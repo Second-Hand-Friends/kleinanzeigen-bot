@@ -13,7 +13,6 @@ from typing import Any, Final, cast
 from .ad_description import get_ad_description
 from .ad_form_helpers import (
     SPECIAL_ATTRIBUTE_TOKEN_RE,
-    VERSAND_COMBOBOX_SELECTOR,
     WANTED_SHIPPING_LABELS,
     get_marker_value,
     location_matches_target,
@@ -48,8 +47,64 @@ _SHIPPING_SIZE_RADIO_XPATH:Final[str] = (
 )
 _SHIPPING_BACK_XPATH:Final[str] = f'{_OPEN_SHIPPING_DIALOG_XPATH}//button[contains(., "Zurück")]'
 
+# CSS-selector counterparts for the redesigned publishing form where nodriver
+# XPath evaluation (via CDP dom.perform_search) is unreliable.
+# Kleinanzeigen renders overlays as either native <dialog open> or ARIA
+# [role="dialog"]; both variants must be probed.  Each selector is tried
+# individually because comma-separated CSS triggers CDP error -32000.
+_OPEN_DIALOG_SELECTORS:Final[tuple[str, ...]] = (
+    "dialog[open]",
+    '[role="dialog"]:not([aria-hidden="true"])',
+)
+_SHIPPING_SIZE_RADIO_VALUES:Final[tuple[str, ...]] = ("SMALL", "MEDIUM", "LARGE")
+
+
+async def _probe_in_dialog(
+    web:WebScrapingMixin,
+    child_css:str,
+    *,
+    timeout:int | float,
+) -> Element | None:
+    """Probe for a child element inside any visible dialog variant.
+
+    Kleinanzeigen renders shipping/condition overlays as either native
+    ``<dialog open>`` or ARIA ``[role="dialog"]`` depending on page variant.
+    Each dialog selector is probed individually to avoid CDP -32000 errors
+    from comma-separated CSS.
+    """
+    for dialog_sel in _OPEN_DIALOG_SELECTORS:
+        elem = await web.web_probe(By.CSS_SELECTOR, f"{dialog_sel} {child_css}", timeout = timeout)
+        if elem is not None:
+            return elem
+    return None
+
+
+async def _find_in_dialog(
+    web:WebScrapingMixin,
+    child_css:str,
+    *,
+    timeout:int | float,
+    error_message:str,
+) -> Element:
+    """Find a child element inside any visible dialog variant, or raise.
+
+    Like :func:`_probe_in_dialog` but raises ``TimeoutError`` with the given
+    message when neither dialog variant contains the child element.
+    """
+    for dialog_sel in _OPEN_DIALOG_SELECTORS:
+        try:
+            return await web.web_find(By.CSS_SELECTOR, f"{dialog_sel} {child_css}", timeout = timeout)
+        except TimeoutError:
+            continue
+    raise TimeoutError(error_message)
+
 
 async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | None, ad_file:str) -> None:
+    """Set or verify the ad category on the publishing form.
+
+    Clicks through the category picker to select the configured category path,
+    or verifies the auto-detected category when none is specified.
+    """
     # click on something to trigger automatic category detection
     await web.web_click(By.ID, "ad-description")
 
@@ -60,12 +115,19 @@ async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | Non
 
     if category:
         await web.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-        await web.web_click(By.XPATH, "//a[contains(., 'Kategorie')] | //button[contains(., 'Kategorie')]")
-        await web.web_find(By.XPATH, "//button[contains(., 'Weiter')]")
+        # The redesigned publishing form uses a link with text "WÃ¤hle deine Kategorie".
+        # Fall back to the shorter "Kategorie" text for older page variants.
+        category_link = await web.web_probe(By.TEXT, "W\u00e4hle deine Kategorie", timeout = web.timeout("quick_dom"))
+        if category_link is None:
+            category_link = await web.web_find(By.TEXT, "Kategorie")
+        await category_link.click()
+        await web.web_sleep()
 
         category_url = f"{root_url}/p-kategorie-aendern.html#?path={category}"
         await web.web_open(category_url)
-        await web.web_click(By.XPATH, "//button[contains(., 'Weiter')]")
+        weiter_btn = await web.web_find(By.TEXT, "Weiter")
+        await weiter_btn.click()
+        await web.web_sleep()
 
         # When the configured path cannot be resolved (e.g. outdated or ambiguous),
         # the site falls back to a React category-suggestion radio picker. Handle it
@@ -127,11 +189,12 @@ async def resolve_category_suggestions(web:WebScrapingMixin, category:str) -> No
         radio_id = str(cast(Any, radio.attrs.get("id")) or "")
         try:
             if radio_id:
-                await web.web_click(
-                    By.XPATH,
-                    f"//fieldset[@id='ad-category-picker']//label[@for={xpath_literal(radio_id)}]",
+                label_elem = await web.web_find(
+                    By.CSS_SELECTOR,
+                    f"#ad-category-picker label[for='{radio_id}']",
                     timeout = picker_timeout,
                 )
+                await label_elem.click()
             else:
                 await radio.click()
         except TimeoutError:
@@ -145,6 +208,7 @@ async def resolve_category_suggestions(web:WebScrapingMixin, category:str) -> No
 
 
 async def city_option_text(web:WebScrapingMixin, option:Element) -> str:
+    """Return the visible text of a city combobox option element."""
     text = str(getattr(option, "text", "") or "").strip()
     if text:
         return text
@@ -155,6 +219,7 @@ async def city_option_text(web:WebScrapingMixin, option:Element) -> str:
 
 
 async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
+    """Read the currently selected city text from the contact location combobox."""
     city_timeout = web.timeout("default")
     quick_dom_timeout = web.timeout("quick_dom")
     try:
@@ -191,6 +256,7 @@ async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
 
 
 async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
+    """Select a city option in the contact-location combobox by visible text."""
     quick_dom_timeout = web.timeout("quick_dom")
     city_flow_timeout = web.timeout("default")
 
@@ -215,6 +281,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
     candidates:list[Element] = []
 
     async def _options_available() -> bool:
+        """Probe whether the city-combobox options are present on the form."""
         nonlocal candidates
         try:
             candidates = await web.web_find_all(By.CSS_SELECTOR, option_selector, timeout = quick_dom_timeout)
@@ -228,6 +295,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
         raise TimeoutError(_("City combobox options did not load for location: %s") % target) from ex
 
     def normalize(value:str) -> str:
+        """Normalize a city-option label for comparison (strip, lower-case, collapse spaces)."""
         return " ".join(value.split()).casefold()
 
     target_norm = normalize(target)
@@ -253,6 +321,7 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
     await selected_option.click()
 
     async def _selection_converged() -> bool:
+        """Check whether the city selection has converged on a stable value across polls."""
         selected_city = await read_city_selection_text(web)
         return location_matches_target(target, selected_city)
 
@@ -263,6 +332,10 @@ async def select_city_combobox_option(web:WebScrapingMixin, target:str) -> None:
 
 
 async def set_contact_location(web:WebScrapingMixin, location:str) -> None:
+    """Fill the contact/location section of the publishing form.
+
+    Sets the city combobox and validates that the selection stabilises.
+    """
     target = location.strip()
     if not target:
         return
@@ -297,6 +370,7 @@ async def set_contact_location(web:WebScrapingMixin, location:str) -> None:
 
 
 async def set_contact_fields(web:WebScrapingMixin, contact:Contact) -> None:
+    """Fill contact fields (name, phone, street, zip) on the publishing form."""
     #############################
     # set contact zipcode + location
     #############################
@@ -352,6 +426,7 @@ async def set_contact_fields(web:WebScrapingMixin, contact:Contact) -> None:
 
 
 async def fill_image_section(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Upload images and fill the image section of the publishing form."""
     #############################
     # delete previous images to ensure a clean slate
     # (needed for MODIFY because we don't know which changed,
@@ -392,6 +467,7 @@ async def fill_image_section(web:WebScrapingMixin, ad_cfg:Ad) -> None:
 
 
 async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Upload image files for an ad via the publishing form uploader."""
     if not ad_cfg.images:
         return
 
@@ -422,6 +498,7 @@ async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
     LOG.info(" -> waiting for %s to be processed...", pluralize("image", ad_cfg.images))
 
     async def count_processed_images() -> int:
+        """Count the number of processed thumbnail images on the form."""
         try:
             markers = await web._web_find_all_once(By.CSS_SELECTOR, hidden_marker_selector, quick_dom_timeout)  # noqa: SLF001 - WebScrapingMixin fast marker probe
             marker_count = sum(1 for marker in markers if get_marker_value(marker))
@@ -431,6 +508,7 @@ async def upload_images(web:WebScrapingMixin, ad_cfg:Ad) -> None:
         return max(0, marker_count - baseline_marker_count)
 
     async def check_thumbnails_uploaded() -> bool:
+        """Check whether all uploaded thumbnails have finished processing."""
         current_count = await count_processed_images()
         if current_count < expected_count:
             LOG.debug(" -> %d of %d images processed", current_count, expected_count)
@@ -629,6 +707,22 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
         )
 
 
+_WANTED_VERSAND_SELECTORS:Final[tuple[str, ...]] = (
+    'button[role="combobox"][id="versand"]',
+    'button[role="combobox"][id$=".versand"]',
+    'button[role="combobox"][aria-labelledby$="versand-selected-option"]',
+)
+
+
+async def _find_versand_combobox(web:WebScrapingMixin, timeout:float | int) -> Element | None:
+    """Find the Versand combobox, probing each selector individually."""
+    for css_sel in _WANTED_VERSAND_SELECTORS:
+        elem = await web.web_probe(By.CSS_SELECTOR, css_sel, timeout = timeout)
+        if elem is not None:
+            return elem
+    return None
+
+
 async def set_shipping_form(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrategy = AdUpdateStrategy.REPLACE) -> None:
     """Fill the shipping type/options/costs section on the ad form."""
     shipping_type = ad_cfg.shipping_type
@@ -641,11 +735,9 @@ async def set_shipping_form(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStrate
             display_text = WANTED_SHIPPING_LABELS.get(shipping_type)
             if display_text:
                 try:
-                    shipping_btn = await web.web_find(
-                        By.CSS_SELECTOR,
-                        VERSAND_COMBOBOX_SELECTOR,
-                        timeout = web.timeout("quick_dom"),
-                    )
+                    shipping_btn = await _find_versand_combobox(web, web.timeout("quick_dom"))
+                    if shipping_btn is None:
+                        raise TimeoutError(_("Shipping combobox button not found"))
                     btn_id = cast(str, shipping_btn.attrs.get("id"))
                     if not btn_id:
                         raise TimeoutError(_("Shipping combobox button has no id attribute"))
@@ -688,7 +780,7 @@ async def _select_shipping_combobox_if_present(
 
     Returns True if the Versand combobox was found and handled, False otherwise.
     """
-    shipping_combobox = await web.web_probe(By.CSS_SELECTOR, VERSAND_COMBOBOX_SELECTOR, timeout = short_timeout)
+    shipping_combobox = await _find_versand_combobox(web, short_timeout)
     if shipping_combobox is not None:
         try:
             btn_id = cast(str, shipping_combobox.attrs.get("id"))
@@ -759,24 +851,48 @@ async def _open_shipping_size_selection(
     max_back_steps = 2
     try:
         for back_steps in range(max_back_steps + 1):
-            size_radio = await web.web_probe(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
+            # Check for shipping size radios via CSS selector (redesign-safe).
+            # Probe each size individually to avoid comma-separated CSS selectors
+            # which can trigger CDP dom-query errors (-32000).
+            size_radio:Element | None = None
+            for size_value in _SHIPPING_SIZE_RADIO_VALUES:
+                size_radio = await _probe_in_dialog(
+                    web,
+                    f'input[type="radio"][value="{size_value}"]',
+                    timeout = short_timeout,
+                )
+                if size_radio is not None:
+                    break
             if size_radio is not None:
                 LOG.debug("Shipping dialog route: direct size selection (%s back step(s)).", back_steps)
                 return
 
-            other_methods = await web.web_probe(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
+            # Check for "Andere Versandmethoden" button via text.
+            other_methods = await web.web_probe(By.TEXT, "Andere Versandmethoden", timeout = short_timeout)
             if other_methods is not None:
-                await web.web_click(By.XPATH, _OTHER_SHIPPING_METHODS_XPATH, timeout = short_timeout)
-                await web.web_find(By.XPATH, _SHIPPING_SIZE_RADIO_XPATH, timeout = short_timeout)
-                LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
-                return
+                await other_methods.click()
+                await web.web_sleep(300, 500)
+                # Verify size radios appeared after clicking.
+                for size_value in _SHIPPING_SIZE_RADIO_VALUES:
+                    size_radio = await _probe_in_dialog(
+                        web,
+                        f'input[type="radio"][value="{size_value}"]',
+                        timeout = short_timeout,
+                    )
+                    if size_radio is not None:
+                        break
+                if size_radio is not None:
+                    LOG.debug("Shipping dialog route: Andere Versandmethoden (%s back step(s)).", back_steps)
+                    return
+                # Radios didn't appear after clicking; continue loop to try back navigation.
 
             if back_steps == max_back_steps:
                 break
-            back_button = await web.web_probe(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
+            # Try back navigation via text.
+            back_button = await web.web_probe(By.TEXT, "Zur\u00fcck", timeout = short_timeout)
             if back_button is None:
                 break
-            await web.web_click(By.XPATH, _SHIPPING_BACK_XPATH, timeout = short_timeout)
+            await back_button.click()
             await web.web_sleep(300, 500)
     except TimeoutError as ex:
         raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
@@ -819,20 +935,25 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
     all_codes_for_size = CARRIER_CODES_BY_SIZE[shipping_size]
 
     short_timeout = web.timeout("quick_dom")
-    dialog = _OPEN_SHIPPING_DIALOG_XPATH
 
     try:
-        # Select the size group via radio button value (e.g. "SMALL", "MEDIUM", "LARGE")
-        size_radio_xpath = f'{dialog}//input[@type="radio" and @value="{shipping_radio_value}"]'
-        shipping_size_radio = await web.web_find(By.XPATH, size_radio_xpath, timeout = short_timeout)
+        # Select the size group via radio button value (e.g. "SMALL", "MEDIUM", "LARGE").
+        # Use CSS selector scoped to the open dialog (redesign-safe).
+        shipping_size_radio = await _find_in_dialog(
+            web,
+            f'input[type="radio"][value="{shipping_radio_value}"]',
+            timeout = short_timeout,
+            error_message = _("Failed to configure shipping options in dialog!"),
+        )
         shipping_size_radio_is_checked = shipping_size_radio.attrs.get("checked") is not None
 
         if not shipping_size_radio_is_checked:
             LOG.debug("Selecting size '%s' (radio value=%s)", shipping_size, shipping_radio_value)
-            await web.web_click(By.XPATH, size_radio_xpath, timeout = short_timeout)
+            await shipping_size_radio.click()
 
         await web.web_sleep(300, 500)
-        await web.web_click(By.XPATH, f'{dialog}//button[contains(., "Weiter")]', timeout = short_timeout)
+        weiter_btn = await web.web_find(By.TEXT, "Weiter", timeout = short_timeout)
+        await weiter_btn.click()
         await web.web_sleep(500, 800)
 
         # Toggle package checkboxes by carrier code value attribute.
@@ -843,8 +964,12 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
         LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
 
         for carrier_code in all_codes_for_size:
-            checkbox_xpath = f'{dialog}//input[@type="checkbox" and @value="{carrier_code}"]'
-            checkbox = await web.web_find(By.XPATH, checkbox_xpath, timeout = short_timeout)
+            checkbox = await _find_in_dialog(
+                web,
+                f'input[type="checkbox"][value="{carrier_code}"]',
+                timeout = short_timeout,
+                error_message = _("Failed to configure shipping options in dialog!"),
+            )
             is_checked = checkbox.attrs.get("checked") is not None
             should_be_checked = carrier_code in wanted_codes
 
@@ -852,14 +977,15 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
 
             if is_checked != should_be_checked:
                 LOG.debug("Toggling carrier '%s'", carrier_code)
-                await web.web_click(By.XPATH, checkbox_xpath, timeout = short_timeout)
+                await checkbox.click()
     except TimeoutError as ex:
         LOG.debug(ex, exc_info = True)
         raise TimeoutError(_("Failed to configure shipping options in dialog!")) from ex
 
     try:
         # Click apply button
-        await web.web_click(By.XPATH, f'{dialog}//button[contains(., "Fertig")]', timeout = short_timeout)
+        fertig_btn = await web.web_find(By.TEXT, "Fertig", timeout = short_timeout)
+        await fertig_btn.click()
     except TimeoutError as ex:
         raise TimeoutError(_("Unable to close shipping dialog!")) from ex
 
@@ -875,15 +1001,41 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
         LOG.warning("Condition value [%s] is deprecated; update your config to [%s].", legacy_value, canonical_value)
 
     short_timeout = web.timeout("quick_dom")
-    condition_trigger_xpath = "//label[contains(@for, '.condition')]/following::button[@aria-haspopup='dialog' or @aria-haspopup='true'][1]"
 
-    condition_trigger = await web.web_probe(By.XPATH, condition_trigger_xpath, timeout = short_timeout)
-    if condition_trigger is None:
+    # On the redesigned form, find the condition trigger via CSS label association.
+    # The trigger is a <button aria-haspopup="dialog"> that is a cousin of the
+    # <label for*=".condition"> — they share a common ancestor div.
+    # nodriver CSS doesn't support ::has() or complex sibling combinators reliably,
+    # so use JS to locate the trigger.
+    trigger_info = await web.web_execute("""
+    (() => {
+        const labels = document.querySelectorAll('label[for*=".condition"]');
+        for (const lbl of labels) {
+            // Walk up to find a common ancestor, then search for the button within it
+            let ancestor = lbl.parentElement;
+            for (let depth = 0; depth < 5 && ancestor; depth++) {
+                const btn = ancestor.querySelector('button[aria-haspopup="dialog"], button[aria-haspopup="true"]');
+                if (btn) {
+                    return JSON.stringify({found: true, id: btn.id || '', ariaControls: btn.getAttribute('aria-controls') || ''});
+                }
+                ancestor = ancestor.parentElement;
+            }
+        }
+        return JSON.stringify({found: false});
+    })()
+    """)
+
+    try:
+        ti = json.loads(trigger_info) if isinstance(trigger_info, str) else {}
+    except (json.JSONDecodeError, TypeError):
+        LOG.debug("Condition dialog trigger returned malformed data for [%s]; falling back to generic handler.", condition_value)
+        return False
+    if not ti.get("found"):
         LOG.debug("Condition dialog trigger not available for [%s]; falling back to generic handler.", condition_value)
         return False
 
-    trigger_id = str(condition_trigger.attrs.get("id") or "")
-    trigger_controls = str(condition_trigger.attrs.get("aria-controls") or "")
+    trigger_id = ti.get("id", "")
+    trigger_controls = ti.get("ariaControls", "")
     LOG.debug("Condition dialog trigger resolved: id='%s', aria-controls='%s'", trigger_id, trigger_controls)
 
     # Some categories render condition as a combobox and the broad dialog-trigger XPath
@@ -907,13 +1059,36 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
         candidate_values.append(legacy_value)
 
     try:
-        await condition_trigger.click()
-        await web.web_find(By.XPATH, '//*[self::dialog or @role="dialog"]', timeout = short_timeout)
+        # Click the trigger button via JS (we located it above but need the actual element).
+        # Use CSS to find the dialog-open button by id if available, otherwise by text.
+        if trigger_id:
+            trigger_btn = await web.web_find(By.ID, trigger_id, timeout = short_timeout)
+            await trigger_btn.click()
+        else:
+            hp_btn:Element | None = None
+            for hp_sel in ("button[aria-haspopup='dialog']", "button[aria-haspopup='true']"):
+                hp_btn = await web.web_probe(By.CSS_SELECTOR, hp_sel, timeout = short_timeout)
+                if hp_btn is not None:
+                    break
+            if hp_btn is None:
+                raise TimeoutError(_("Condition dialog trigger button not found"))
+            await hp_btn.click()
+
+        # Wait for dialog to open (CSS selector — redesign-safe).
+        # Probe both native <dialog open> and ARIA [role="dialog"] variants.
+        for dialog_sel in _OPEN_DIALOG_SELECTORS:
+            try:
+                await web.web_find(By.CSS_SELECTOR, dialog_sel, timeout = short_timeout)
+                break
+            except TimeoutError:
+                continue
+        else:
+            raise TimeoutError(_("Condition dialog did not open"))
         condition_radio = None
         for candidate in candidate_values:
-            condition_radio = await web.web_probe(
-                By.XPATH,
-                f"//*[self::dialog or @role='dialog']//input[@type='radio' and @value={xpath_literal(candidate)}]",
+            condition_radio = await _probe_in_dialog(
+                web,
+                f'input[type="radio"][value="{candidate}"]',
                 timeout = short_timeout,
             )
             if condition_radio is not None:
@@ -923,7 +1098,13 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
         condition_radio_id = str(condition_radio.attrs.get("id") or "")
         if condition_radio_id:
             try:
-                await web.web_click(By.XPATH, f"//*[self::dialog or @role='dialog']//label[@for={xpath_literal(condition_radio_id)}]")
+                label_elem = await _find_in_dialog(
+                    web,
+                    f'label[for="{condition_radio_id}"]',
+                    timeout = short_timeout,
+                    error_message = _("Condition dialog label not found"),
+                )
+                await label_elem.click()
             except TimeoutError:
                 await condition_radio.click()
         else:
@@ -934,7 +1115,8 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
 
     try:
         # Click accept button
-        await web.web_click(By.XPATH, '//*[self::dialog or @role="dialog"]//button[.//span[text()="Bestätigen"]]')
+        bestaetigen_btn = await web.web_find(By.TEXT, "Best\u00e4tigen", timeout = short_timeout)
+        await bestaetigen_btn.click()
     except TimeoutError as ex:
         raise TimeoutError(_("Unable to close condition dialog!")) from ex
 
@@ -969,6 +1151,7 @@ def _build_special_attribute_xpath(normalized_special_attribute_key:str, special
 
 
 def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
+    """Compute a sorting priority for a special-attribute candidate element."""
     local_name = elem.local_name
     elem_type = str(cast(Any, elem.attrs.get("type")) or "").lower()
     role = str(cast(Any, elem.attrs.get("role")) or "").lower()
@@ -989,6 +1172,7 @@ def _special_attribute_candidate_priority(elem:Element) -> tuple[int, int]:
 
 
 def _describe_special_attribute_candidate(elem:Element) -> str:
+    """Return a short human-readable description of a special-attribute candidate."""
     elem_id = cast(str | None, elem.attrs.get("id"))
     elem_name = cast(str | None, elem.attrs.get("name"))
     elem_type = cast(str | None, elem.attrs.get("type"))
@@ -997,6 +1181,7 @@ def _describe_special_attribute_candidate(elem:Element) -> str:
 
 
 def _pick_special_attribute_candidate(candidates:Sequence[Element], special_attribute_key:str) -> Element:
+    """Pick the best special-attribute candidate from a list of matching elements."""
     ensure(candidates, f"No candidates found for special attribute [{special_attribute_key}]")
     ranked_candidates = sorted(
         enumerate(candidates),
@@ -1024,14 +1209,46 @@ async def _resolve_special_attribute_element(
     special_attribute_key:str,
 ) -> Element:
     """Find DOM candidates for a special attribute and pick the best match."""
-    special_attr_candidates = await web.web_find_all(By.XPATH, special_attr_xpath)
+    special_attr_candidates:list[Element] = []
+    try:
+        special_attr_candidates = await web.web_find_all(By.XPATH, special_attr_xpath)
+    except TimeoutError:
+        # XPath via CDP dom.perform_search is unreliable on redesigned pages;
+        # fall through to the CSS selector fallback below.
+        pass
+
+    if not special_attr_candidates:
+        # XPath via CDP dom.perform_search is unreliable on the redesigned
+        # Astro/Tailwind form. Fall back to CSS selectors scoped by id/name.
+        # Probe each pattern individually to avoid comma-separated CSS selectors
+        # which can trigger CDP dom-query errors (-32000).
+        # Use the same normalization as _build_special_attribute_xpath:
+        # strip trailing _<suffix> (e.g. art_s -> art) then take last dot-segment.
+        normalized_key = re.sub(r"_[a-z]+$", "", special_attribute_key).rsplit(".", maxsplit = 1)[-1]
+        css_patterns = [
+            f"#{normalized_key}",
+            f"[id$='.{normalized_key}']",
+            f"[name='attributeMap[{normalized_key}]']",
+            f"[name$='.{normalized_key}]']",
+            f"[name*='.{normalized_key}+']",
+            f"[name*='{normalized_key}']",
+        ]
+        for css_sel in css_patterns:
+            try:
+                found = await web.web_find_all(By.CSS_SELECTOR, css_sel)
+                special_attr_candidates.extend(found)
+            except TimeoutError:
+                # Selector didn't match any elements; try the next pattern.
+                pass
+            if special_attr_candidates:
+                break
+
     return _pick_special_attribute_candidate(special_attr_candidates, special_attribute_key)
 
 
 async def _set_special_attribute_input(
     web:WebScrapingMixin,
     special_attr_elem:Element,
-    special_attr_xpath:str,
     special_attribute_key:str,
     special_attribute_value_str:str,
 ) -> None:
@@ -1044,8 +1261,15 @@ async def _set_special_attribute_input(
     elem_id = cast(str | None, special_attr_elem.attrs.get("id"))
     elem_type = str(cast(Any, special_attr_elem.attrs.get("type")) or "").lower()
     elem_role = str(cast(Any, special_attr_elem.attrs.get("role")) or "").lower()
-    elem_selector_type = By.ID if elem_id else By.XPATH
-    elem_selector_value = elem_id or special_attr_xpath
+    elem_name = cast(str | None, special_attr_elem.attrs.get("name"))
+    if elem_id:
+        elem_selector_type = By.ID
+        elem_selector_value = elem_id
+    elif elem_name:
+        elem_selector_type = By.CSS_SELECTOR
+        elem_selector_value = f"[name='{elem_name}']"
+    else:
+        raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
 
     # If the only match was a hidden backing input, search for the
     # associated <button role="combobox"> by walking up the DOM tree.
@@ -1105,6 +1329,11 @@ async def _set_special_attribute_input(
 
 
 async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Set special attributes (condition, brand, etc.) on the publishing form.
+
+    Iterates configured special attributes, resolves the form element via XPath
+    or CSS fallback, and dispatches to the appropriate input handler.
+    """
     if not ad_cfg.special_attributes:
         return
 
@@ -1135,7 +1364,24 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
 
         quick_dom = web.timeout("quick_dom")
         if special_attribute_key == "condition_s":
-            special_attr_probe = await web.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
+            special_attr_probe = None
+            try:
+                special_attr_probe = await web.web_probe(By.XPATH, special_attr_xpath, timeout = quick_dom)
+            except TimeoutError:
+                # XPath probe failed on redesigned page; fall through to CSS fallback.
+                pass
+            if special_attr_probe is None:
+                # XPath fallback: try CSS selectors for the condition attribute.
+                # The redesigned form uses name="attributeMap[sonstiges.condition]"
+                # and label[for="sonstiges.condition"].
+                for cond_css in (
+                    "label[for*='.condition']",
+                    "[name*='condition']",
+                    "[id*='condition']",
+                ):
+                    special_attr_probe = await web.web_probe(By.CSS_SELECTOR, cond_css, timeout = quick_dom)
+                    if special_attr_probe is not None:
+                        break
             if special_attr_probe is None:
                 LOG.warning("Special attribute '%s' is not available for the selected category. Skipping.", special_attribute_key)
                 continue
@@ -1154,7 +1400,7 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
 
         try:
-            await _set_special_attribute_input(web, special_attr_elem, special_attr_xpath, special_attribute_key, special_attribute_value_str)
+            await _set_special_attribute_input(web, special_attr_elem, special_attribute_key, special_attribute_value_str)
         except TimeoutError as ex:
             LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex

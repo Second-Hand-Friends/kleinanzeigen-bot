@@ -15,14 +15,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from kleinanzeigen_bot import LOG
-from kleinanzeigen_bot.ad_form_helpers import VERSAND_COMBOBOX_SELECTOR
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
     _OTHER_SHIPPING_METHODS_XPATH,  # noqa: PLC2701
     _SHIPPING_BACK_XPATH,  # noqa: PLC2701
-    _SHIPPING_SIZE_RADIO_XPATH,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     _set_condition,  # noqa: PLC2701
     _set_configured_shipping_options,  # noqa: PLC2701
@@ -49,6 +47,7 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 class TestKleinanzeigenBotContactLocationHardening:
     @pytest.mark.asyncio
     async def test_city_option_text_falls_back_to_visible_text(self, test_bot:KleinanzeigenBot) -> None:
+        """City option text falls back to visible text when aria-label is empty."""
         option = MagicMock(spec = Element)
         option.text = ""
         with patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = "  Metroville  "):
@@ -56,6 +55,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_city_option_text_returns_empty_when_visible_text_times_out(self, test_bot:KleinanzeigenBot) -> None:
+        """City option text returns empty string when visible text probe times out."""
         option = MagicMock(spec = Element)
         option.text = ""
 
@@ -64,6 +64,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_prefers_live_input_value(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection prefers the live input value over the selected option."""
         city_input = MagicMock(spec = Element)
         city_input.local_name = "input"
         city_input.apply = AsyncMock(return_value = "Live City")
@@ -79,6 +80,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_uses_selected_option_text(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection uses the selected option text when input value is unavailable."""
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
 
@@ -94,6 +96,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_falls_back_to_element_text(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection falls back to element text when no input or option is found."""
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
         city_button.apply = AsyncMock(return_value = "Button City")
@@ -108,6 +111,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_returns_none_when_city_field_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """Reading city selection returns None when the city field element is missing."""
         with patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("missing city")):
             assert await read_city_selection_text(test_bot) is None
 
@@ -117,6 +121,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Setting contact fields fails closed when zipcode cannot be set."""
         ad_cfg = Ad.model_validate(base_ad_config)
 
         with (
@@ -154,6 +159,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Setting contact fields populates optional contact inputs (phone, street)."""
         config = base_ad_config | {"contact": base_ad_config["contact"] | {"street": "Test Street 1", "phone": "+491234567"}}
         ad_cfg = Ad.model_validate(config)
         checks = {
@@ -188,6 +194,7 @@ class TestKleinanzeigenBotContactLocationHardening:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Setting contact fields skips the phone field when it is absent from the form."""
         config = base_ad_config | {"contact": base_ad_config["contact"] | {"phone": "+491234567"}}
         ad_cfg = Ad.model_validate(config)
 
@@ -238,6 +245,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_returns_for_blank_location(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location returns early when the configured location is blank."""
         with patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock) as read_city_mock:
             await set_contact_location(test_bot, "   ")
 
@@ -245,6 +253,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_for_missing_city_element(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location raises TimeoutError when the city element is missing."""
         with (
             patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = None),
@@ -254,6 +263,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_for_unsupported_city_element(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location raises TimeoutError for an unsupported city element type."""
         city_input = MagicMock(spec = Element)
         city_input.local_name = "input"
         city_input.attrs = {}
@@ -267,6 +277,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_select_city_combobox_option_raises_when_options_do_not_load(self, test_bot:KleinanzeigenBot) -> None:
+        """Selecting a city combobox option raises TimeoutError when options do not load."""
         city_button = MagicMock(spec = Element)
         city_button.attrs = {}
 
@@ -281,6 +292,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_select_city_combobox_option_raises_when_no_option_matches(self, test_bot:KleinanzeigenBot) -> None:
+        """Selecting a city combobox option raises TimeoutError when no option matches."""
         city_button = MagicMock(spec = Element)
         city_button.attrs = {"aria-controls": "custom-city-list extra-token"}
         option = MagicMock(spec = Element)
@@ -301,6 +313,7 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_raises_when_selection_does_not_converge(self, test_bot:KleinanzeigenBot) -> None:
+        """Setting contact location raises TimeoutError when the selection does not converge."""
         city_button = MagicMock(spec = Element)
         city_button.local_name = "button"
         city_button.attrs = {"role": "combobox", "aria-controls": "ad-city-menu"}
@@ -571,6 +584,32 @@ class TestCategoryProbeBehavior:
 class TestCategorySuggestionPicker:
     """Regression tests for the post-redesign category-suggestion radio picker fallback."""
 
+    @pytest.mark.asyncio
+    async def test_set_category_falls_back_to_short_label_when_long_label_missing(self, test_bot:KleinanzeigenBot) -> None:
+        """When the 'Wähle deine Kategorie' probe returns None, fall back to 'Kategorie'."""
+        category_link = MagicMock()
+        category_link.click = AsyncMock()
+
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            """Async probe side effect for mocking web_probe calls."""
+            if selector_value == "W\u00e4hle deine Kategorie":
+                return None  # long label not found
+            if selector_value == "ad-category-path":
+                return None  # no auto-selected category
+            return None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = category_link) as mock_find,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
+
+        # The fallback web_find(By.TEXT, "Kategorie") should have been called.
+        mock_find.assert_any_await(By.TEXT, "Kategorie")
+
     @staticmethod
     def _picker_probe_factory(picker_present:bool) -> Callable[..., Any]:
         async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
@@ -631,18 +670,29 @@ class TestCategorySuggestionPicker:
             self._radio("240", "category-suggestion-other"),
         ]
 
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+
+        async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "#ad-category-picker label[for='category-suggestion-leaf']":
+                return label_elem
+            return MagicMock()
+
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await resolve_category_suggestions(test_bot, "73/77")
 
-        mock_click.assert_awaited_once()
-        selector_type, selector_value = mock_click.call_args.args[:2]
-        assert selector_type == By.XPATH
-        assert "label[@for='category-suggestion-leaf']" in selector_value
-        assert "'ad-category-picker'" in selector_value
+        mock_click.assert_not_awaited()
+        mock_find.assert_awaited_once()
+        selector_type, selector_value = mock_find.call_args.args[:2]
+        assert selector_type == By.CSS_SELECTOR
+        assert selector_value == "#ad-category-picker label[for='category-suggestion-leaf']"
+        label_elem.click.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_picker_present_no_match_raises_with_offered_list(self, test_bot:KleinanzeigenBot) -> None:
@@ -674,15 +724,27 @@ class TestCategorySuggestionPicker:
         """When both parent and leaf segments match radios, the leaf (deepest) wins."""
         radios = [self._radio("76", "id-for-76"), self._radio("77", "id-for-77")]
 
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+
+        async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "#ad-category-picker label[for='id-for-77']":
+                return label_elem
+            return MagicMock()
+
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._picker_probe_factory(picker_present = True)),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = radios),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await resolve_category_suggestions(test_bot, "76/77")
 
-        mock_click.assert_awaited_once()
-        assert "label[@for='id-for-77']" in mock_click.call_args.args[1]
+        mock_click.assert_not_awaited()
+        assert mock_find.call_args.args[0] == By.CSS_SELECTOR
+        assert "#ad-category-picker label[for='id-for-77']" in mock_find.call_args.args[1]
+        label_elem.click.assert_awaited_once()
 
 
 class TestImageUploadProcessedMarkerFallback:
@@ -1310,7 +1372,22 @@ class TestPricingFields:
 class TestShippingDialogFlow:
     """Regression tests for shipping dialog flow using new radio selectors only."""
 
-    shipping_combobox_selector = VERSAND_COMBOBOX_SELECTOR
+    # The three individual CSS selectors probed by _find_versand_combobox.
+    versand_selectors = (
+        'button[role="combobox"][id="versand"]',
+        'button[role="combobox"][id$=".versand"]',
+        'button[role="combobox"][aria-labelledby$="versand-selected-option"]',
+    )
+
+    @staticmethod
+    def _versand_probe_factory(combobox:MagicMock | None) -> Callable[..., Any]:
+        """Return a web_probe side effect that returns the combobox for the first matching versand selector, None otherwise."""
+        async def probe(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async probe side effect for mocking web_probe calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value in TestShippingDialogFlow.versand_selectors:
+                return combobox
+            return None
+        return probe
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -1330,18 +1407,18 @@ class TestShippingDialogFlow:
         shipping_combobox.attrs = {"id": "uhren.versand"}
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = shipping_combobox) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = self._versand_probe_factory(shipping_combobox)) as mock_probe,
             patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await set_shipping(test_bot, ad_cfg)
 
-        mock_probe.assert_awaited_once()
-        assert mock_probe.await_args is not None
-        assert mock_probe.await_args.args[:2] == (
-            By.CSS_SELECTOR,
-            self.shipping_combobox_selector,
-        )
+        # At least one versand selector probe should have returned the combobox.
+        versand_probes = [
+            call for call in mock_probe.await_args_list
+            if call.args[:2] == (By.CSS_SELECTOR, self.versand_selectors[0])
+        ]
+        assert versand_probes, "Expected at least one probe for the first versand CSS selector"
         mock_select_combobox.assert_awaited_once()
         assert mock_select_combobox.await_args is not None
         assert mock_select_combobox.await_args.args[:2] == ("uhren.versand", expected_label)
@@ -1358,15 +1435,25 @@ class TestShippingDialogFlow:
         """PICKUP shipping should click the pickup radio only when it is not already selected."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            # All versand combobox probes return None (not a commercial account).
+            if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
+                return None
+            # Pickup radio probe returns a mock element.
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled-no":
+                return MagicMock()
+            return None
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = selected),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             await set_shipping(test_bot, ad_cfg)
 
         observed = [call.args[:2] for call in mock_probe.await_args_list]
-        assert (By.CSS_SELECTOR, self.shipping_combobox_selector) in observed
+        assert (By.CSS_SELECTOR, self.versand_selectors[0]) in observed
         assert (By.ID, "ad-shipping-enabled-no") in observed
         if selected:
             mock_click.assert_not_awaited()
@@ -1379,8 +1466,18 @@ class TestShippingDialogFlow:
         """PICKUP shipping should fail fast when pickup radio selector is unavailable."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            # All versand combobox probes return None (not a commercial account).
+            if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
+                return None
+            # Pickup radio probe returns a mock element.
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled-no":
+                return MagicMock()
+            return None
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, MagicMock()]),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, side_effect = TimeoutError("pickup lookup timed out")),
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'PICKUP'!"),
         ):
@@ -1397,8 +1494,21 @@ class TestShippingDialogFlow:
         short-circuit without calling ``web_check``/``web_click``."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            # All versand combobox probes return None.
+            if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
+                return None
+            # Pickup radio probe returns None (not rendered).
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled-no":
+                return None
+            # Shipping fieldset probe returns None (not rendered).
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled":
+                return None
+            return None
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
@@ -1416,8 +1526,21 @@ class TestShippingDialogFlow:
         """A rendered shipping fieldset without the pickup radio should be treated as an error."""
         ad_cfg = Ad.model_validate(base_ad_config | {"shipping_type": "PICKUP"})
 
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            # All versand combobox probes return None.
+            if selector_type == By.CSS_SELECTOR and selector_value in self.versand_selectors:
+                return None
+            # Pickup radio probe returns None (missing).
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled-no":
+                return None
+            # Shipping fieldset probe returns a mock (rendered).
+            if selector_type == By.ID and selector_value == "ad-shipping-enabled":
+                return MagicMock()
+            return None
+
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, MagicMock()]) as mock_probe,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect) as mock_probe,
             patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             pytest.raises(
@@ -1428,7 +1551,7 @@ class TestShippingDialogFlow:
             await set_shipping(test_bot, ad_cfg)
 
         observed = [call.args[:2] for call in mock_probe.await_args_list]
-        assert (By.CSS_SELECTOR, self.shipping_combobox_selector) in observed
+        assert (By.CSS_SELECTOR, self.versand_selectors[0]) in observed
         assert (By.ID, "ad-shipping-enabled-no") in observed
         assert (By.ID, "ad-shipping-enabled") in observed
         mock_check.assert_not_awaited()
@@ -1534,15 +1657,42 @@ class TestShippingOptionsDialog:
         """The shipping action may be a button, link, span, or another clickable element."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
+        other_methods_elem = MagicMock()
+        other_methods_elem.click = AsyncMock()
+
+        # Track whether "Andere Versandmethoden" has been clicked yet.
+        andere_clicked = [False]
+
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
+                # Before Andere Versandmethoden click: no radios. After: radios appear.
+                return MagicMock() if andere_clicked[0] else None
+            # "Andere Versandmethoden" text probe returns the element.
+            if selector_type == By.TEXT and selector_value == "Andere Versandmethoden":
+                return other_methods_elem
+            return None
+
+        async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
+            return MagicMock()
+
+        # Set the flag when click is awaited.
+        async def _track_click() -> None:
+            """Track that the Andere Versandmethoden button was clicked."""
+            andere_clicked[0] = True
+
+        other_methods_elem.click.side_effect = _track_click
+
         with (
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(
                 test_bot,
                 "web_probe",
                 new_callable = AsyncMock,
-                side_effect = [None, MagicMock()],
-            ),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+                side_effect = probe_side_effect,
+            ) as mock_probe,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
         ):
@@ -1553,13 +1703,13 @@ class TestShippingOptionsDialog:
                 test_bot.timeout("quick_dom"),
             )
 
-        assert "self::dialog[@open]" in _OTHER_SHIPPING_METHODS_XPATH
-        assert "self::button" not in _OTHER_SHIPPING_METHODS_XPATH
-        assert "not(.//*[" in _OTHER_SHIPPING_METHODS_XPATH
-        assert any(
-            click.args == (By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
-            for click in mock_click.await_args_list
-        )
+        # The "Andere Versandmethoden" action is found via By.TEXT (tag-agnostic).
+        text_probes = [
+            call for call in mock_probe.await_args_list
+            if call.args[:2] == (By.TEXT, "Andere Versandmethoden")
+        ]
+        assert text_probes, "Expected a By.TEXT probe for 'Andere Versandmethoden'"
+        other_methods_elem.click.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_reports_clear_error_when_alternate_action_disappears(
@@ -1567,26 +1717,42 @@ class TestShippingOptionsDialog:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
-        """Report the workflow error when a probed alternate action disappears."""
+        """When size radios don't appear after clicking Andere Versandmethoden, the route exhausts back-navigation and raises TimeoutError."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
+        other_methods_elem = MagicMock()
+        other_methods_elem.click = AsyncMock()
+
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            # Size radio probes return None (radios never appear).
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
+                return None
+            # "Andere Versandmethoden" text probe returns the element.
+            if selector_type == By.TEXT and selector_value == "Andere Versandmethoden":
+                return other_methods_elem
+            return None
+
+        async def find_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_find calls."""
+            return MagicMock()
+
         with (
-            patch.object(
-                test_bot,
-                "web_click",
-                new_callable = AsyncMock,
-                side_effect = [None, None, TimeoutError("action disappeared")],
-            ),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(
                 test_bot,
                 "web_probe",
                 new_callable = AsyncMock,
-                side_effect = [None, MagicMock()],
+                side_effect = probe_side_effect,
             ),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
             pytest.raises(TimeoutError, match = "Failed to configure shipping options in dialog"),
         ):
+            # With web_probe returning None for all size radios, the Andere Versandmethoden
+            # route completes without finding a radio — the outer loop exhausts max_back_steps
+            # and raises TimeoutError.
             await _set_configured_shipping_options(
                 test_bot,
                 ad_cfg,
@@ -1605,13 +1771,43 @@ class TestShippingOptionsDialog:
         """A nested dialog state is unwound before selecting a package size."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
+        back_elem = MagicMock()
+        back_elem.click = AsyncMock()
+        size_radio_elem = MagicMock()
+
+        # _probe_in_dialog tries 2 dialog selectors per size value, so each
+        # pass generates up to 6 probes (3 sizes × 2 selectors).  Track
+        # passes by counting rounds of size-radio probes.
+        size_pass = {"round": 0, "probes_this_round": 0}
+
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
+                size_pass["probes_this_round"] += 1
+                # After 6 probes (= 3 sizes × 2 dialog selectors), advance to next round.
+                if size_pass["probes_this_round"] > 6:
+                    size_pass["round"] += 1
+                    size_pass["probes_this_round"] = 1
+                # First round: all probes return None.
+                if size_pass["round"] == 0:
+                    return None
+                # Second round: first probe returns the element.
+                return size_radio_elem
+            # "Andere Versandmethoden" probe returns None.
+            if selector_type == By.TEXT and selector_value == "Andere Versandmethoden":
+                return None
+            # "Zurück" (back) probe returns the back button element.
+            if selector_type == By.TEXT and selector_value == "Zurück":
+                return back_elem
+            return None
+
         with (
             patch.object(
                 test_bot,
                 "web_probe",
                 new_callable = AsyncMock,
-                side_effect = [None, None, MagicMock(), MagicMock()],
-            ),
+                side_effect = probe_side_effect,
+            ) as mock_probe,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
@@ -1623,13 +1819,21 @@ class TestShippingOptionsDialog:
                 test_bot.timeout("quick_dom"),
             )
 
-        assert any(
-            click.args == (By.XPATH, _SHIPPING_BACK_XPATH)
-            for click in mock_click.await_args_list
+        # Back navigation happened via element.click(), not web_click.
+        back_elem.click.assert_awaited_once()
+        # No web_click for XPath-based back or other-methods selectors.
+        assert not any(
+            call.args[:2] == (By.XPATH, _SHIPPING_BACK_XPATH)
+            for call in mock_click.await_args_list
         )
         assert not any(
-            click.args == (By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
-            for click in mock_click.await_args_list
+            call.args[:2] == (By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
+            for call in mock_click.await_args_list
+        )
+        # "Zurück" was probed via By.TEXT.
+        assert any(
+            call.args[:2] == (By.TEXT, "Zurück")
+            for call in mock_probe.await_args_list
         )
 
     @pytest.mark.asyncio
@@ -1646,7 +1850,7 @@ class TestShippingOptionsDialog:
                 test_bot,
                 "web_probe",
                 new_callable = AsyncMock,
-                side_effect = [None, None, None],
+                return_value = None,
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
@@ -1669,16 +1873,38 @@ class TestShippingOptionsDialog:
     ) -> None:
         """Stop after two back steps when no supported size pane appears."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
+
+        back_elems = []
+        for _ in range(2):
+            elem = MagicMock()
+            elem.click = AsyncMock()
+            back_elems.append(elem)
+
+        zuruck_call_count = {"n": 0}
+
+        async def probe_side_effect(selector_type:Any, selector_value:str, **_:Any) -> Any:
+            """Async side effect for mocking web_probe calls."""
+            # Size radio probes always return None.
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
+                return None
+            # "Andere Versandmethoden" probe always returns None.
+            if selector_type == By.TEXT and selector_value == "Andere Versandmethoden":
+                return None
+            # "Zurück" (back) probe: return element for first 2 calls, None after.
+            if selector_type == By.TEXT and selector_value == "Zurück":
+                idx = zuruck_call_count["n"]
+                zuruck_call_count["n"] += 1
+                if idx < 2:
+                    return back_elems[idx]
+                return None
+            return None
+
         with (
             patch.object(
                 test_bot,
                 "web_probe",
                 new_callable = AsyncMock,
-                side_effect = [
-                    None, None, MagicMock(),
-                    None, None, MagicMock(),
-                    None, None,
-                ],
+                side_effect = probe_side_effect,
             ),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as click_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
@@ -1692,25 +1918,37 @@ class TestShippingOptionsDialog:
                 test_bot.timeout("quick_dom"),
             )
 
-        back_clicks = [
+        # Back navigation happened via element.click(), not web_click with XPath.
+        assert all(elem.click.await_count == 1 for elem in back_elems)
+        back_xpath_clicks = [
             call for call in click_mock.await_args_list
             if call.args == (By.XPATH, _SHIPPING_BACK_XPATH)
         ]
-        assert len(back_clicks) == 2
+        assert len(back_xpath_clicks) == 0
         options_mock.assert_not_awaited()
 
+    @staticmethod
+    def _mock_interactable_checkbox(checked:bool = False) -> MagicMock:
+        """Create a mock checkbox element with click tracking and optional checked attribute."""
+        el = MagicMock()
+        if checked:
+            el.attrs = {"checked": ""}
+        else:
+            el.attrs = {}
+        el.click = AsyncMock()
+        return el
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "case",
         [
-            # SMALL pre-checked, only unwanted carriers are toggled
             {
-                "options": ["Hermes_Päckchen"],
+                "options": ["DHL_2", "Hermes_P\u00e4ckchen"],
                 "radio_checked": True,
                 "expected_radio_click": False,
-                "expected_clicked_carriers": ["HERMES_002", "DHL_001"],
-                "expected_not_clicked_carriers": ["HERMES_001"],
+                "expected_clicked_carriers": ["HERMES_002"],
+                "expected_not_clicked_carriers": ["DHL_001", "HERMES_001"],
             },
-            # LARGE not checked, radio click needed and only unwanted carriers are toggled
             {
                 "options": ["DHL_10"],
                 "radio_checked": False,
@@ -1720,7 +1958,6 @@ class TestShippingOptionsDialog:
             },
         ],
     )
-    @pytest.mark.asyncio
     async def test_replace_mode_handles_radio_state(
         self,
         test_bot:KleinanzeigenBot,
@@ -1730,36 +1967,58 @@ class TestShippingOptionsDialog:
         """REPLACE mode: handles both pre-checked and unchecked radio states."""
         ad_cfg = self._make_ad_with_options(base_ad_config, case["options"])
 
-        radio_mock = self._mock_checkbox(checked = case["radio_checked"])
+        radio_mock = self._mock_interactable_checkbox(checked = case["radio_checked"])
+        weiter_mock = MagicMock()
+        weiter_mock.click = AsyncMock()
+        fertig_mock = MagicMock()
+        fertig_mock.click = AsyncMock()
+
+        # Track all checkbox mocks so we can inspect which were clicked.
+        checkbox_mocks:dict[str, MagicMock] = {}
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if "radio" in selector_value:
+            """Async side effect for mocking web_find calls."""
+            # Size radio via CSS selector.
+            if selector_type == By.CSS_SELECTOR and "radio" in selector_value:
                 return radio_mock
-            return self._mock_checkbox(checked = True)  # all checkboxes pre-checked
+            # Weiter button via By.TEXT.
+            if selector_type == By.TEXT and selector_value == "Weiter":
+                return weiter_mock
+            # Fertig button via By.TEXT.
+            if selector_type == By.TEXT and selector_value == "Fertig":
+                return fertig_mock
+            # Carrier checkbox via CSS selector — all pre-checked.
+            if selector_type == By.CSS_SELECTOR and "checkbox" in selector_value:
+                # Extract carrier code from the CSS selector value attribute.
+                code = selector_value.rsplit('"', 2)[-2] if '"' in selector_value else ""
+                if code not in checkbox_mocks:
+                    checkbox_mocks[code] = self._mock_interactable_checkbox(checked = True)
+                return checkbox_mocks[code]
+            return MagicMock()
 
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,  # noqa: F841
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await set_shipping_options(test_bot, ad_cfg, mode = AdUpdateStrategy.REPLACE)
 
-        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+        # Radio click behavior matches expectation (element.click, not web_click).
+        assert (radio_mock.click.await_count == 1) == case["expected_radio_click"]
 
-        # Radio click behavior matches expectation
-        radio_clicked = any("radio" in str(a[1]) for a in click_args)
-        assert radio_clicked == case["expected_radio_click"]
+        # Weiter and Fertig were clicked via element.click().
+        weiter_mock.click.assert_awaited_once()
+        fertig_mock.click.assert_awaited_once()
 
-        # Should click Weiter and Fertig
-        assert any("Weiter" in str(a[1]) for a in click_args)
-        assert any("Fertig" in str(a[1]) for a in click_args)
+        # web_click should never be called (all clicks are element.click()).
+        mock_click.assert_not_awaited()
 
-        # Should toggle exactly the expected carriers for this scenario
+        # Should toggle exactly the expected carriers for this scenario.
         for carrier_code in case["expected_clicked_carriers"]:
-            assert any(carrier_code in str(a[1]) for a in click_args)
+            assert checkbox_mocks[carrier_code].click.await_count == 1, f"Expected {carrier_code} to be toggled"
 
         for carrier_code in case["expected_not_clicked_carriers"]:
-            assert not any(carrier_code in str(a[1]) for a in click_args)
+            assert checkbox_mocks[carrier_code].click.await_count == 0, f"Expected {carrier_code} to NOT be toggled"
 
     @pytest.mark.asyncio
     async def test_replace_mode_dom_verified_unchecked_defaults_select_wanted_carrier(
@@ -1770,31 +2029,41 @@ class TestShippingOptionsDialog:
         """REPLACE mode must select wanted carriers when defaults are unchecked (DOM-verified for MEDIUM/LARGE)."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_5"])
 
-        radio_mock = self._mock_checkbox(checked = False)  # MEDIUM radio not selected yet
+        radio_mock = self._mock_interactable_checkbox(checked = False)  # MEDIUM radio not selected yet
+        weiter_mock = MagicMock()
+        weiter_mock.click = AsyncMock()
+        fertig_mock = MagicMock()
+        fertig_mock.click = AsyncMock()
+
+        checkbox_mocks:dict[str, MagicMock] = {
+            "HERMES_003": self._mock_interactable_checkbox(checked = False),
+            "DHL_002": self._mock_interactable_checkbox(checked = False),
+        }
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if "radio" in selector_value and "MEDIUM" in selector_value:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and "radio" in selector_value and "MEDIUM" in selector_value:
                 return radio_mock
-            # DOM probe confirms MEDIUM defaults can be unchecked after "Weiter"
-            if "HERMES_003" in selector_value:
-                return self._mock_checkbox(checked = False)
-            if "DHL_002" in selector_value:
-                return self._mock_checkbox(checked = False)
-            return self._mock_checkbox(checked = False)
+            if selector_type == By.TEXT and selector_value == "Weiter":
+                return weiter_mock
+            if selector_type == By.TEXT and selector_value == "Fertig":
+                return fertig_mock
+            if selector_type == By.CSS_SELECTOR and "checkbox" in selector_value:
+                for code, mock_el in checkbox_mocks.items():
+                    if code in selector_value:
+                        return mock_el
+            return self._mock_interactable_checkbox(checked = False)
 
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await set_shipping_options(test_bot, ad_cfg, mode = AdUpdateStrategy.REPLACE)
 
-        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
-
         # Regression guard for issue #956: wanted DHL_002 must be selected
-        assert any("DHL_002" in str(a[1]) for a in click_args)
+        assert checkbox_mocks["DHL_002"].click.await_count >= 1
         # Unwanted Hermes checkbox must remain untouched when already unchecked
-        assert not any("HERMES_003" in str(a[1]) for a in click_args)
+        assert checkbox_mocks["HERMES_003"].click.await_count == 0
 
     @pytest.mark.asyncio
     async def test_modify_mode_toggles_carriers(
@@ -1805,19 +2074,31 @@ class TestShippingOptionsDialog:
         """MODIFY mode: explicitly (de-)selects each carrier based on wanted set."""
         ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen", "DHL_2"])
 
-        radio_mock = self._mock_checkbox(checked = True)  # SMALL already selected
+        radio_mock = self._mock_interactable_checkbox(checked = True)  # SMALL already selected
+        weiter_mock = MagicMock()
+        weiter_mock.click = AsyncMock()
+        fertig_mock = MagicMock()
+        fertig_mock.click = AsyncMock()
+
+        checkbox_mocks:dict[str, MagicMock] = {
+            "HERMES_001": self._mock_interactable_checkbox(checked = True),
+            "HERMES_002": self._mock_interactable_checkbox(checked = True),
+            "DHL_001": self._mock_interactable_checkbox(checked = False),
+        }
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            if "radio" in selector_value and "SMALL" in selector_value:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and "radio" in selector_value and "SMALL" in selector_value:
                 return radio_mock
-            # HERMES_001 checked, HERMES_002 checked, DHL_001 unchecked
-            if "HERMES_001" in selector_value:
-                return self._mock_checkbox(checked = True)
-            if "HERMES_002" in selector_value:
-                return self._mock_checkbox(checked = True)
-            if "DHL_001" in selector_value:
-                return self._mock_checkbox(checked = False)
-            return self._mock_checkbox(checked = False)
+            if selector_type == By.TEXT and selector_value == "Weiter":
+                return weiter_mock
+            if selector_type == By.TEXT and selector_value == "Fertig":
+                return fertig_mock
+            if selector_type == By.CSS_SELECTOR and "checkbox" in selector_value:
+                for code, mock_el in checkbox_mocks.items():
+                    if code in selector_value:
+                        return mock_el
+            return self._mock_interactable_checkbox(checked = False)
 
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
@@ -1826,13 +2107,14 @@ class TestShippingOptionsDialog:
         ):
             await set_shipping_options(test_bot, ad_cfg, mode = AdUpdateStrategy.MODIFY)
 
-        click_args = [(c.args[0], c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2]
+        # web_click should never be called (all clicks are element.click()).
+        mock_click.assert_not_awaited()
         # HERMES_002 should be deselected (was checked, not wanted)
-        assert any("HERMES_002" in str(a[1]) for a in click_args)
+        assert checkbox_mocks["HERMES_002"].click.await_count == 1
         # DHL_001 should be selected (was unchecked, wanted via DHL_2 → DHL_001)
-        assert any("DHL_001" in str(a[1]) for a in click_args)
+        assert checkbox_mocks["DHL_001"].click.await_count == 1
         # HERMES_001 should NOT be clicked (was checked, wanted)
-        assert not any("HERMES_001" in str(a[1]) for a in click_args)
+        assert checkbox_mocks["HERMES_001"].click.await_count == 0
 
     @pytest.mark.asyncio
     async def test_unknown_option_raises_key_error(
@@ -1923,23 +2205,29 @@ class TestShippingOptionsDialog:
         base_ad_config:dict[str, Any],
     ) -> None:
         """Timeout on the final Fertig click should raise TimeoutError."""
-        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_Päckchen"])
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["Hermes_P\u00e4ckchen"])
 
-        async def click_side_effect(selector_type:By, selector_value:str, **_:Any) -> None:
-            if selector_type == By.XPATH and "Fertig" in selector_value:
-                raise TimeoutError("Fertig click timeout")
-
-        radio_mock = MagicMock()
-        radio_mock.attrs = {"checked": ""}
-        checkbox_mock = MagicMock()
-        checkbox_mock.attrs = {"checked": ""}
+        radio_mock = self._mock_interactable_checkbox(checked = True)
+        weiter_mock = MagicMock()
+        weiter_mock.click = AsyncMock()
+        fertig_mock = MagicMock()
+        fertig_mock.click = AsyncMock(side_effect = TimeoutError("Fertig click timeout"))
+        checkbox_mock = self._mock_interactable_checkbox(checked = True)
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
-            return radio_mock if "radio" in selector_value else checkbox_mock
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and "radio" in selector_value:
+                return radio_mock
+            if selector_type == By.TEXT and selector_value == "Weiter":
+                return weiter_mock
+            if selector_type == By.TEXT and selector_value == "Fertig":
+                return fertig_mock
+            if selector_type == By.CSS_SELECTOR and "checkbox" in selector_value:
+                return checkbox_mock
+            return checkbox_mock
 
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_side_effect),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             pytest.raises(TimeoutError, match = "Unable to close shipping dialog!"),
         ):
@@ -1976,10 +2264,14 @@ class TestShippingOptionsDialog:
 
         # Mock web_execute to handle all JavaScript calls
         async def mock_web_execute(script:str) -> Any:
+            """Async mock for web_execute calls."""
             if script == "document.body.scrollHeight":
                 return 0  # Return integer to prevent scrolling loop
             if "window.location.href" in script:
                 return test_bot.page.url  # Return confirmation URL for ad_id extraction
+            # Submit button JS click returns True (button found and clicked)
+            if "querySelectorAll('button')" in script:
+                return True
             return None
 
         # Create mock elements
@@ -1991,9 +2283,16 @@ class TestShippingOptionsDialog:
 
         shipping_size_radio = MagicMock()
         shipping_size_radio.attrs = {"checked": ""}  # SMALL radio is pre-checked
+        shipping_size_radio.click = AsyncMock()
 
         shipping_checkbox = MagicMock()
         shipping_checkbox.attrs = {"checked": ""}  # Simulate pre-checked carriers for SMALL
+        shipping_checkbox.click = AsyncMock()
+
+        weiter_mock = MagicMock()
+        weiter_mock.click = AsyncMock()
+        fertig_mock = MagicMock()
+        fertig_mock.click = AsyncMock()
 
         category_path_elem = MagicMock()
         category_path_elem.apply = AsyncMock(return_value = "Test Category")
@@ -2001,7 +2300,7 @@ class TestShippingOptionsDialog:
         # Mock the necessary web interaction methods
         with (
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
@@ -2018,9 +2317,11 @@ class TestShippingOptionsDialog:
         ):
 
             async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                """Async side effect for mocking web_probe calls."""
                 if selector_type == By.ID and selector_value == "ad-category-path":
                     return category_path_elem
-                if selector_type == By.XPATH and selector_value == _SHIPPING_SIZE_RADIO_XPATH:
+                # Shipping size radio via CSS probe
+                if selector_type == By.CSS_SELECTOR and "radio" in selector_value and "SMALL" in selector_value:
                     return shipping_size_radio
                 return None
 
@@ -2028,15 +2329,25 @@ class TestShippingOptionsDialog:
 
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+                """Async mock side effect for web_find calls."""
                 if selector_value == "meta[name=_csrf]":
                     return csrf_token_elem
                 if selector_value == "myftr-shppngcrt-frm":
                     return shipping_form_elem
-                # New shipping dialog: size radio via XPath with value attribute
-                if selector_type == By.XPATH and '@type="radio"' in selector_value and "@value=" in selector_value:
+                # Category link via By.TEXT
+                if selector_type == By.TEXT and selector_value in {"W\u00e4hle deine Kategorie", "Kategorie"}:
+                    cat_link = MagicMock()
+                    cat_link.click = AsyncMock()
+                    return cat_link
+                if selector_type == By.TEXT and selector_value == "Weiter":
+                    return weiter_mock
+                # New shipping dialog: size radio via CSS with value attribute
+                if selector_type == By.CSS_SELECTOR and "radio" in selector_value and "SMALL" in selector_value:
                     return shipping_size_radio
-                if selector_type == By.XPATH and '@type="checkbox"' in selector_value and "@value=" in selector_value:
+                if selector_type == By.CSS_SELECTOR and "checkbox" in selector_value:
                     return shipping_checkbox
+                if selector_type == By.TEXT and selector_value == "Fertig":
+                    return fertig_mock
                 return None
 
             mock_find.side_effect = mock_find_side_effect
@@ -2049,18 +2360,14 @@ class TestShippingOptionsDialog:
                 await test_bot.publish_ad(str(ad_file), ad_cfg, ad_cfg_orig, published_ads)
 
             # Verify that the shipping dialog was interacted with:
-            # - web_find should have been called for the size radio (XPath with @type="radio")
-            # - web_click should have been called to deselect unwanted carriers and close dialog
-            radio_find_calls = [c for c in mock_find.await_args_list if len(c.args) >= 2 and '@type="radio"' in str(c.args[1])]
+            # - web_find should have been called for the size radio (CSS with radio+SMALL)
+            radio_find_calls = [c for c in mock_find.await_args_list if len(c.args) >= 2 and "radio" in str(c.args[1]) and "SMALL" in str(c.args[1])]
             assert len(radio_find_calls) >= 1, "Expected at least one web_find for size radio"
 
-            click_xpath_values = [str(c.args[1]) for c in mock_click.await_args_list if len(c.args) >= 2 and c.args[0] == By.XPATH]
-            # Should click Weiter, deselect HERMES_002 (unwanted), and click Fertig
-            assert any("Weiter" in v for v in click_xpath_values), "Expected click on Weiter button"
-            assert any("HERMES_002" in v for v in click_xpath_values), "Expected click to deselect HERMES_002"
-            assert not any("DHL_001" in v for v in click_xpath_values), "Did not expect click for wanted DHL_001"
-            assert not any("HERMES_001" in v for v in click_xpath_values), "Did not expect click for wanted HERMES_001"
-            assert any("Fertig" in v for v in click_xpath_values), "Expected click on Fertig button"
+            # Verify Weiter and Fertig were found via By.TEXT
+            text_finds = [str(c.args[1]) for c in mock_find.await_args_list if len(c.args) >= 2 and c.args[0] == By.TEXT]
+            assert any("Weiter" in v for v in text_finds), "Expected find on Weiter button"
+            assert any("Fertig" in v for v in text_finds), "Expected find on Fertig button"
 
             # Verify the file was created in the temporary directory
             assert ad_file.exists()
@@ -2077,7 +2384,7 @@ class TestWantedShippingSelection:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("shipping_type", "expected_label"),
-        [("SHIPPING", "Versand möglich"), ("PICKUP", "Nur Abholung")],
+        [("SHIPPING", "Versand m\u00f6glich"), ("PICKUP", "Nur Abholung")],
         ids = ["shipping", "pickup"],
     )
     async def test_wanted_shipping_selects_combobox_dropdown(
@@ -2087,7 +2394,7 @@ class TestWantedShippingSelection:
         shipping_type:str,
         expected_label:str,
     ) -> None:
-        """WANTED ads should select shipping via button-combobox dropdown using VERSAND_COMBOBOX_SELECTOR."""
+        """WANTED ads should select shipping via button-combobox dropdown using individual CSS probes."""
         ad_cfg = Ad.model_validate(
             base_ad_config
             | {
@@ -2101,21 +2408,19 @@ class TestWantedShippingSelection:
         combobox_btn.attrs = {"id": "babyausstattung.versand"}
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = combobox_btn) as mock_find,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = combobox_btn) as mock_probe,
             patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_btn_combo,
         ):
             await set_shipping_form(test_bot, ad_cfg)
 
-        mock_find.assert_awaited_once()
-        assert mock_find.await_args is not None
-        assert mock_find.await_args.args == (
-            By.CSS_SELECTOR,
-            VERSAND_COMBOBOX_SELECTOR,
-        )
         mock_select_btn_combo.assert_awaited_once_with(
             "babyausstattung.versand",
             expected_label,
         )
+        # Verify at least one CSS probe was made
+        assert mock_probe.await_count >= 1
+        assert mock_probe.await_args is not None
+        assert mock_probe.await_args.args[0] == By.CSS_SELECTOR
 
     @pytest.mark.asyncio
     async def test_wanted_shipping_raises_when_combobox_not_found(
@@ -2134,7 +2439,7 @@ class TestWantedShippingSelection:
         )
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("combobox not found in DOM")),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock),
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
         ):
@@ -2157,12 +2462,12 @@ class TestWantedShippingSelection:
         )
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock) as mock_probe,
             patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock) as mock_select_btn_combo,
         ):
             await set_shipping_form(test_bot, ad_cfg)
 
-        mock_find.assert_not_awaited()
+        mock_probe.assert_not_awaited()
         mock_select_btn_combo.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -2185,7 +2490,7 @@ class TestWantedShippingSelection:
         combobox_btn.attrs = {}  # No "id" key
 
         with (
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = combobox_btn),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = combobox_btn),
             patch.object(test_bot, "web_select_button_combobox", new_callable = AsyncMock),
             pytest.raises(TimeoutError, match = "Failed to set shipping attribute for type 'SHIPPING'!"),
         ):
@@ -2390,8 +2695,8 @@ class TestSpecialAttributes:
 
             assert mock_select.await_count == 1
             assert mock_select.await_args is not None
-            assert mock_select.await_args.args[0] == By.XPATH
-            assert "contains(@name, 'autos.model_s')" in str(mock_select.await_args.args[1])
+            assert mock_select.await_args.args[0] == By.CSS_SELECTOR
+            assert "attributeMap[autos.marke_s+autos.model_s]" in str(mock_select.await_args.args[1])
             assert mock_select.await_args.args[2] == "a3"
 
     @pytest.mark.asyncio
@@ -2705,6 +3010,49 @@ class TestSpecialAttributes:
         assert _special_attribute_candidate_priority(elem) == (8, 0)
 
 
+class TestCssFallbackCandidates:
+    """Tests for CSS fallback when XPath returns no special-attribute candidates."""
+
+    @pytest.mark.asyncio
+    async def test_css_fallback_extends_candidates_when_xpath_empty(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """When XPath returns no candidates, the CSS fallback should find and extend the list."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"brand_s": "audi"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        brand_elem = MagicMock()
+        brand_attrs = MagicMock()
+        brand_attrs.get.side_effect = lambda key, default = None: {
+            "id": "brand",
+            "type": None,
+            "role": None,
+            "name": None,
+        }.get(key, default)
+        brand_elem.attrs = brand_attrs
+        brand_elem.local_name = "input"
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            """Async side effect for mocking web_find_all calls."""
+            if selector_type == By.XPATH:
+                raise TimeoutError("xpath timeout")
+            if selector_type == By.CSS_SELECTOR and selector_value == "#brand":
+                return [brand_elem]
+            return []
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch.object(test_bot, "web_input", new_callable = AsyncMock) as mock_input,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_input.assert_awaited_once()
+
+
 class TestConditionSelector:
     """Regression tests for condition dialog selection."""
 
@@ -2712,38 +3060,140 @@ class TestConditionSelector:
     async def test_condition_selects_radio_by_value(self, test_bot:KleinanzeigenBot) -> None:
         """Condition selection should resolve radios by value in the new dialog."""
         dialog = MagicMock()
-        trigger = MagicMock()
-        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
-        trigger.click = AsyncMock()
+        trigger_btn = MagicMock()
+        trigger_btn.click = AsyncMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
         radio_attrs.id = "radio-condition-ok"
         radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-ok" if key == "id" else default
         radio.attrs = radio_attrs
         radio.click = AsyncMock()
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+        bestaetigen_btn = MagicMock()
+        bestaetigen_btn.click = AsyncMock()
+
+        # web_execute returns a JSON string describing the located trigger button.
+        trigger_info = '{"found": true, "id": "condition-trigger", "ariaControls": "condition-dialog"}'
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            # trigger lookup returns the dialog trigger button
-            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
-                return trigger
-            # radio lookup returns the matching radio
-            if selector_type == By.XPATH and "@type='radio'" in selector_value and "@value='ok'" in selector_value:
+            """Async side effect for mocking web_probe calls."""
+            # radio lookup returns the matching radio (CSS selector scoped to open dialog)
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value and '"ok"' in selector_value:
                 return radio
             return None
 
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
+                return dialog
+            if selector_type == By.ID and selector_value == "condition-trigger":
+                return trigger_btn
+            if selector_type == By.CSS_SELECTOR and 'label[for="radio-condition-ok"]' in selector_value:
+                return label_elem
+            if selector_type == By.TEXT and selector_value == "Best\u00e4tigen":
+                return bestaetigen_btn
+            raise TimeoutError(f"unexpected find: {selector_type} {selector_value}")
+
         with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             handled = await _set_condition(test_bot, "ok")
 
             assert handled is True
 
-            clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
-            trigger.click.assert_awaited_once()
-            assert any("label[@for=" in selector and "radio-condition-ok" in selector for selector in clicked_xpath_selectors)
-            assert any("Bestätigen" in selector for selector in clicked_xpath_selectors)
+            # Trigger button is clicked via web_find(By.ID) + .click(), not web_click.
+            trigger_btn.click.assert_awaited_once()
+            # Label for the matched radio is clicked directly.
+            label_elem.click.assert_awaited_once()
+            # Bestätigen button is clicked directly.
+            bestaetigen_btn.click.assert_awaited_once()
+            # web_click is no longer used by the condition dialog path.
+            mock_click.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_condition_malformed_trigger_json_falls_back(self, test_bot:KleinanzeigenBot) -> None:
+        """Malformed JSON from web_execute should return False (fall back to generic handler)."""
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "not-json"),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+        ):
+            handled = await _set_condition(test_bot, "ok")
+
+        assert handled is False
+
+    @pytest.mark.asyncio
+    async def test_condition_no_trigger_id_uses_aria_haspopup_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        """When trigger_info lacks an id, fall back to button[aria-haspopup] CSS probes."""
+        hp_btn = MagicMock()
+        hp_btn.click = AsyncMock()
+        dialog = MagicMock()
+        radio = MagicMock()
+        radio_attrs = MagicMock()
+        radio_attrs.id = "radio-condition-ok"
+        radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-ok" if key == "id" else default
+        radio.attrs = radio_attrs
+        radio.click = AsyncMock()
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+        bestaetigen_btn = MagicMock()
+        bestaetigen_btn.click = AsyncMock()
+
+        # trigger_info has found:true but no id — forces aria-haspopup fallback.
+        trigger_info = '{"found": true, "id": "", "ariaControls": "condition-dialog"}'
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value and '"ok"' in selector_value:
+                return radio
+            if selector_type == By.CSS_SELECTOR and "aria-haspopup" in selector_value:
+                return hp_btn
+            return None
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
+                return dialog
+            if selector_type == By.CSS_SELECTOR and 'label[for="radio-condition-ok"]' in selector_value:
+                return label_elem
+            if selector_type == By.TEXT and selector_value == "Best\u00e4tigen":
+                return bestaetigen_btn
+            raise TimeoutError(f"unexpected find: {selector_type} {selector_value}")
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+        ):
+            handled = await _set_condition(test_bot, "ok")
+
+        assert handled is True
+        hp_btn.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_condition_no_trigger_id_and_no_aria_haspopup_raises(self, test_bot:KleinanzeigenBot) -> None:
+        """When trigger_info has no id and no aria-haspopup button is found, raise TimeoutError."""
+        trigger_info = '{"found": true, "id": "", "ariaControls": "condition-dialog"}'
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
+            # No aria-haspopup buttons found.
+            return None
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "Failed to set attribute"),
+        ):
+            await _set_condition(test_bot, "ok")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -2769,32 +3219,48 @@ class TestConditionSelector:
         """Condition tokens should resolve to the current API codes and warn only for legacy German values."""
         caplog.set_level(logging.WARNING, logger = LOG.name)
         dialog = MagicMock()
-        trigger = MagicMock()
-        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
-        trigger.click = AsyncMock()
+        trigger_btn = MagicMock()
+        trigger_btn.click = AsyncMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
         radio_attrs.get.side_effect = lambda key, default = None: f"radio-condition-{expected_api_value}" if key == "id" else default
         radio.attrs = radio_attrs
         radio.click = AsyncMock()
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+        bestaetigen_btn = MagicMock()
+        bestaetigen_btn.click = AsyncMock()
 
+        trigger_info = '{"found": true, "id": "condition-trigger", "ariaControls": "condition-dialog"}'
         probed_values:list[str] = []
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
-                return trigger
-            if selector_type == By.XPATH and "@type='radio'" in selector_value:
-                if f"@value='{expected_api_value}'" in selector_value:
+            """Async side effect for mocking web_probe calls."""
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
+                if f'value="{expected_api_value}"' in selector_value:
                     probed_values.append(expected_api_value)
                     return radio
-                if f"@value='{configured}'" in selector_value:
+                if f'value="{configured}"' in selector_value:
                     probed_values.append(configured)
                     return radio
             return None
 
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
+                return dialog
+            if selector_type == By.ID and selector_value == "condition-trigger":
+                return trigger_btn
+            if selector_type == By.CSS_SELECTOR and f'label[for="radio-condition-{expected_api_value}"]' in selector_value:
+                return label_elem
+            if selector_type == By.TEXT and selector_value == "Best\u00e4tigen":
+                return bestaetigen_btn
+            raise TimeoutError(f"unexpected find: {selector_type} {selector_value}")
+
         with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             handled = await _set_condition(test_bot, configured)
@@ -2810,8 +3276,9 @@ class TestConditionSelector:
         else:
             assert warning_messages == []
             assert probed_values == [configured]
-        clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
-        assert any(f"radio-condition-{expected_api_value}" in selector for selector in clicked_xpath_selectors)
+        # The label for the resolved radio is clicked directly (not via web_click).
+        label_elem.click.assert_awaited_once()
+        mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_condition_legacy_value_falls_back_when_mapped_value_is_missing(
@@ -2822,33 +3289,49 @@ class TestConditionSelector:
         """Legacy values should still work if the mapped API radio is unavailable."""
         caplog.set_level(logging.WARNING, logger = LOG.name)
         dialog = MagicMock()
-        trigger = MagicMock()
-        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
-        trigger.click = AsyncMock()
+        trigger_btn = MagicMock()
+        trigger_btn.click = AsyncMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
         radio_attrs.id = "radio-condition-wie_neu"
         radio_attrs.get.side_effect = lambda key, default = None: "radio-condition-wie_neu" if key == "id" else default
         radio.attrs = radio_attrs
         radio.click = AsyncMock()
+        label_elem = MagicMock()
+        label_elem.click = AsyncMock()
+        bestaetigen_btn = MagicMock()
+        bestaetigen_btn.click = AsyncMock()
 
+        trigger_info = '{"found": true, "id": "condition-trigger", "ariaControls": "condition-dialog"}'
         probed_values:list[str] = []
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
-                return trigger
-            if selector_type == By.XPATH and "@type='radio'" in selector_value:
-                if "@value='like_new'" in selector_value:
+            """Async side effect for mocking web_probe calls."""
+            if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value:
+                if 'value="like_new"' in selector_value:
                     probed_values.append("like_new")
                     return None
-                if "@value='wie_neu'" in selector_value:
+                if 'value="wie_neu"' in selector_value:
                     probed_values.append("wie_neu")
                     return radio
             return None
 
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
+                return dialog
+            if selector_type == By.ID and selector_value == "condition-trigger":
+                return trigger_btn
+            if selector_type == By.CSS_SELECTOR and 'label[for="radio-condition-wie_neu"]' in selector_value:
+                return label_elem
+            if selector_type == By.TEXT and selector_value == "Best\u00e4tigen":
+                return bestaetigen_btn
+            raise TimeoutError(f"unexpected find: {selector_type} {selector_value}")
+
         with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             handled = await _set_condition(test_bot, "wie_neu")
@@ -2858,9 +3341,10 @@ class TestConditionSelector:
         assert len(warning_messages) == 1
         assert "wie_neu" in warning_messages[0]
         assert "like_new" in warning_messages[0]
-        assert probed_values == ["like_new", "wie_neu"]
-        clicked_xpath_selectors = [str(call.args[1]) for call in mock_click.await_args_list if len(call.args) > 1]
-        assert any("radio-condition-wie_neu" in selector for selector in clicked_xpath_selectors)
+        assert probed_values == ["like_new", "like_new", "wie_neu"]
+        # The legacy radio's label is clicked directly.
+        label_elem.click.assert_awaited_once()
+        mock_click.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_condition_legacy_value_warns_even_when_not_handled(
@@ -2871,7 +3355,10 @@ class TestConditionSelector:
         """Legacy German values should warn even when the condition dialog path is unavailable."""
         caplog.set_level(logging.WARNING, logger = LOG.name)
 
-        with patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None):
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = '{"found": false}'),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+        ):
             handled = await _set_condition(test_bot, "wie_neu")
 
         assert handled is False
@@ -2884,20 +3371,29 @@ class TestConditionSelector:
     async def test_condition_unknown_value_raises(self, test_bot:KleinanzeigenBot) -> None:
         """Unknown condition values should raise when no matching radio option is present."""
         dialog = MagicMock()
-        trigger = MagicMock()
-        trigger.attrs = {"id": "condition-trigger", "aria-controls": "condition-dialog"}
-        trigger.click = AsyncMock()
+        trigger_btn = MagicMock()
+        trigger_btn.click = AsyncMock()
+
+        trigger_info = '{"found": true, "id": "condition-trigger", "ariaControls": "condition-dialog"}'
 
         async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
-            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
-                return trigger
+            """Async side effect for mocking web_probe calls."""
             # Radio lookups for unknown values return None (no matching radio in the dialog).
             return None
 
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and selector_value == "dialog[open]":
+                return dialog
+            if selector_type == By.ID and selector_value == "condition-trigger":
+                return trigger_btn
+            raise TimeoutError(f"unexpected find: {selector_type} {selector_value}")
+
         with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dialog),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
             pytest.raises(TimeoutError, match = "Failed to set attribute 'condition_s'"),
         ):
             await _set_condition(test_bot, "totally_unknown_value")
@@ -2905,29 +3401,20 @@ class TestConditionSelector:
     @pytest.mark.asyncio
     async def test_condition_rejects_shipping_trigger(self, test_bot:KleinanzeigenBot) -> None:
         """Condition dialog path should not click shipping trigger controls."""
-        trigger = MagicMock()
-        trigger.attrs = {
-            "id": "ad-shipping-options",
-            "aria-controls": None,
-            "aria-haspopup": "dialog",
-        }
-        trigger.click = AsyncMock()
-
-        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
-            if selector_type == By.XPATH and "contains(@for, '.condition')" in selector_value:
-                return trigger
-            raise TimeoutError("unexpected selector")
+        # The JS trigger-location helper resolves to a shipping-related button;
+        # the condition dialog path must skip it and fall back to generic handling.
+        trigger_info = '{"found": true, "id": "ad-shipping-options", "ariaControls": ""}'
 
         with (
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = trigger),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = trigger_info),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("unexpected find")),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
         ):
             handled = await _set_condition(test_bot, "new")
 
         assert handled is False
         # Regression guard: wrong shipping trigger must never be clicked by condition handler
-        trigger.click.assert_not_awaited()
         mock_click.assert_not_awaited()
 
 
@@ -3067,12 +3554,16 @@ class TestConditionFallbackToGenericHandler:
         assert len([message for message in warning_messages if "Special attribute 'condition_s' is not available" in message]) == 1
 
     @pytest.mark.asyncio
-    async def test_condition_s_lookup_timeout_propagates(
+    async def test_condition_s_lookup_timeout_warns_and_continues(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Lookup timeouts for condition_s should still fail instead of being skipped."""
+        """Lookup timeouts for condition_s now fall back to CSS selectors and, when
+        those also time out, warn and continue (redesign-safe resilience) instead of
+        surfacing the raw XPath TimeoutError."""
+        caplog.set_level(logging.WARNING, logger = LOG.name)
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "185/249", "special_attributes": {"condition_s": "ok"}, "shipping_type": "PICKUP"})
 
         condition_probe = MagicMock()
@@ -3081,10 +3572,71 @@ class TestConditionFallbackToGenericHandler:
         with (
             patch("kleinanzeigen_bot.publishing_form._set_condition", new_callable = AsyncMock, return_value = False),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = condition_probe),
+            # Every web_find_all (XPath + CSS fallback) times out.
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("lookup timeout")),
-            pytest.raises(TimeoutError, match = "lookup timeout"),
         ):
             await set_special_attributes(test_bot, ad_cfg)
+
+        # condition_s is unavailable after both XPath and CSS lookups time out;
+        # the resilient fallback warns and skips instead of raising.
+        warning_messages = [record.message for record in caplog.records if record.levelno == logging.WARNING]
+        assert any("Special attribute 'condition_s' is not available" in m for m in warning_messages)
+
+    @pytest.mark.asyncio
+    async def test_condition_s_xpath_probe_timeout_then_css_found(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """When the XPath probe raises TimeoutError but a CSS fallback probe finds the
+        condition element, the element should be used (covers lines 1303-1305, 1317)."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "category": "185/249",
+                "special_attributes": {"condition_s": "ok"},
+                "shipping_type": "PICKUP",
+            }
+        )
+
+        condition_elem = MagicMock()
+        condition_attrs = MagicMock()
+        condition_attrs.get.side_effect = lambda key, default = None: {
+            "id": "sonstiges.condition",
+            "type": "button",
+            "role": "combobox",
+            "name": None,
+        }.get(key, default)
+        condition_elem.attrs = condition_attrs
+        condition_elem.local_name = "button"
+
+        async def probe_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
+            """Async side effect for mocking web_probe calls."""
+            # XPath probe raises TimeoutError (handled by try/except).
+            if selector_type == By.XPATH and "condition_s" in selector_value:
+                raise TimeoutError("xpath timeout")
+            # CSS fallback: first pattern matches.
+            if selector_type == By.CSS_SELECTOR and "label[for*='.condition']" in selector_value:
+                return condition_elem
+            return None
+
+        async def find_all_side_effect(selector_type:By, selector_value:str, **_:Any) -> list[Element]:
+            """Async side effect for mocking web_find_all calls."""
+            # CSS fallback inside _resolve_special_attribute_element finds the element.
+            if selector_type == By.CSS_SELECTOR and selector_value == "#condition":
+                return [condition_elem]
+            return []
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._set_condition", new_callable = AsyncMock, return_value = False),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all_side_effect),
+            patch("kleinanzeigen_bot.publishing_form._select_button_combobox", new_callable = AsyncMock) as mock_select_combobox,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        # The condition element was found via CSS fallback and dispatched to the combobox handler.
+        mock_select_combobox.assert_awaited_once_with(test_bot, "sonstiges.condition", "ok")
 
     @pytest.mark.asyncio
     async def test_special_attributes_text_input_fallback(

@@ -157,6 +157,51 @@ async def _try_recover_ad_id_from_redirect(
     return None
 
 
+_SUBMIT_LABELS:Final[tuple[str, ...]] = (
+    "Anzeige aufgeben",
+    "\u00c4nderungen speichern",
+    "Anzeige speichern",
+)
+
+
+async def _click_submit_button(web:WebScrapingMixin) -> None:
+    """Find and click the submit button across page variants.
+
+    Uses JS to locate the <button> element (not a child span/div) containing
+    the label text, ensuring the click reaches the actual button.  Wrapped in
+    ``web_await`` to retry because React may not have re-rendered the submit
+    button after a deferred title update or captcha solve.
+    """
+
+    async def _find_and_click() -> bool:
+        """Attempt to find and click a submit button for any known label."""
+        for label in _SUBMIT_LABELS:
+            clicked = await web.web_execute(f"""
+            (() => {{
+                const buttons = document.querySelectorAll('button');
+                for (const btn of buttons) {{
+                    if (btn.textContent.trim().includes('{label}')) {{
+                        btn.click();
+                        return true;
+                    }}
+                }}
+                return false;
+            }})()
+            """)
+            if clicked:
+                return True
+        return False
+
+    try:
+        await web.web_await(
+            _find_and_click,
+            timeout_error_message = str(_("Could not find submit button")),
+        )
+    except TimeoutError:
+        raise TimeoutError(_("Could not find submit button")) from None
+    await web.web_sleep()
+
+
 async def submit_and_confirm_ad(
     web:WebScrapingMixin,
     ad_file:str,
@@ -201,7 +246,7 @@ async def submit_and_confirm_ad(
     # Click is retryable — no submission can have occurred before this point.
     # Edit page uses 'Änderungen speichern' or 'Anzeige speichern'; publish page uses 'Anzeige aufgeben'
     pre_submit_referrer = str(await web.web_execute("document.referrer") or "")
-    await web.web_click(By.XPATH, "//button[contains(., 'Anzeige aufgeben') or contains(., 'Änderungen speichern') or contains(., 'Anzeige speichern')]")
+    await _click_submit_button(web)
 
     # Everything after the first click is uncertain: the ad may already have been submitted.
     ad_id:int | None = None
@@ -212,15 +257,11 @@ async def submit_and_confirm_ad(
         # PostListingForm v2 may show an "Effektiver verkaufen" upsell
         # dialog after clicking submit.  Dismiss it so the actual form
         # POST can proceed.
-        upsell_dialog = await web.web_probe(
-            By.XPATH, "//dialog[@open and contains(., 'Effektiver verkaufen')]", timeout = quick_dom
-        )
-        if upsell_dialog is not None:
+        upsell_dialog_text = await web.web_probe(By.TEXT, "Effektiver verkaufen", timeout = quick_dom)
+        if upsell_dialog_text is not None:
             LOG.info("Dismissing upsell dialog...")
-            await web.web_click(
-                By.XPATH, "//dialog[@open]//button[contains(., 'Ohne Hochschieben weiter')]",
-                timeout = quick_dom,
-            )
+            dismiss_btn = await web.web_find(By.TEXT, "Ohne Hochschieben weiter", timeout = quick_dom)
+            await dismiss_btn.click()
             await web.web_sleep(500)  # let the dialog close animation finish
 
         imprint_btn = await web.web_probe(By.ID, "imprint-guidance-submit", timeout = quick_dom)
@@ -229,8 +270,7 @@ async def submit_and_confirm_ad(
 
         # check for no image question
         if not ad_cfg.images:
-            image_hint_xpath = '//button[contains(., "Ohne Bild veröffentlichen")]'
-            image_hint_button = await web.web_probe(By.XPATH, image_hint_xpath, timeout = quick_dom)
+            image_hint_button = await web.web_probe(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = quick_dom)
             if image_hint_button is not None:
                 await image_hint_button.click()
 
@@ -248,6 +288,11 @@ async def submit_and_confirm_ad(
         confirmation_timeout = web.timeout("publishing_confirmation")
 
         async def _check_confirmation_state() -> bool:
+            """Check whether the submitted ad has reached a confirmed state.
+
+            Polls the confirmation page indicators and returns the ad ID when
+            confirmation is detected, or raises on timeout.
+            """
             nonlocal idless_success_detected
             url = str(await web.web_execute("window.location.href"))
             if "p-anzeige-aufgeben-bestaetigung.html?adId=" in url:

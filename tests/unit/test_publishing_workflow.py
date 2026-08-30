@@ -58,6 +58,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
         first_failure:Exception,
         first_title:str,
     ) -> None:
+        """Updating ads continues after a retryable first-ad failure."""
         ad_one = build_update_ad(base_ad_config, 101, first_title)
         ad_two = build_update_ad(base_ad_config, 102, "Success Ad")
 
@@ -94,6 +95,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
     @pytest.mark.asyncio
     async def test_update_ads_publish_submission_uncertain_is_not_retried(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Uncertain publish-submission outcomes are not retried."""
         ad_one = build_update_ad(base_ad_config, 301, "Uncertain Update")
         ad_two = build_update_ad(base_ad_config, 302, "Second Update")
 
@@ -126,6 +128,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
     @pytest.mark.asyncio
     async def test_update_ads_category_resolution_error_is_not_retried(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Category-resolution errors during ad updates are not retried."""
         ad_one = build_update_ad(base_ad_config, 303, "Category Error Update")
         ad_two = build_update_ad(base_ad_config, 304, "Second Update")
 
@@ -158,6 +161,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
     @pytest.mark.asyncio
     async def test_update_ads_cancelled_error_propagates_immediately(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Cancelled errors propagate immediately without retry."""
         ad_one = build_update_ad(base_ad_config, 401, "Cancelled Ad")
         ad_two = build_update_ad(base_ad_config, 402, "Should Not Run")
 
@@ -177,6 +181,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
 
     @pytest.mark.asyncio
     async def test_update_ads_publishing_result_timeout_is_non_fatal(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
+        """Publishing-result timeouts are treated as non-fatal."""
         ad_one = build_update_ad(base_ad_config, 501, "Result Timeout")
 
         with (
@@ -356,6 +361,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         mock_page:MagicMock,
         caplog:pytest.LogCaptureFixture,
     ) -> None:
+        """Post-publish persistence errors are treated as fail-closed."""
         test_bot.page = mock_page
         test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
         test_bot.keep_old_ads = False
@@ -409,6 +415,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         base_ad_config:dict[str, Any],
         caplog:pytest.LogCaptureFixture,
     ) -> None:
+        """Publishing fetches published ads strictly for ID-less title cleanup."""
         test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
         test_bot.config.publishing.delete_old_ads_by_title = True
 
@@ -454,6 +461,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         base_ad_config:dict[str, Any],
         caplog:pytest.LogCaptureFixture,
     ) -> None:
+        """Publishing fails closed when strict published-ads fetch fails for ID-less candidates."""
         test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
         test_bot.config.publishing.delete_old_ads_by_title = True
 
@@ -490,6 +498,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Keep-old strategy falls back when strict recovery snapshot fetching fails."""
         test_bot.config.publishing.delete_old_ads = "BEFORE_PUBLISH"
         test_bot.config.publishing.delete_old_ads_by_title = True
         test_bot.keep_old_ads = True
@@ -526,6 +535,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
     ) -> None:
+        """Persistence failures are not retried and the next ad is still processed."""
         ad_one = build_update_ad(base_ad_config, 401, "Persistence Error Update")
         ad_two = build_update_ad(base_ad_config, 402, "Healthy Update")
 
@@ -897,7 +907,10 @@ class TestPublishAdPostSubmitUncertainty:
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_side_effect),
+            patch.object(
+                test_bot, "web_await", new_callable = AsyncMock,
+                side_effect = [True, web_await_side_effect] if web_await_side_effect is not None else None,
+            ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ]
 
@@ -1084,8 +1097,13 @@ class TestWantedShippingSelection:
         ad_file = str(tmp_path / "ad.yaml")
 
         async def execute_side_effect(script:str) -> Any:
+            """Async side effect for mocking web_execute calls."""
             if "window.location.href" in script:
                 return test_bot.page.url
+            # _click_submit_button uses JS to find and click the <button>;
+            # return True so the click is considered successful.
+            if "querySelectorAll('button')" in script:
+                return True
             return None
 
         with (
