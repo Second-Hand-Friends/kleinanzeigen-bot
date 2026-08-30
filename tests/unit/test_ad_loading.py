@@ -26,6 +26,7 @@ from kleinanzeigen_bot.model.config_model import (
     Config,
 )
 from kleinanzeigen_bot.utils import dicts, misc
+from kleinanzeigen_bot.utils.pydantics import format_validation_error
 
 # --------------------------------------------------------------------------- #
 # Local fixtures (base_ad_config is in tests/conftest.py)
@@ -326,6 +327,20 @@ _VALIDATION_ERROR_CASES = [
 ]
 
 
+_FILE_CONTEXT_VALIDATION_ERROR_CASES = [
+    pytest.param(
+        {"title": "x" * 66},
+        "title length exceeds 65 characters",
+        id = "title_too_long",
+    ),
+    pytest.param(
+        {"description": "x" * 4_001},
+        "description length exceeds 4000 characters",
+        id = "description_too_long",
+    ),
+]
+
+
 @pytest.mark.parametrize(("ad_overrides", "expected_error"), _VALIDATION_ERROR_CASES)
 def test_load_ads_validation_errors(
     tmp_path:Path,
@@ -353,6 +368,70 @@ def test_load_ads_validation_errors(
             command = "publish",
         )
     assert expected_error in str(exc_info.value)
+
+
+@pytest.mark.parametrize(("ad_overrides", "expected_error"), _FILE_CONTEXT_VALIDATION_ERROR_CASES)
+def test_load_ads_validation_errors_include_ad_file_path(
+    tmp_path:Path,
+    base_ad_config:dict[str, Any],
+    test_bot_config:Config,
+    ad_overrides:dict[str, Any],
+    expected_error:str,
+) -> None:
+    """Invalid ad files include their paths in the user-facing validation error."""
+    ad_dir = tmp_path / "ads"
+    ad_dir.mkdir()
+    ad_file = ad_dir / "invalid_ad.yaml"
+    dicts.save_dict(ad_file, base_ad_config | ad_overrides)
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("")
+
+    with pytest.raises(ValidationError) as exc_info:
+        load_ads(
+            config_file_path = str(config_file),
+            ad_file_patterns = ["ads/*.yaml"],
+            ad_defaults = test_bot_config.ad_defaults,
+            categories = {},
+            ads_selector = "due",
+            command = "publish",
+        )
+
+    formatted_error = format_validation_error(exc_info.value)
+    assert str(ad_file) in formatted_error
+    assert expected_error in formatted_error
+
+
+def test_load_ads_final_validation_errors_include_ad_file_path(
+    tmp_path:Path,
+    base_ad_config:dict[str, Any],
+    test_bot_config:Config,
+) -> None:
+    """Final Ad validation errors retain the source ad file path."""
+    ad_dir = tmp_path / "ads"
+    ad_dir.mkdir()
+    ad_file = ad_dir / "invalid_ad.yaml"
+    ad_cfg = base_ad_config.copy()
+    ad_cfg.pop("sell_directly")
+    dicts.save_dict(ad_file, ad_cfg)
+
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text("")
+    ad_defaults = test_bot_config.ad_defaults.model_copy(update = {"sell_directly": True})
+
+    with pytest.raises(ValidationError) as exc_info:
+        load_ads(
+            config_file_path = str(config_file),
+            ad_file_patterns = ["ads/*.yaml"],
+            ad_defaults = ad_defaults,
+            categories = {},
+            ads_selector = "due",
+            command = "publish",
+        )
+
+    formatted_error = format_validation_error(exc_info.value)
+    assert str(ad_file) in formatted_error
+    assert "shipping_options" in formatted_error
 
 
 # --------------------------------------------------------------------------- #
