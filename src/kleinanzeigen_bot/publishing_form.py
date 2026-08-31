@@ -35,18 +35,6 @@ from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
-_OPEN_SHIPPING_DIALOG_XPATH:Final[str] = '//*[self::dialog[@open] or (@role="dialog" and not(@aria-hidden="true"))]'
-_OTHER_SHIPPING_METHODS_XPATH:Final[str] = (
-    _OPEN_SHIPPING_DIALOG_XPATH
-    + '//*[contains(normalize-space(.), "Andere Versandmethoden")'
-    ' and not(.//*[contains(normalize-space(.), "Andere Versandmethoden")])]'
-)
-_SHIPPING_SIZE_RADIO_XPATH:Final[str] = (
-    f'{_OPEN_SHIPPING_DIALOG_XPATH}//input[@type="radio" and '
-    '(@value="SMALL" or @value="MEDIUM" or @value="LARGE")]'
-)
-_SHIPPING_BACK_XPATH:Final[str] = f'{_OPEN_SHIPPING_DIALOG_XPATH}//button[contains(., "Zurück")]'
-
 # CSS-selector counterparts for the redesigned publishing form where nodriver
 # XPath evaluation (via CDP dom.perform_search) is unreliable.
 # Kleinanzeigen renders overlays as either native <dialog open> or ARIA
