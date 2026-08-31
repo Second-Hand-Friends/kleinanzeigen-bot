@@ -91,6 +91,17 @@ class TestAdExtractorBasics:
         assert extractor.download_dir == Path("downloaded-ads")
 
     @pytest.mark.asyncio
+    async def test_extract_island_props_preserves_decoded_entity_like_description(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Parse the browser-returned attribute before attempting HTML unescaping."""
+        description = "Verkaufe LEGO-Set mit &quot;The Great Wall of China&quot;."
+        astro_props = json.dumps({"data": [0, {"description": [0, description]}]})
+
+        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = astro_props):
+            island_props = await test_extractor._extract_island_props()
+
+        assert island_props["description"] == [0, description]
+
+    @pytest.mark.asyncio
     async def test_extract_island_props_unescapes_and_unwraps_ad_data(self, test_extractor:extract_module.AdExtractor) -> None:
         """Extract usable ad data from an HTML-escaped Astro props attribute."""
         astro_props = (

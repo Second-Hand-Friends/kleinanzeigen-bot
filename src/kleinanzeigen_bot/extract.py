@@ -744,16 +744,28 @@ class AdExtractor(WebScrapingMixin):
             })()""")
             if not raw or not isinstance(raw, str):
                 return {}
-            # The props attribute uses &quot; encoded quotes
-            decoded = html.unescape(raw)
-            props = json.loads(decoded)
+            # getAttribute() returns an HTML-decoded value. Parse it directly
+            # first so entity-like content inside JSON strings is preserved.
+            # Retain unescaping as a compatibility fallback for unexpected
+            # browser responses that still contain HTML entities.
+            props:dict[str, Any] | None = None
+            for candidate in (raw, html.unescape(raw)):
+                try:
+                    parsed = json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed, dict):
+                    props = parsed
+                    break
+            if props is None:
+                return {}
             # The ad data is nested under 'data' -> [0, {...}]
             data_val = props.get("data", {})
             if isinstance(data_val, list) and len(data_val) == _ISLAND_ENVELOPE_LENGTH:
                 data_val = data_val[1]
             if isinstance(data_val, dict):
                 return cast(dict[str, Any], data_val)
-            return cast(dict[str, Any], props) if isinstance(props, dict) else {}
+            return props
         except Exception:
             return {}
 
