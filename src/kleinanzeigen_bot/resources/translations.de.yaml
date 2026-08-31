@@ -462,25 +462,29 @@ kleinanzeigen_bot/download_flow.py:
   _download_all_ads:
     "Starting download of all ads...": "Starte den Download aller Anzeigen..."
     "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
-    "%d of %d ads were downloaded from your profile.": "%d von %d Anzeigen wurden aus Ihrem Profil heruntergeladen."
 
   _download_new_ads:
     "Starting download of not yet downloaded ads...": "Starte den Download noch nicht heruntergeladener Anzeigen..."
     "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
     "Skipping saved ad without id (likely unpublished or manually created): %s": "Überspringe gespeicherte Anzeige ohne ID (vermutlich nicht veröffentlicht oder manuell erstellt): %s"
     "The ad with id %d has already been saved.": "Die Anzeige mit der ID %d wurde bereits gespeichert."
-    "%s were downloaded from your profile.": "%s wurden aus Ihrem Profil heruntergeladen."
-    "new ad": "neue Anzeige"
 
   _download_ads_by_ids:
     "Starting download of ad(s) with the id(s):": "Starte Download der Anzeige(n) mit den ID(s):"
     "Downloading %d/%d ads...": "Lade Anzeige %d/%d herunter..."
-    "Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.": "Anzeigen-ID %d ist nicht in Ihren veröffentlichten Profilanzeigen. Speichere die heruntergeladene Anzeige als inaktiv."
-    "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
-    "The page with the id %d does not exist!": "Die Seite mit der ID %d existiert nicht!"
 
   _download_ad_with_resolved_state:
     "Ad %d found in overview but not in published profile. Saving as inactive.": "Anzeige %d wurde in der Übersicht gefunden, aber nicht im veröffentlichten Profil. Speichere als inaktiv."
+
+  _try_download_ad:
+    "Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.": "Anzeigen-ID %d ist nicht in Ihren veröffentlichten Profilanzeigen. Speichere die heruntergeladene Anzeige als inaktiv."
+    "Could not navigate to ad with id %d. Skipping ad.": "Navigation zu Anzeige mit ID %d nicht möglich. Überspringe Anzeige."
+    "Downloaded ad with id %d": "Anzeige mit der ID %d heruntergeladen"
+    "Failed to download ad with id %d. Skipping ad.": "Download der Anzeige mit ID %d fehlgeschlagen. Überspringe Anzeige."
+
+  _log_download_summary:
+    "DONE: downloaded %s of %s (%s failed)": "FERTIG: %s von %s heruntergeladen (%s fehlgeschlagen)"
+    "ad": "Anzeige"
 
 #################################################
 kleinanzeigen_bot/ad_status.py:

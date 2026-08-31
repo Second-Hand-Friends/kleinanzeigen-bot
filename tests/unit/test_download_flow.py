@@ -3,10 +3,11 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for download flow functionality."""
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -558,6 +559,93 @@ class TestDownloadFlow:
 
         # Verify download_ad was NOT called when navigation fails
         extractor_mock.download_ad.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("selector", ["all", "new", "123,456"])
+    @pytest.mark.parametrize("failure_stage", ["navigation", "download"])
+    async def test_download_ads_continues_after_individual_ad_failure(
+        self,
+        test_bot:KleinanzeigenBot,
+        tmp_path:Path,
+        selector:str,
+        failure_stage:str,
+    ) -> None:
+        """Continue the batch and report failures when one ad cannot be downloaded."""
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.ads_selector = selector
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.extract_own_ads_urls = AsyncMock(return_value = [
+            "https://www.kleinanzeigen.de/s-anzeige/test/123",
+            "https://www.kleinanzeigen.de/s-anzeige/test/456",
+        ])
+        extractor_mock.extract_ad_id_from_ad_url = MagicMock(side_effect = [123, 456])
+        if failure_stage == "navigation":
+            extractor_mock.navigate_to_ad_page = AsyncMock(side_effect = [RuntimeError("navigation failed"), True])
+            extractor_mock.download_ad = AsyncMock()
+        else:
+            extractor_mock.navigate_to_ad_page = AsyncMock(return_value = True)
+            extractor_mock.download_ad = AsyncMock(side_effect = [RuntimeError("download failed"), None])
+
+        def load_ads_func(
+            *,
+            ignore_inactive:bool = True,
+            exclude_ads_with_id:bool = True,
+        ) -> list[tuple[str, Ad, dict[str, Any]]]:
+            return []
+
+        with (
+            patch(
+                "kleinanzeigen_bot.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = [{"id": 123, "state": "active"}, {"id": 456, "state": "active"}],
+            ),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
+        ):
+            await download_flow.download_ads(
+                web = test_bot,
+                config = test_bot.config,
+                config_file_path = test_bot.config_file_path,
+                workspace = test_bot.workspace,
+                ads_selector = selector,
+                load_ads_func = load_ads_func,
+                root_url = test_bot.root_url,
+            )
+
+        ad_references = [123, 456] if selector == "123,456" else [
+            "https://www.kleinanzeigen.de/s-anzeige/test/123",
+            "https://www.kleinanzeigen.de/s-anzeige/test/456",
+        ]
+        assert extractor_mock.navigate_to_ad_page.await_args_list == [call(reference) for reference in ad_references]
+
+        download_kwargs = {"active": True}
+        if selector != "123,456":
+            download_kwargs["owned_overview"] = True
+
+        if failure_stage == "navigation":
+            extractor_mock.download_ad.assert_awaited_once_with(456, **download_kwargs)
+        else:
+            assert extractor_mock.download_ad.await_args_list == [
+                call(123, **download_kwargs),
+                call(456, **download_kwargs),
+            ]
+
+    @pytest.mark.asyncio
+    async def test_download_ads_propagates_cancellation(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        """Do not turn task cancellation into a per-ad download failure."""
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+        test_bot.browser = MagicMock()
+
+        extractor_mock = MagicMock()
+        extractor_mock.navigate_to_ad_page = AsyncMock(side_effect = asyncio.CancelledError())
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 123, "state": "active"}]),
+            patch("kleinanzeigen_bot.extract.AdExtractor", return_value = extractor_mock),
+            pytest.raises(asyncio.CancelledError),
+        ):
+            await download_flow._download_ads_by_ids(extractor_mock, [123], {123: {"id": 123, "state": "active"}})
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("state_value", ["", "deleted", "expired", "pending", "draft", None])

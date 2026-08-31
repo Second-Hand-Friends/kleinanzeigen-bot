@@ -81,6 +81,47 @@ async def _download_ad_with_resolved_state(
     await ad_extractor.download_ad(ad_id, active = resolved.active, owned_overview = True)
 
 
+async def _try_download_ad(
+    ad_extractor:extract.AdExtractor,
+    ad_id:int,
+    published_ads_by_id:dict[int, PublishedAd],
+    *,
+    ad_reference:str | int,
+    owned_overview:bool,
+) -> bool:
+    """Download one ad without aborting the surrounding batch on failure."""
+    try:
+        if not await ad_extractor.navigate_to_ad_page(ad_reference):
+            LOG.error("Could not navigate to ad with id %d. Skipping ad.", ad_id)
+            return False
+
+        if owned_overview:
+            await _download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
+        else:
+            resolved = _download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
+            if not resolved.owned:
+                # Foreign ad - expected for numeric IDs (can download any public ad)
+                LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
+
+            await ad_extractor.download_ad(ad_id, active = resolved.active)
+            LOG.info("Downloaded ad with id %d", ad_id)
+    except Exception:  # noqa: BLE001 - one bad ad must not abort the batch
+        # asyncio.CancelledError inherits BaseException and therefore still propagates.
+        LOG.exception("Failed to download ad with id %d. Skipping ad.", ad_id)
+        return False
+    return True
+
+
+def _log_download_summary(success_count:int, total_count:int) -> None:
+    """Log the common batch result for all download selectors."""
+    LOG.info(
+        "DONE: downloaded %s of %s (%s failed)",
+        pluralize("ad", success_count),
+        pluralize("ad", total_count),
+        total_count - success_count,
+    )
+
+
 async def _fetch_published_ads_by_id(
     web:WebScrapingMixin,
     root_url:str,
@@ -122,10 +163,15 @@ async def _download_all_ads(
     for idx, (ad_url, ad_id) in enumerate(valid_ad_refs, start = 1):
         LOG.info("Downloading %d/%d ads...", idx, len(valid_ad_refs))
 
-        if await ad_extractor.navigate_to_ad_page(ad_url):
-            await _download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
+        if await _try_download_ad(
+            ad_extractor,
+            ad_id,
+            published_ads_by_id,
+            ad_reference = ad_url,
+            owned_overview = True,
+        ):
             success_count += 1
-    LOG.info("%d of %d ads were downloaded from your profile.", success_count, len(valid_ad_refs))
+    _log_download_summary(success_count, len(valid_ad_refs))
 
 
 async def _download_new_ads(
@@ -165,10 +211,15 @@ async def _download_new_ads(
     for idx, (ad_url, ad_id) in enumerate(ads_to_download, start = 1):
         LOG.info("Downloading %d/%d ads...", idx, len(ads_to_download))
 
-        if await ad_extractor.navigate_to_ad_page(ad_url):
-            await _download_ad_with_resolved_state(ad_extractor, ad_id, published_ads_by_id)
+        if await _try_download_ad(
+            ad_extractor,
+            ad_id,
+            published_ads_by_id,
+            ad_reference = ad_url,
+            owned_overview = True,
+        ):
             new_count += 1
-    LOG.info("%s were downloaded from your profile.", pluralize("new ad", new_count))
+    _log_download_summary(new_count, len(ads_to_download))
 
 
 async def _download_ads_by_ids(
@@ -180,19 +231,18 @@ async def _download_ads_by_ids(
     LOG.info("Starting download of ad(s) with the id(s):")
     LOG.info(" | ".join([str(ad_id) for ad_id in ids]))
 
+    success_count = 0
     for idx, ad_id in enumerate(ids, start = 1):
         LOG.info("Downloading %d/%d ads...", idx, len(ids))
-        exists = await ad_extractor.navigate_to_ad_page(ad_id)
-        if exists:
-            resolved = _download_selection.resolve_download_ad_activity(ad_id, published_ads_by_id)
-            if not resolved.owned:
-                # Foreign ad - expected for numeric IDs (can download any public ad)
-                LOG.warning("Ad id %d is not in your published profile ads. Saving downloaded ad as inactive.", ad_id)
-
-            await ad_extractor.download_ad(ad_id, active = resolved.active)
-            LOG.info("Downloaded ad with id %d", ad_id)
-        else:
-            LOG.error("The page with the id %d does not exist!", ad_id)
+        if await _try_download_ad(
+            ad_extractor,
+            ad_id,
+            published_ads_by_id,
+            ad_reference = ad_id,
+            owned_overview = False,
+        ):
+            success_count += 1
+    _log_download_summary(success_count, len(ids))
 
 
 async def download_ads(
