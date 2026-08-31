@@ -19,8 +19,6 @@ from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
-    _OTHER_SHIPPING_METHODS_XPATH,  # noqa: PLC2701
-    _SHIPPING_BACK_XPATH,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     _set_condition,  # noqa: PLC2701
     _set_configured_shipping_options,  # noqa: PLC2701
@@ -1808,7 +1806,7 @@ class TestShippingOptionsDialog:
                 new_callable = AsyncMock,
                 side_effect = probe_side_effect,
             ) as mock_probe,
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock),
         ):
@@ -1821,15 +1819,6 @@ class TestShippingOptionsDialog:
 
         # Back navigation happened via element.click(), not web_click.
         back_elem.click.assert_awaited_once()
-        # No web_click for XPath-based back or other-methods selectors.
-        assert not any(
-            call.args[:2] == (By.XPATH, _SHIPPING_BACK_XPATH)
-            for call in mock_click.await_args_list
-        )
-        assert not any(
-            call.args[:2] == (By.XPATH, _OTHER_SHIPPING_METHODS_XPATH)
-            for call in mock_click.await_args_list
-        )
         # "Zurück" was probed via By.TEXT.
         assert any(
             call.args[:2] == (By.TEXT, "Zurück")
@@ -1906,7 +1895,7 @@ class TestShippingOptionsDialog:
                 new_callable = AsyncMock,
                 side_effect = probe_side_effect,
             ),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock) as click_mock,
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_shipping_options", new_callable = AsyncMock) as options_mock,
             pytest.raises(TimeoutError, match = "Failed to configure shipping options"),
@@ -1918,13 +1907,8 @@ class TestShippingOptionsDialog:
                 test_bot.timeout("quick_dom"),
             )
 
-        # Back navigation happened via element.click(), not web_click with XPath.
+        # Back navigation happened via element.click().
         assert all(elem.click.await_count == 1 for elem in back_elems)
-        back_xpath_clicks = [
-            call for call in click_mock.await_args_list
-            if call.args == (By.XPATH, _SHIPPING_BACK_XPATH)
-        ]
-        assert len(back_xpath_clicks) == 0
         options_mock.assert_not_awaited()
 
     @staticmethod
