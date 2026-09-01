@@ -109,6 +109,12 @@ kleinanzeigen_bot/app.py:
     "Extending all ads within 8-day window...": "Verlängere alle Anzeigen innerhalb des 8-Tage-Zeitfensters..."
     "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
 
+  _handle_reserve_or_activate:
+    "############################################": "############################################"
+    "DONE: No ads found to reserve.": "FERTIG: Keine Anzeigen zum Reservieren gefunden."
+    "DONE: No ads found to activate.": "FERTIG: Keine Anzeigen zum Aktivieren gefunden."
+    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+
   _handle_download:
     "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
 
@@ -443,6 +449,35 @@ kleinanzeigen_bot/extend_flow.py:
 
   find_and_click_extend_button:
     "Found extend button on page %s": "'Verlängern'-Button auf Seite %s gefunden"
+
+#################################################
+kleinanzeigen_bot/reserve_flow.py:
+#################################################
+  set_reservation_state:
+    "############################################": "############################################"
+    "DONE: No ads to reserve.": "FERTIG: Keine Anzeigen zu reservieren."
+    "DONE: No ads to activate.": "FERTIG: Keine Anzeigen zu aktivieren."
+    "DONE: Reserved %s": "FERTIG: %s reserviert"
+    "DONE: Activated %s": "FERTIG: %s aktiviert"
+    "ad": "Anzeige"
+    "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' aus [%s]..."
+
+  _is_applicable:
+    " -> SKIPPED: ad '%s' is not published yet": " -> ÜBERSPRUNGEN: Anzeige '%s' ist noch nicht veröffentlicht"
+    " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht gefunden"
+    " -> SKIPPED: ad '%s' is already in the requested state": " -> ÜBERSPRUNGEN: Anzeige '%s' ist bereits im gewünschten Zustand"
+    " -> SKIPPED: ad '%s' cannot be switched (state: %s)": " -> ÜBERSPRUNGEN: Anzeige '%s' kann nicht umgestellt werden (Status: %s)"
+
+  _change_ad_state:
+    "Reserving ad '%s' (ID: %s)...": "Reserviere Anzeige '%s' (ID: %s)..."
+    "Activating ad '%s' (ID: %s)...": "Aktiviere Anzeige '%s' (ID: %s)..."
+    " -> FAILED: Timeout while switching ad '%s': %s": " -> FEHLER: Zeitüberschreitung beim Umstellen der Anzeige '%s': %s"
+    " -> FAILED: Could not find '%s' button for ad ID %s": " -> FEHLER: '%s'-Button für Anzeigen-ID %s nicht gefunden"
+    " -> SUCCESS: ad '%s' (ID: %s) is now reserved": " -> ERFOLG: Anzeige '%s' (ID: %s) ist jetzt reserviert"
+    " -> SUCCESS: ad '%s' (ID: %s) is now active": " -> ERFOLG: Anzeige '%s' (ID: %s) ist jetzt aktiv"
+
+  find_and_click_button:
+    "Found '%s' button on page %s": "'%s'-Button auf Seite %s gefunden"
 
 #################################################
 kleinanzeigen_bot/download_flow.py:

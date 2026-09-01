@@ -134,6 +134,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               delete   - Löscht Anzeigen
               update   - Aktualisiert bestehende Anzeigen
               extend   - Verlängert Anzeigen im 8-Tage-Zeitfenster (behält Beobachter/Interessenten bei und zählt nicht zum monatlichen Anzeigenkontingent)
+              reserve  - Reserviert Anzeigen: nimmt sie aus der Suche, behält aber ID, Alter, Aufrufe und Beobachter/Interessenten
+              activate - Aktiviert reservierte Anzeigen wieder
               download - Lädt eine oder mehrere Anzeigen herunter
               update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
@@ -171,6 +173,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * all: Verlängert alle Anzeigen, die innerhalb von 8 Tagen ablaufen
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
                     * Hinweis: Anzeigen außerhalb des 8-Tage-Fensters werden übersprungen.
+              --ads=all|<id(s)> (reserve, activate) - Gibt an, welche Anzeigen umgestellt werden sollen (STANDARD: all)
+                    Mögliche Werte:
+                    * all: Stellt alle passenden Anzeigen um
+                    * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
+                    * Hinweis: Anzeigen, die bereits im Zielzustand sind, werden übersprungen.
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --preserve-local-settings - Erzwingt das Beibehalten lokaler Einstellungen bei erneutem Download (überschreibt config-Wert false)
@@ -192,6 +199,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           delete   - deletes ads
           update   - updates published ads
           extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
+          reserve  - reserves ads: removes them from search results while keeping the ad ID, age, view count and watchers/savers
+          activate - re-activates reserved ads
           download - downloads one or multiple ads
           update-check - checks for available updates
           update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
@@ -227,6 +236,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * all: extend all ads expiring within 8 days
                 * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
                 * Note: ads outside the 8-day window are skipped.
+          --ads=all|<id(s)> (reserve, activate) - specifies which ads to switch (DEFAULT: all)
+                Possible values:
+                * all: switch all eligible ads
+                * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
+                * Note: ads already in the target state are skipped.
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication
           --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)

@@ -37,6 +37,7 @@ VALID_COMMANDS:Final[frozenset[str]] = frozenset({
     "help", "version", "create-config", "diagnose", "verify",
     "update-check", "update-content-hash",
     "publish", "status", "update", "delete", "extend", "download",
+    "reserve", "activate",
 })
 
 
