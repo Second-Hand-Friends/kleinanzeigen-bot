@@ -174,7 +174,7 @@ async def _change_ad_state(
 
     try:
         updated_ads = await published_ads.fetch_published_ads(web, root_url, strict = True)
-    except published_ads.PublishedAdsFetchIncompleteError:
+    except (published_ads.PublishedAdsFetchIncompleteError, TimeoutError):
         LOG.error(" -> FAILED: Could not confirm state change for ad '%s' (ID: %s)", ad_cfg.title, ad_cfg.id)
         return False
     resulting_ad = next((ad for ad in updated_ads if ad_matches_id(ad, ad_cfg.id)), None)

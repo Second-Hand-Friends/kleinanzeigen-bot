@@ -469,3 +469,31 @@ class TestChangeAdState:
             )
 
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_reports_failure_when_state_verification_times_out(
+        self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]
+    ) -> None:
+        """A verification timeout must fail only the current ad."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        button = MagicMock()
+        button.click = AsyncMock()
+
+        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
+            return await callback(1)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
+            patch(
+                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                side_effect = TimeoutError("verification timed out"),
+            ),
+        ):
+            result = await reserve_flow._change_ad_state(  # noqa: SLF001
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+            )
+
+        assert result is False
