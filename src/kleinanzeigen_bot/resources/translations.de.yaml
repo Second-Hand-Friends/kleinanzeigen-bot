@@ -473,6 +473,7 @@ kleinanzeigen_bot/reserve_flow.py:
     "Activating ad '%s' (ID: %s)...": "Aktiviere Anzeige '%s' (ID: %s)..."
     " -> FAILED: Timeout while switching ad '%s': %s": " -> FEHLER: Zeitüberschreitung beim Umstellen der Anzeige '%s': %s"
     " -> FAILED: Could not find '%s' button for ad ID %s": " -> FEHLER: '%s'-Button für Anzeigen-ID %s nicht gefunden"
+    " -> FAILED: Could not confirm state change for ad '%s' (ID: %s)": " -> FEHLER: Zustandsänderung für Anzeige '%s' (ID: %s) konnte nicht bestätigt werden"
     " -> SUCCESS: ad '%s' (ID: %s) is now reserved": " -> ERFOLG: Anzeige '%s' (ID: %s) ist jetzt reserviert"
     " -> SUCCESS: ad '%s' (ID: %s) is now active": " -> ERFOLG: Anzeige '%s' (ID: %s) ist jetzt aktiv"
 

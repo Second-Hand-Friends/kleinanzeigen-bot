@@ -14,6 +14,7 @@ import pytest
 from kleinanzeigen_bot import reserve_flow, runtime_config
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
+from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.utils import xdg_paths
 
 
@@ -67,25 +68,45 @@ class TestReserveCommand:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["reserve", "activate"])
-    async def test_run_command_defaults_to_all_ads(self, test_bot:KleinanzeigenBot, tmp_path:Path, command:str) -> None:
+    async def test_run_command_defaults_to_all_ads(
+        self, test_bot:KleinanzeigenBot, tmp_path:Path, base_ad_config_with_id:dict[str, Any], command:str
+    ) -> None:
         patches = _patched_command_run(test_bot, tmp_path)
-        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        ads = [("test.yaml", ad_cfg, base_ad_config_with_id)]
+        with (
+            patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
+            patch.object(test_bot, "load_ads", return_value = ads),
+            patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
+            patch.object(test_bot, "login", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.reserve_flow.set_reservation_state", new_callable = AsyncMock) as mock_flow,
+        ):
             await test_bot.run(["script.py", command])
             assert test_bot.command == command
             assert test_bot.ads_selector == "all"
+            mock_flow.assert_awaited_once()
+            assert mock_flow.call_args.kwargs["action"] == command
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("command", ["reserve", "activate"])
-    async def test_run_command_with_specific_ids(self, test_bot:KleinanzeigenBot, tmp_path:Path, command:str) -> None:
+    async def test_run_command_with_specific_ids(
+        self, test_bot:KleinanzeigenBot, tmp_path:Path, base_ad_config_with_id:dict[str, Any], command:str
+    ) -> None:
         patches = _patched_command_run(test_bot, tmp_path)
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        ads = [("test.yaml", ad_cfg, base_ad_config_with_id)]
         with (
             patches[0], patches[1], patches[2], patches[3], patches[4], patches[5],
+            patch.object(test_bot, "load_ads", return_value = ads),
             patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
             patch.object(test_bot, "login", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.reserve_flow.set_reservation_state", new_callable = AsyncMock) as mock_flow,
         ):
             await test_bot.run(["script.py", command, "--ads=12345,67890"])
             assert test_bot.command == command
             assert test_bot.ads_selector == "12345,67890"
+            mock_flow.assert_awaited_once()
+            assert mock_flow.call_args.kwargs["action"] == command
 
 
 class TestSetReservationState:
@@ -279,6 +300,11 @@ class TestChangeAdState:
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
+            patch(
+                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = [{"id": 12345, "state": reserve_flow._RESULTING_STATE[action]}],  # noqa: SLF001
+            ),
         ):
             mock_find.return_value = button
 
@@ -314,6 +340,11 @@ class TestChangeAdState:
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = [TimeoutError, button]),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
+            patch(
+                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = [{"id": 12345, "state": reserve_flow.STATE_RESERVED}],
+            ),
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
                 test_bot, test_bot.root_url, ad_cfg, action = "reserve",
@@ -371,9 +402,70 @@ class TestChangeAdState:
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
             patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
+            patch(
+                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = [{"id": 12345, "state": reserve_flow.STATE_RESERVED}],
+            ),
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
                 test_bot, test_bot.root_url, ad_cfg, action = "reserve",
             )
 
             assert result is True
+
+    @pytest.mark.asyncio
+    async def test_reports_failure_when_resulting_state_is_not_confirmed(
+        self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]
+    ) -> None:
+        """A button click alone must not be reported as a successful state change."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        button = MagicMock()
+        button.click = AsyncMock()
+
+        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
+            return await callback(1)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
+            patch(
+                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                return_value = [{"id": 12345, "state": reserve_flow.STATE_ACTIVE}],
+            ),
+        ):
+            result = await reserve_flow._change_ad_state(  # noqa: SLF001
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+            )
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_reports_failure_when_state_verification_is_incomplete(
+        self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]
+    ) -> None:
+        """An incomplete verification response must fail only this ad, not abort the batch."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        button = MagicMock()
+        button.click = AsyncMock()
+
+        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
+            return await callback(1)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
+            patch(
+                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
+                new_callable = AsyncMock,
+                side_effect = PublishedAdsFetchIncompleteError("incomplete response"),
+            ),
+        ):
+            result = await reserve_flow._change_ad_state(  # noqa: SLF001
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+            )
+
+        assert result is False

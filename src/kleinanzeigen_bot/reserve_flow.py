@@ -53,6 +53,11 @@ _RESULTING_STATE:Final[dict[ReserveAction, str]] = {
     "activate": STATE_ACTIVE,
 }
 
+_OPEN_DIALOG_SELECTORS:Final[tuple[str, ...]] = (
+    "dialog[open]",
+    '[role="dialog"]:not([aria-hidden="true"])',
+)
+
 
 async def set_reservation_state(
     web:WebScrapingMixin,
@@ -167,6 +172,16 @@ async def _change_ad_state(
 
     await _dismiss_confirmation_dialog(web)
 
+    try:
+        updated_ads = await published_ads.fetch_published_ads(web, root_url, strict = True)
+    except published_ads.PublishedAdsFetchIncompleteError:
+        LOG.error(" -> FAILED: Could not confirm state change for ad '%s' (ID: %s)", ad_cfg.title, ad_cfg.id)
+        return False
+    resulting_ad = next((ad for ad in updated_ads if ad_matches_id(ad, ad_cfg.id)), None)
+    if not resulting_ad or resulting_ad.get("state") != _RESULTING_STATE[action]:
+        LOG.error(" -> FAILED: Could not confirm state change for ad '%s' (ID: %s)", ad_cfg.title, ad_cfg.id)
+        return False
+
     if action == "reserve":
         LOG.info(" -> SUCCESS: ad '%s' (ID: %s) is now reserved", ad_cfg.title, ad_cfg.id)
     else:
@@ -180,10 +195,15 @@ async def _dismiss_confirmation_dialog(web:WebScrapingMixin) -> None:
     Its absence is not an error: the action may complete without a dialog, and
     the state change has already been requested at this point either way.
     """
-    try:
-        await web.web_click(
-            By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = web.timeout("quick_dom")
-        )
-        LOG.debug(" -> Closed confirmation dialog")
-    except TimeoutError:
-        LOG.debug(" -> No confirmation dialog found, action may have completed directly")
+    for dialog_selector in _OPEN_DIALOG_SELECTORS:
+        try:
+            await web.web_click(
+                By.CSS_SELECTOR,
+                f'{dialog_selector} button[aria-label="Schließen"]',
+                timeout = web.timeout("quick_dom"),
+            )
+            LOG.debug(" -> Closed confirmation dialog")
+            return
+        except TimeoutError:
+            continue
+    LOG.debug(" -> No confirmation dialog found, action may have completed directly")
