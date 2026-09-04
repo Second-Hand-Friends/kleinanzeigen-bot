@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow
+from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, reserve_flow
 from . import login_flow as _login_flow
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
@@ -146,6 +146,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self._handle_delete()
                 case "extend":
                     await self._handle_extend()
+                case "reserve":
+                    await self._handle_reserve_or_activate("reserve")
+                case "activate":
+                    await self._handle_reserve_or_activate("activate")
                 case "download":
                     await self._handle_download()
                 case _:
@@ -337,6 +341,32 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.info("############################################")
             LOG.info("DONE: No ads found to extend.")
+            LOG.info("############################################")
+
+    async def _handle_reserve_or_activate(self, action:reserve_flow.ReserveAction) -> None:
+        """Takes ads out of circulation (``reserve``) or puts them back (``activate``)."""
+        self._bootstrap_runtime()
+        self._check_for_updates()
+
+        # Default to all ads if no selector provided, but reject invalid values
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all"}):
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
+                sys.exit(2)
+            self.ads_selector = "all"
+
+        if ads := self.load_ads():
+            await self._open_logged_in_browser()
+            await reserve_flow.set_reservation_state(
+                web = self, root_url = self.root_url,
+                ad_cfgs = ads, action = action,
+            )
+        else:
+            LOG.info("############################################")
+            if action == "reserve":
+                LOG.info("DONE: No ads found to reserve.")
+            else:
+                LOG.info("DONE: No ads found to activate.")
             LOG.info("############################################")
 
     async def _handle_download(self) -> None:

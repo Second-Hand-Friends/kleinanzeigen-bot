@@ -210,6 +210,8 @@ Commands:
   delete   - deletes ads
   update   - updates published ads
   extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
+  reserve  - reserves ads: removes them from search results while keeping the ad ID, age, view count and watchers/savers
+  activate - re-activates reserved ads
   download - downloads one or multiple ads
   update-check - checks for available updates
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;
@@ -245,6 +247,11 @@ Options:
         * all: extend all ads expiring within 8 days
         * <id(s)>: specify ad IDs to extend, e.g. "--ads=1,2,3"
         * Note: ads outside the 8-day window are skipped.
+  --ads=all|<id(s)> (reserve, activate) - specifies which ads to switch (DEFAULT: all)
+        Possible values:
+        * all: switch all eligible ads
+        * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
+        * Note: ads already in the target state are skipped.
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
   --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)

@@ -143,7 +143,7 @@ class TestClickSubmitButton:
     async def test_raises_timeout_when_no_submit_button_found(self, test_bot:KleinanzeigenBot) -> None:
         """When web_execute returns False for all labels, TimeoutError is raised."""
 
-        async def await_side_effect(condition: Any, **__: Any) -> Any:
+        async def await_side_effect(condition:Any, **__:Any) -> Any:
             """Simulate web_await: call condition, raise TimeoutError if falsy."""
             result = await condition()
             if not result:
