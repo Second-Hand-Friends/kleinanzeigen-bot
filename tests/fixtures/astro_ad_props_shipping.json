@@ -1,0 +1,347 @@
+{
+  "shippingHeader": [
+    0,
+    "+ Versand ab 0,99 €"
+  ],
+  "title": [
+    0,
+    "Sample ad with shipping"
+  ],
+  "ogTitle": [
+    0,
+    "Sample ad with shipping"
+  ],
+  "price": [
+    0,
+    {
+      "amount": [
+        0,
+        120
+      ],
+      "type": [
+        0,
+        "NEGOTIABLE"
+      ]
+    }
+  ],
+  "basePrice": [
+    0,
+    null
+  ],
+  "priceEnabled": [
+    0,
+    true
+  ],
+  "startingPrice": [
+    0,
+    null
+  ],
+  "adStatus": [
+    0,
+    {
+      "mobileAd": [
+        0,
+        false
+      ],
+      "mobileDeAd": [
+        0,
+        false
+      ],
+      "realEstateAd": [
+        0,
+        false
+      ],
+      "jobOffer": [
+        0,
+        false
+      ],
+      "newConstructionsAd": [
+        0,
+        false
+      ],
+      "newConstructionsProjectAd": [
+        0,
+        false
+      ],
+      "newConstructionsUnitAd": [
+        0,
+        false
+      ],
+      "viewable": [
+        0,
+        true
+      ],
+      "paused": [
+        0,
+        false
+      ],
+      "pendingAd": [
+        0,
+        false
+      ],
+      "expiredAd": [
+        0,
+        false
+      ],
+      "deletedOrExpiredAd": [
+        0,
+        false
+      ],
+      "preview": [
+        0,
+        false
+      ],
+      "onWatchlist": [
+        0,
+        false
+      ],
+      "featured": [
+        0,
+        false
+      ],
+      "featureTopAd": [
+        0,
+        false
+      ],
+      "featureHpGallery": [
+        0,
+        false
+      ],
+      "featureHighlight": [
+        0,
+        false
+      ],
+      "featureMultiBumpUp": [
+        0,
+        false
+      ],
+      "featureArtificialPhoneNumber": [
+        0,
+        false
+      ]
+    }
+  ],
+  "adType": [
+    0,
+    "OFFER"
+  ],
+  "formattedCreationDate": [
+    0,
+    "25.08.2026"
+  ],
+  "sortingDate": [
+    0,
+    1787689416000
+  ],
+  "adLifeTimeInSeconds": [
+    0,
+    1010807
+  ],
+  "breadcrumbPosition": [
+    0,
+    "ABOVE_IMAGE_GALLERY"
+  ],
+  "id": [
+    0,
+    "9999999901"
+  ],
+  "mobileDeAdId": [
+    0,
+    ""
+  ],
+  "buyNowPossible": [
+    0,
+    true
+  ],
+  "offerPossible": [
+    0,
+    true
+  ],
+  "priceLabelMessageKey": [
+    0,
+    "price.defaultLabel"
+  ],
+  "securePayment": [
+    0,
+    true
+  ],
+  "visibleComponents": [
+    0,
+    {
+      "displayMap": [
+        0,
+        false
+      ],
+      "showUserInventoryLink": [
+        0,
+        true
+      ],
+      "showPostersOtherAds": [
+        0,
+        true
+      ],
+      "separatedBeforePostersOtherAds": [
+        0,
+        true
+      ],
+      "showSecureOverlay": [
+        0,
+        false
+      ],
+      "showDogsWarningOverlay": [
+        0,
+        false
+      ],
+      "showCatsWarningOverlay": [
+        0,
+        false
+      ],
+      "showPublicTransportationWarningOverlay": [
+        0,
+        false
+      ],
+      "openFlagWindow": [
+        0,
+        false
+      ],
+      "showLoadingBar": [
+        0,
+        false
+      ],
+      "showPetContract": [
+        0,
+        false
+      ],
+      "useEnhancedAdDescription": [
+        0,
+        false
+      ],
+      "displayAdBackwardsCompatible": [
+        0,
+        false
+      ],
+      "descriptionClamped": [
+        0,
+        false
+      ],
+      "sidebarSticky": [
+        0,
+        false
+      ],
+      "offerBookProBanner": [
+        0,
+        false
+      ]
+    }
+  ],
+  "sectionHeaders": [
+    0,
+    {
+      "CONTACT_POSTER": [
+        0,
+        "Nachricht schreiben"
+      ],
+      "CUSTOMER_INFORMATION": [
+        0,
+        "Verbraucherinformationen"
+      ],
+      "DESCRIPTION": [
+        0,
+        "Beschreibung"
+      ],
+      "DOCUMENTS": [
+        0,
+        "Weitere Informationen"
+      ],
+      "IMPRINT": [
+        0,
+        "Rechtliche Angaben"
+      ],
+      "MAP": [
+        0,
+        "Standort"
+      ],
+      "PRODUCT_SAFETY": [
+        0,
+        "Produktsicherheit"
+      ],
+      "RADIUS_MAP": [
+        0,
+        "Anzeige mit erweitertem Umkreis"
+      ]
+    }
+  ],
+  "sectionOrder": [
+    1,
+    [
+      [
+        0,
+        "MAIN_INFO"
+      ],
+      [
+        0,
+        "ADVERTISING_SLOT_BELLY"
+      ],
+      [
+        0,
+        "PET_CONTRACT"
+      ],
+      [
+        0,
+        "ATTRIBUTES"
+      ],
+      [
+        0,
+        "TAGS"
+      ],
+      [
+        0,
+        "DOCUMENTS"
+      ],
+      [
+        0,
+        "MAP"
+      ],
+      [
+        0,
+        "DESCRIPTION"
+      ],
+      [
+        0,
+        "MORTGAGE_SIMULATOR"
+      ],
+      [
+        0,
+        "RADIUS_MAP"
+      ],
+      [
+        0,
+        "IMPRINT"
+      ],
+      [
+        0,
+        "PRODUCT_SAFETY"
+      ],
+      [
+        0,
+        "CAR_FINANCING"
+      ],
+      [
+        0,
+        "CUSTOMER_INFORMATION"
+      ],
+      [
+        0,
+        "CONTACT_POSTER"
+      ]
+    ]
+  ],
+  "tags": [
+    1,
+    []
+  ],
+  "dmhSource": [
+    0,
+    null
+  ]
+}

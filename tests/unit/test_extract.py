@@ -28,6 +28,12 @@ def _read_text_file(path:Path) -> str:
     return path.read_text(encoding = "utf-8")
 
 
+def _load_astro_props_fixture(name:str) -> dict[str, Any]:
+    """Load a saved Astro island props fixture from ``tests/fixtures``."""
+    fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / name
+    return json.loads(fixture_path.read_text(encoding = "utf-8"))
+
+
 def _create_test_ad_partial(**overrides:Any) -> AdPartial:
     """Create a valid AdPartial payload for extract staging/rollback tests."""
     payload:dict[str, Any] = {
@@ -286,6 +292,125 @@ class TestAdExtractorShipping:
                 assert options == [OPTION_NAME_BY_CARRIER_CODE["DHL_001"]]
             else:
                 assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_from_island_props_fallback(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Shipping is extracted from the shippingHeader island prop when the legacy DOM element is absent."""
+        island_props:dict[str, Any] = {"shippingHeader": [0, "+ Versand ab 2,99 €"]}
+        shipping_response:dict[str, Any] = {
+            "content": json.dumps(
+                {
+                    "data": {
+                        "shippingOptionsResponse": {
+                            "options": [{"id": "DHL_001", "priceInEuroCent": 299, "packageSize": "SMALL"}]
+                        }
+                    }
+                }
+            )
+        }
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+
+            assert shipping_type == "SHIPPING"
+            assert costs == 2.99
+            assert options == [OPTION_NAME_BY_CARRIER_CODE["DHL_001"]]
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    @pytest.mark.parametrize(
+        ("header_text", "expected_type"),
+        [
+            ("Nur Abholung", "PICKUP"),
+            ("Versand möglich", "SHIPPING"),
+        ],
+    )
+    async def test_extract_shipping_type_from_island_props_fallback_without_costs(
+        self, test_extractor:extract_module.AdExtractor, header_text:str, expected_type:str
+    ) -> None:
+        """Island-prop fallback also covers PICKUP / shipping-without-costs wording."""
+        island_props:dict[str, Any] = {"shippingHeader": [0, header_text]}
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+
+            assert shipping_type == expected_type
+            assert costs is None
+            assert options is None
+            mock_web_request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_info_island_props_without_shipping_header(
+        self, test_extractor:extract_module.AdExtractor
+    ) -> None:
+        """Missing shippingHeader island prop keeps the legacy NOT_APPLICABLE behaviour."""
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(
+                island_props = {"formattedCreationDate": [0, "Heute"]}
+            )
+
+            assert shipping_type == "NOT_APPLICABLE"
+            assert costs is None
+            assert options is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_from_real_island_props_fixture_shipping(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Real saved redesigned-page props (shipping ad) restore SHIPPING via the island fallback."""
+        island_props = _load_astro_props_fixture("astro_ad_props_shipping.json")
+        assert island_props["shippingHeader"] == [0, "+ Versand ab 0,99 €"]
+
+        shipping_response:dict[str, Any] = {
+            "content": json.dumps(
+                {
+                    "data": {
+                        "shippingOptionsResponse": {
+                            "options": [{"id": "DHL_001", "priceInEuroCent": 99, "packageSize": "SMALL"}]
+                        }
+                    }
+                }
+            )
+        }
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+
+        assert shipping_type == "SHIPPING"
+        assert costs == 0.99
+        assert options == [OPTION_NAME_BY_CARRIER_CODE["DHL_001"]]
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_shipping_from_real_island_props_fixture_pickup(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Real saved redesigned-page props (pickup ad) restore PICKUP via the island fallback."""
+        island_props = _load_astro_props_fixture("astro_ad_props_pickup.json")
+        assert island_props["shippingHeader"] == [0, "Nur Abholung"]
+
+        with (
+            patch.object(test_extractor, "page", MagicMock()),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+
+        assert shipping_type == "PICKUP"
+        assert costs is None
+        assert options is None
+        mock_web_request.assert_not_awaited()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
