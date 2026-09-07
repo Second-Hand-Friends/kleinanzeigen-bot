@@ -1135,7 +1135,7 @@ class AdExtractor(WebScrapingMixin):
             return header.strip()
         return None
 
-    async def _extract_shipping_info_from_ad_page(self, *, island_props: dict[str, Any] | None = None) -> tuple[str, float | None, list[str] | None]:
+    async def _extract_shipping_info_from_ad_page(self, *, island_props:dict[str, Any] | None = None) -> tuple[str, float | None, list[str] | None]:
         """
         Extracts shipping information from an ad page.
 
@@ -1151,8 +1151,8 @@ class AdExtractor(WebScrapingMixin):
         ship_type, ship_costs, shipping_options = "NOT_APPLICABLE", None, None
         try:
             shipping_text = await self._extract_shipping_text_from_dom()
-            if shipping_text is None:
-                # Redesigned layout: legacy shipping element is absent.
+            if not shipping_text:
+                # Redesigned layout: legacy shipping element is absent or empty.
                 # Fall back to the shippingHeader Astro island prop, which
                 # carries the same wording as the legacy element.
                 shipping_text = self._shipping_text_from_island_props(island_props)

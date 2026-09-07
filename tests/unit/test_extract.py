@@ -7,7 +7,7 @@ import errno
 import shutil
 import stat
 from pathlib import Path
-from typing import Any, Final, TypedDict
+from typing import Any, Final, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.error import URLError
 
@@ -31,7 +31,7 @@ def _read_text_file(path:Path) -> str:
 def _load_astro_props_fixture(name:str) -> dict[str, Any]:
     """Load a saved Astro island props fixture from ``tests/fixtures``."""
     fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / name
-    return json.loads(fixture_path.read_text(encoding = "utf-8"))
+    return cast(dict[str, Any], json.loads(fixture_path.read_text(encoding = "utf-8")))
 
 
 def _create_test_ad_partial(**overrides:Any) -> AdPartial:
@@ -259,6 +259,7 @@ class TestAdExtractorPricing:
 class TestAdExtractorShipping:
     """Tests for shipping related functionality."""
 
+    @pytest.mark.parametrize("island_header", [None, "Nur Abholung", "Versand möglich"])
     @pytest.mark.parametrize(
         ("shipping_text", "expected_type", "expected_cost"),
         [
@@ -270,9 +271,9 @@ class TestAdExtractorShipping:
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_shipping_info(
-        self, test_extractor:extract_module.AdExtractor, shipping_text:str, expected_type:str, expected_cost:float | None
+        self, test_extractor:extract_module.AdExtractor, shipping_text:str, expected_type:str, expected_cost:float | None, island_header:str | None
     ) -> None:
-        """Test shipping info extraction with different text formats."""
+        """DOM shipping text takes precedence over potentially conflicting island props."""
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = shipping_text),
@@ -284,7 +285,9 @@ class TestAdExtractorShipping:
                 }
                 mock_web_request.return_value = {"content": json.dumps(shipping_response)}
 
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(
+                island_props = {"shippingHeader": [0, island_header]} if island_header is not None else None
+            )
 
             assert shipping_type == expected_type
             assert costs == expected_cost
@@ -295,8 +298,9 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_from_island_props_fallback(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Shipping is extracted from the shippingHeader island prop when the legacy DOM element is absent."""
+    @pytest.mark.parametrize("dom_text", [None, ""], ids = ["absent", "empty"])
+    async def test_extract_shipping_info_from_island_props_fallback(self, test_extractor:extract_module.AdExtractor, dom_text:str | None) -> None:
+        """Shipping falls back to island props when the legacy DOM element is absent or empty."""
         island_props:dict[str, Any] = {"shippingHeader": [0, "+ Versand ab 2,99 €"]}
         shipping_response:dict[str, Any] = {
             "content": json.dumps(
@@ -311,7 +315,10 @@ class TestAdExtractorShipping:
         }
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(
+                test_extractor, "web_text", new_callable = AsyncMock,
+                side_effect = TimeoutError if dom_text is None else None, return_value = dom_text,
+            ),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
