@@ -869,7 +869,7 @@ class AdExtractor(WebScrapingMixin):
             # change f to  'nein' and 't' to 'ja'
             info["special_attributes"]["schaden_s"] = info["special_attributes"]["schaden_s"].translate(str.maketrans({"t": "ja", "f": "nein"}))
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page()
-        info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page()
+        info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page(island_props = island_props)
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
         info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem, island_props = island_props)
         info["contact"] = await self._extract_contact_from_ad_page(island_props = island_props)
@@ -1119,15 +1119,46 @@ class AdExtractor(WebScrapingMixin):
         except TimeoutError:  # no 'commercial' ad, has no pricing box etc.
             return None, "NOT_APPLICABLE"
 
-    async def _extract_shipping_info_from_ad_page(self) -> tuple[str, float | None, list[str] | None]:
+    async def _extract_shipping_text_from_dom(self) -> str | None:
+        """Return the legacy shipping wording element, or ``None`` if it is absent."""
+        try:
+            return await self.web_text(By.CLASS_NAME, "boxedarticle--details--shipping")
+        except TimeoutError:
+            return None
+
+    def _shipping_text_from_island_props(self, island_props:dict[str, Any] | None) -> str | None:
+        """Return the shipping wording from the ``shippingHeader`` island prop, if present."""
+        if not island_props:
+            return None
+        header = self._unwrap_island_value(island_props.get("shippingHeader"))
+        if isinstance(header, str) and header.strip():
+            return header.strip()
+        return None
+
+    async def _extract_shipping_info_from_ad_page(self, *, island_props:dict[str, Any] | None = None) -> tuple[str, float | None, list[str] | None]:
         """
         Extracts shipping information from an ad page.
 
-        :return: the shipping type, and the shipping price (optional)
+        On the redesigned (Astro) layout the legacy shipping element
+        (``boxedarticle--details--shipping``) is absent on owned ads. In that
+        case the ``shippingHeader`` island prop is used as a fallback — it
+        carries the same display text (e.g. ``+ Versand ab 5,49 €`` or
+        ``Nur Abholung``).
+
+        :param island_props: optional Astro island props from the redesigned layout
+        :return: the shipping type, the shipping price (optional), and the matching shipping options (optional)
         """
         ship_type, ship_costs, shipping_options = "NOT_APPLICABLE", None, None
         try:
-            shipping_text = await self.web_text(By.CLASS_NAME, "boxedarticle--details--shipping")
+            shipping_text = await self._extract_shipping_text_from_dom()
+            if not shipping_text:
+                # Redesigned layout: legacy shipping element is absent or empty.
+                # Fall back to the shippingHeader Astro island prop, which
+                # carries the same wording as the legacy element.
+                shipping_text = self._shipping_text_from_island_props(island_props)
+                if shipping_text is None:  # no shipping info anywhere
+                    raise TimeoutError
+                LOG.debug("Falling back to shippingHeader island prop: %s", shipping_text)
             # e.g. '+ Versand ab 5,49 €' OR 'Nur Abholung'
             if shipping_text == "Nur Abholung":
                 ship_type = "PICKUP"
