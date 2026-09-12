@@ -476,7 +476,8 @@ async def wait_for_post_auth0_submit_transition(
 
     login_confirmed = False
     try:
-        login_confirmed = await asyncio.wait_for(is_logged_in(web, username = username), timeout = post_submit_timeout)
+        async with asyncio.timeout(post_submit_timeout):
+            login_confirmed = await is_logged_in(web, username = username)
     except TimeoutError:
         LOG.debug("Post-submit login verification did not complete within %.1fs", post_submit_timeout)
 
@@ -488,8 +489,9 @@ async def wait_for_post_auth0_submit_transition(
     await web.web_sleep(min_ms = fallback_min_ms, max_ms = fallback_max_ms)
 
     try:
-        if await asyncio.wait_for(is_logged_in(web, username = username), timeout = quick_dom_timeout):
-            return
+        async with asyncio.timeout(quick_dom_timeout):
+            if await is_logged_in(web, username = username):
+                return
     except TimeoutError:
         LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 

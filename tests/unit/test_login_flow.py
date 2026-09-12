@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import asyncio
 import inspect
 from collections.abc import Callable
 from pathlib import Path
@@ -781,6 +782,105 @@ class TestKleinanzeigenBotAuthentication:
         sleep_kwargs = cast(Any, mock_sleep.await_args).kwargs
         assert sleep_kwargs["min_ms"] < sleep_kwargs["max_ms"]
         mock_classify.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_bounds_hung_login_checks(self, test_bot:KleinanzeigenBot) -> None:
+        """Each login verification phase stops at its configured relative deadline."""
+
+        async def hang_login_check(*args:object, **kwargs:object) -> bool:
+            await asyncio.Event().wait()
+            return False
+
+        with (
+            patch.object(test_bot, "timeout", return_value = 0.01),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError()),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = hang_login_check) as mock_is_logged_in,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch(
+                "kleinanzeigen_bot.login_flow._classify_post_submit_state",
+                new_callable = AsyncMock,
+                return_value = "UNKNOWN (url=unknown)",
+            ),
+            pytest.raises(TimeoutError, match = "Auth0 post-submit verification remained inconclusive"),
+        ):
+            async with asyncio.timeout(0.5):
+                await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+
+        assert mock_is_logged_in.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_propagates_external_cancellation(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """Caller cancellation stops the flow without fallback work or diagnostics."""
+        login_check_started = asyncio.Event()
+
+        async def hang_login_check(*args:object, **kwargs:object) -> bool:
+            login_check_started.set()
+            await asyncio.Event().wait()
+            return False
+
+        with (
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError()),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = hang_login_check),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_sleep,
+            patch("kleinanzeigen_bot.login_flow._classify_post_submit_state", new_callable = AsyncMock) as mock_classify,
+            patch(
+                "kleinanzeigen_bot.login_flow.capture_login_detection_diagnostics_if_enabled",
+                new_callable = AsyncMock,
+            ) as mock_diagnostics,
+        ):
+            task = asyncio.create_task(
+                wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+            )
+            await login_check_started.wait()
+            task.cancel()
+
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        mock_sleep.assert_not_awaited()
+        mock_classify.assert_not_awaited()
+        mock_diagnostics.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_wait_for_post_auth0_submit_transition_respects_parent_total_budget(
+        self, test_bot:KleinanzeigenBot,
+    ) -> None:
+        """An enclosing deadline limits time spent across both verification phases."""
+        login_check_count = 0
+        second_login_check_started = asyncio.Event()
+
+        async def login_check(*args:object, **kwargs:object) -> bool:
+            nonlocal login_check_count
+            login_check_count += 1
+            if login_check_count == 1:
+                return False
+            second_login_check_started.set()
+            await asyncio.Event().wait()
+            return False
+
+        async def fallback_pause(*args:object, **kwargs:object) -> None:
+            await asyncio.sleep(0)
+
+        with (
+            patch.object(test_bot, "timeout", return_value = 1.0),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError()),
+            patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, side_effect = login_check),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock, side_effect = fallback_pause),
+            patch("kleinanzeigen_bot.login_flow._classify_post_submit_state", new_callable = AsyncMock) as mock_classify,
+            patch(
+                "kleinanzeigen_bot.login_flow.capture_login_detection_diagnostics_if_enabled",
+                new_callable = AsyncMock,
+            ) as mock_diagnostics,
+            pytest.raises(TimeoutError),
+        ):
+            async with asyncio.timeout(0.05):
+                await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
+
+        assert second_login_check_started.is_set()
+        mock_classify.assert_not_awaited()
+        mock_diagnostics.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_click_gdpr_banner_uses_quick_dom_timeout_and_clicks_found_element(self, test_bot:KleinanzeigenBot) -> None:

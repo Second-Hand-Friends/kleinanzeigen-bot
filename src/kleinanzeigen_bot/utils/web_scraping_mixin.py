@@ -387,10 +387,19 @@ class WebScrapingMixin:  # noqa: PLR0904
             LOG.warning("Timing collector failed for key=%s operation=%s: %s", key, operation_type, exc)
 
     async def _run_with_timeout_retries(
-        self, operation:Callable[[float], Awaitable[T]], *, description:str, key:str = "default", override:float | None = None
+        self,
+        operation:Callable[[float, float], Awaitable[T]],
+        *,
+        description:str,
+        key:str = "default",
+        override:float | None = None,
     ) -> T:
         """
         Execute an async callable with retry/backoff handling for TimeoutError.
+
+        The callback receives the effective relative duration and its absolute
+        deadline. It must enforce that deadline around its asynchronous work;
+        this coordinator keeps the duration separate for messages and timing.
         """
         attempts = self._timeout_attempts()
         configured_timeout = self.timeout(key, override)
@@ -399,8 +408,9 @@ class WebScrapingMixin:  # noqa: PLR0904
         for attempt in range(attempts):
             effective_timeout = self.effective_timeout(key, override, attempt = attempt)
             attempt_started = loop.time()
+            attempt_deadline = attempt_started + effective_timeout
             try:
-                result = await operation(effective_timeout)
+                result = await operation(effective_timeout, attempt_deadline)
                 self._record_timing(
                     key = key,
                     description = description,
@@ -442,12 +452,19 @@ class WebScrapingMixin:  # noqa: PLR0904
         if not selectors:
             raise ValueError(_("selectors must contain at least one selector"))
 
-        async def attempt(effective_timeout:float) -> tuple[Element, int]:
+        async def attempt(effective_timeout:float, group_deadline:float) -> tuple[Element, int]:
             budgets = _allocate_selector_group_budgets(effective_timeout, len(selectors))
             failures:list[str] = []
             for index, ((selector_type, selector_value), candidate_timeout) in enumerate(zip(selectors, budgets, strict = True)):
+                candidate_deadline = min(asyncio.get_running_loop().time() + candidate_timeout, group_deadline)
                 try:
-                    element = await self._web_find_once(selector_type, selector_value, candidate_timeout, parent = parent)
+                    element = await self._web_find_once(
+                        selector_type,
+                        selector_value,
+                        candidate_timeout,
+                        parent = parent,
+                        deadline = candidate_deadline,
+                    )
                     LOG.debug(
                         "Selector group matched candidate %d/%d (%s=%s) within %.2fs (group budget %.2fs)",
                         index + 1,
@@ -576,17 +593,20 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         cfg = _build_nodriver_config(self.browser_config.binary_location, browser_args, effective_user_data_dir)
 
-        # Enhanced profile directory handling
-        if cfg.user_data_dir:
-            await self._prepare_browser_profile(cfg.user_data_dir, self.browser_config.profile_name)
-
-        # load extensions
-        await self._add_browser_extensions(cfg)
-
         try:
+            # Enhanced profile directory handling
+            if cfg.user_data_dir:
+                await self._prepare_browser_profile(cfg.user_data_dir, self.browser_config.profile_name)
+
+            # load extensions
+            await self._add_browser_extensions(cfg)
+
             self.browser = await nodriver.start(cfg)  # type: ignore[attr-defined]
             LOG.info("New Browser session is %s", self.browser.websocket_url)
             self._browser_session_is_remote = False
+        except asyncio.CancelledError:
+            self._cleanup_session_resources()
+            raise
         except Exception as e:
             # Clean up any resources that were created during setup
             self._cleanup_session_resources()
@@ -626,6 +646,9 @@ class WebScrapingMixin:  # noqa: PLR0904
             cfg.host = host
             cfg.port = port
             return await nodriver.start(cfg)  # type: ignore[attr-defined]
+        except asyncio.CancelledError:
+            self._cleanup_session_resources()
+            raise
         except Exception as e:
             error_msg = str(e)
             if "root" in error_msg.lower():
@@ -931,42 +954,55 @@ class WebScrapingMixin:  # noqa: PLR0904
         browser_process = getattr(browser, "_process", None)
         # Close nodriver's websocket tasks before stopping the event loop. Browser.stop()
         # schedules this cleanup without awaiting it, which can leave pending tasks behind.
+        cancelled_during_aclose = False
         try:
             await browser.aclose()
+        except asyncio.CancelledError:
+            cancelled_during_aclose = True
+            raise
         finally:
             try:
                 browser.stop()
                 if isinstance(browser_process, asyncio.subprocess.Process):
-                    await self._wait_for_browser_process_exit(browser_process)
+                    if cancelled_during_aclose:
+                        self._kill_browser_process(browser_process)
+                    else:
+                        await self._wait_for_browser_process_exit(browser_process)
                 # Browser.stop() schedules one final, idempotent aclose() call.
-                await asyncio.sleep(0)
-                self._kill_orphaned_browser_children(browser_pid)
+                if not cancelled_during_aclose:
+                    await asyncio.sleep(0)
             finally:
-                self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+                try:
+                    self._kill_orphaned_browser_children(browser_pid)
+                finally:
+                    self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
 
     async def _wait_for_browser_process_exit(self, browser_process:asyncio.subprocess.Process) -> None:
+        loop = asyncio.get_running_loop()
         try:
-            await asyncio.wait_for(
-                browser_process.wait(),
-                timeout = _BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS,
-            )
+            async with asyncio.timeout_at(loop.time() + _BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS):
+                await browser_process.wait()
             return
+        except asyncio.CancelledError:
+            self._kill_browser_process(browser_process)
+            raise
         except (TimeoutError, OSError) as exc:
             LOG.debug("Browser process did not exit cleanly: %s", exc)
 
+        self._kill_browser_process(browser_process)
+
+        try:
+            async with asyncio.timeout_at(loop.time() + _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS):
+                await browser_process.wait()
+        except (TimeoutError, OSError) as exc:
+            LOG.debug("Browser process could not be reaped after being killed: %s", exc)
+
+    def _kill_browser_process(self, browser_process:asyncio.subprocess.Process) -> None:
         try:
             if browser_process.returncode is None:
                 browser_process.kill()
         except OSError as exc:
             LOG.debug("Browser process could not be killed: %s", exc)
-
-        try:
-            await asyncio.wait_for(
-                browser_process.wait(),
-                timeout = _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS,
-            )
-        except (TimeoutError, OSError) as exc:
-            LOG.debug("Browser process could not be reaped after being killed: %s", exc)
 
     def _close_browser_session_nowait(self) -> None:
         """Best-effort browser cleanup for destructors, where awaiting is impossible."""
@@ -1068,6 +1104,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         condition:Callable[[], Coroutine[Any, Any, T]],
         *,
         timeout:int | float | None = None,
+        deadline:float | None = None,
         timeout_error_message:str = "",
         apply_multiplier:bool = True,
     ) -> T:
@@ -1079,6 +1116,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         condition:Callable[[], T],
         *,
         timeout:int | float | None = None,
+        deadline:float | None = None,
         timeout_error_message:str = "",
         apply_multiplier:bool = True,
     ) -> T:
@@ -1089,6 +1127,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         condition:Callable[[], T | Coroutine[Any, Any, T]],
         *,
         timeout:int | float | None = None,
+        deadline:float | None = None,
         timeout_error_message:str = "",
         apply_multiplier:bool = True,
     ) -> T:
@@ -1096,46 +1135,54 @@ class WebScrapingMixin:  # noqa: PLR0904
         Blocks/waits until the given condition is met.
 
         :param timeout: timeout in seconds (base value, multiplier applied unless disabled)
+        :param deadline: absolute event-loop deadline; derived from timeout when omitted
         :raises TimeoutError: if element could not be found within time
         """
         loop = asyncio.get_running_loop()
-        start_at = loop.time()
         base_timeout = timeout if timeout is not None else self.timeout()
         effective_timeout = self.effective_timeout(override = base_timeout) if apply_multiplier else base_timeout
+        operation_deadline = deadline if deadline is not None else loop.time() + effective_timeout
+        last_exception:Exception | None = None
 
-        while True:
-            await self.page
-            ex:Exception | None = None
-            try:
-                result_raw = condition()
-                result:T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
-                if result:
-                    return result
-            except ProtocolException as ex1:  # pragma: no cover — needs live CDP session
-                if ex1.code == -32601:  # noqa: PLR2004
-                    # Chromium 148+ rejects DOM commands on stale flat-mode
-                    # sessions.  Re-attach and retry.
-                    LOG.debug("Re-attaching CDP session after -32601")
+        timeout_scope = asyncio.timeout_at(operation_deadline)
+        try:
+            async with timeout_scope:
+                while True:
+                    last_exception = None
+                    await self.browser.update_targets()
                     try:
-                        await self.page.attach()
-                    except Exception as re_exc:  # noqa: S110
-                        LOG.debug("Re-attach failed: %s", re_exc)
-                    elapsed = loop.time() - start_at
-                    if elapsed >= effective_timeout:
-                        raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds") from None
-                    remaining_timeout = max(effective_timeout - elapsed, 0.0)
-                    await asyncio.sleep(min(0.05, remaining_timeout))
-                    continue
-                ex = ex1
-            except Exception as ex1:
-                ex = ex1
-            elapsed = loop.time() - start_at
-            if elapsed >= effective_timeout:
-                if ex:
-                    raise ex
-                raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds")
-            remaining_timeout = max(effective_timeout - elapsed, 0.0)
-            await asyncio.sleep(min(0.5, remaining_timeout))
+                        result_raw = condition()
+                        result:T = cast(T, await result_raw if inspect.isawaitable(result_raw) else result_raw)
+                        if result:
+                            return result
+                    except ProtocolException as ex:  # pragma: no cover — needs live CDP session
+                        if ex.code != -32601:  # noqa: PLR2004
+                            last_exception = ex
+                        else:
+                            # Chromium 148+ rejects DOM commands on stale flat-mode
+                            # sessions. Re-attach and retry.
+                            await self._reattach_page(operation_deadline)
+                            continue
+                    except Exception as ex:
+                        last_exception = ex
+
+                    remaining_timeout = max(operation_deadline - loop.time(), 0.0)
+                    await asyncio.sleep(min(0.5, remaining_timeout))
+        except TimeoutError:
+            if not timeout_scope.expired():
+                raise
+            if last_exception is not None:
+                raise last_exception from None
+            raise TimeoutError(timeout_error_message or f"Condition not met within {effective_timeout} seconds") from None
+
+    async def _reattach_page(self, deadline:float) -> None:
+        LOG.debug("Re-attaching CDP session after -32601")
+        try:
+            await self.page.attach()
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Re-attach failed: %s", exc)
+        remaining_timeout = max(deadline - asyncio.get_running_loop().time(), 0.0)
+        await asyncio.sleep(min(0.05, remaining_timeout))
 
     async def web_check(self, selector_type:By, selector_value:str, attr:Is, *, timeout:int | float | None = None) -> bool:
         """
@@ -1324,8 +1371,8 @@ class WebScrapingMixin:  # noqa: PLR0904
         :raises TimeoutError: if element could not be found within time
         """
 
-        async def attempt(effective_timeout:float) -> Element:
-            return await self._web_find_once(selector_type, selector_value, effective_timeout, parent = parent)
+        async def attempt(effective_timeout:float, deadline:float) -> Element:
+            return await self._web_find_once(selector_type, selector_value, effective_timeout, parent = parent, deadline = deadline)
 
         return await self._run_with_timeout_retries(  # noqa: E501
             attempt, description = f"web_find({selector_type.name}, {selector_value})", key = "default", override = timeout
@@ -1355,14 +1402,22 @@ class WebScrapingMixin:  # noqa: PLR0904
         :raises TimeoutError: if element could not be found within time
         """
 
-        async def attempt(effective_timeout:float) -> list[Element]:
-            return await self._web_find_all_once(selector_type, selector_value, effective_timeout, parent = parent)
+        async def attempt(effective_timeout:float, deadline:float) -> list[Element]:
+            return await self._web_find_all_once(selector_type, selector_value, effective_timeout, parent = parent, deadline = deadline)
 
         return await self._run_with_timeout_retries(
             attempt, description = f"web_find_all({selector_type.name}, {selector_value})", key = "default", override = timeout
         )
 
-    async def _web_find_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
+    async def _web_find_once(
+        self,
+        selector_type:By,
+        selector_value:str,
+        timeout:float,
+        *,
+        parent:Element | None = None,
+        deadline:float | None = None,
+    ) -> Element:
         timeout_suffix = f" within {timeout} seconds."
 
         match selector_type:
@@ -1371,6 +1426,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(f"#{escaped_id}", parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML element found with ID '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1379,6 +1435,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(f".{escaped_classname}", parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML element found with CSS class '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1386,6 +1443,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML element found of tag <{selector_value}>{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1393,6 +1451,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(Element, await self.web_await(
                     lambda: self.page.query_selector(selector_value, parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML element found using CSS selector '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1401,6 +1460,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(Element, await self.web_await(
                     lambda: self.page.find_element_by_text(selector_value, best_match = True),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML element found containing text '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1409,13 +1469,22 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(Element, await self.web_await(
                     lambda: self._xpath_first(selector_value),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML element found using XPath '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
 
         raise AssertionError(_("Unsupported selector type: %s") % selector_type)
 
-    async def _web_find_all_once(self, selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> list[Element]:
+    async def _web_find_all_once(
+        self,
+        selector_type:By,
+        selector_value:str,
+        timeout:float,
+        *,
+        parent:Element | None = None,
+        deadline:float | None = None,
+    ) -> list[Element]:
         timeout_suffix = f" within {timeout} seconds."
 
         match selector_type:
@@ -1424,6 +1493,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(list[Element], await self.web_await(
                     lambda: self.page.query_selector_all(f".{escaped_classname}", parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML elements found with CSS class '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1431,6 +1501,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(list[Element], await self.web_await(
                     lambda: self.page.query_selector_all(selector_value, parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML elements found using CSS selector '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1438,6 +1509,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return cast(list[Element], await self.web_await(
                     lambda: self.page.query_selector_all(selector_value, parent),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML elements found of tag <{selector_value}>{timeout_suffix}",
                     apply_multiplier = False,
                 ))
@@ -1446,6 +1518,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return await self.web_await(
                     lambda: self.page.find_elements_by_text(selector_value),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML elements found containing text '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 )
@@ -1454,6 +1527,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 return await self.web_await(
                     lambda: self._xpath_all(selector_value),
                     timeout = timeout,
+                    deadline = deadline,
                     timeout_error_message = f"No HTML elements found using XPath '{selector_value}'{timeout_suffix}",
                     apply_multiplier = False,
                 )
@@ -1508,12 +1582,23 @@ class WebScrapingMixin:  # noqa: PLR0904
         if not reload_if_already_open and self.page and url == self.page.url:
             LOG.debug("  => skipping, [%s] is already open", url)
             return
-        self.page = await self.browser.get(url = url, new_tab = False, new_window = False)
         page_timeout = self.effective_timeout("page_load", timeout)
+        loop = asyncio.get_running_loop()
+        page_deadline = loop.time() + page_timeout
+        timeout_message = f"Page did not finish loading within {page_timeout} seconds."
+        navigation_timeout = asyncio.timeout_at(page_deadline)
+        try:
+            async with navigation_timeout:
+                self.page = await self.browser.get(url = url, new_tab = False, new_window = False)
+        except TimeoutError:
+            if not navigation_timeout.expired():
+                raise
+            raise TimeoutError(timeout_message) from None
         await self.web_await(
             lambda: self.web_execute("document.readyState == 'complete'"),
             timeout = page_timeout,
-            timeout_error_message = f"Page did not finish loading within {page_timeout} seconds.",
+            deadline = page_deadline,
+            timeout_error_message = timeout_message,
             apply_multiplier = False,
         )
 

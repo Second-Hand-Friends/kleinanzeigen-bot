@@ -420,6 +420,29 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_open("https://example.com", timeout = 0.1)
 
     @pytest.mark.asyncio
+    async def test_web_open_bounds_hanging_navigation(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
+        """The page-load budget should include browser.get, not only readiness polling."""
+
+        async def hanging_get(**kwargs:object) -> Page:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+        mock_browser.get.side_effect = hanging_get
+        web_scraper.page = None  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+
+        with pytest.raises(TimeoutError, match = "Page did not finish loading within"):
+            await web_scraper.web_open("https://example.com", timeout = 0.03)
+
+    @pytest.mark.asyncio
+    async def test_web_open_preserves_navigation_timeout_error(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
+        """An underlying navigation TimeoutError should not be relabeled as deadline expiry."""
+        mock_browser.get.side_effect = TimeoutError("navigation failed")
+        web_scraper.page = None  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+
+        with pytest.raises(TimeoutError, match = "navigation failed"):
+            await web_scraper.web_open("https://example.com", timeout = 1)
+
+    @pytest.mark.asyncio
     async def test_web_open_skip_when_url_already_loaded(
         self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock, mock_page:TrulyAwaitableMockPage
     ) -> None:
@@ -501,7 +524,14 @@ class TestWebScrapingErrorHandling:
 
         recorded:list[tuple[float, bool]] = []
 
-        async def fake_web_await(condition:Callable[[], object], *, timeout:float, timeout_error_message:str = "", apply_multiplier:bool = True) -> Element:
+        async def fake_web_await(
+            condition:Callable[[], object],
+            *,
+            timeout:float,
+            deadline:float | None = None,
+            timeout_error_message:str = "",
+            apply_multiplier:bool = True,
+        ) -> Element:
             recorded.append((timeout, apply_multiplier))
             raise TimeoutError(timeout_error_message or "timeout")
 
@@ -542,7 +572,7 @@ class TestTimeoutAndRetryHelpers:
         """_run_with_timeout_retries should retry when TimeoutError is raised before succeeding."""
         attempts:list[float] = []
 
-        async def flaky_operation(timeout:float) -> str:
+        async def flaky_operation(timeout:float, _deadline:float) -> str:
             attempts.append(timeout)
             if len(attempts) == 1:
                 raise TimeoutError("first attempt")
@@ -555,12 +585,51 @@ class TestTimeoutAndRetryHelpers:
         assert len(attempts) == 2
 
     @pytest.mark.asyncio
+    async def test_parent_deadline_stops_retries_during_hanging_attempt(self, web_scraper:WebScrapingMixin) -> None:
+        """A caller deadline should cancel a hanging attempt without starting another retry."""
+        attempts = 0
+
+        async def hanging_operation(_timeout:float, _deadline:float) -> None:
+            nonlocal attempts
+            attempts += 1
+            await asyncio.Event().wait()
+
+        web_scraper.config.timeouts.retry_enabled = True
+        web_scraper.config.timeouts.retry_max_attempts = 3
+
+        with pytest.raises(TimeoutError):
+            async with asyncio.timeout(0.03):
+                await web_scraper._run_with_timeout_retries(hanging_operation, description = "hanging-op")
+
+        assert attempts == 1
+
+    @pytest.mark.asyncio
+    async def test_run_with_timeout_retries_passes_backoff_deadlines(self, web_scraper:WebScrapingMixin) -> None:
+        """Each retry should receive its configured backoff duration as an absolute deadline."""
+        received:list[tuple[float, float]] = []
+        loop = asyncio.get_running_loop()
+
+        async def always_timeout(timeout:float, deadline:float) -> None:
+            received.append((timeout, deadline - loop.time()))
+            raise TimeoutError("retry")
+
+        web_scraper.config.timeouts.retry_enabled = True
+        web_scraper.config.timeouts.retry_max_attempts = 2
+        web_scraper.config.timeouts.retry_backoff_factor = 2.0
+
+        with pytest.raises(TimeoutError, match = "retry"):
+            await web_scraper._run_with_timeout_retries(always_timeout, description = "retry-op", override = 0.1)
+
+        assert [timeout for timeout, _ in received] == pytest.approx([0.1, 0.2, 0.4])
+        assert [remaining for _, remaining in received] == pytest.approx([0.1, 0.2, 0.4], abs = 0.01)
+
+    @pytest.mark.asyncio
     async def test_run_with_timeout_retries_records_success_timing(self, web_scraper:WebScrapingMixin) -> None:
         """_run_with_timeout_retries should emit a timing record for successful attempts."""
         recorded:list[dict[str, Any]] = []
         cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
 
-        async def operation(_timeout:float) -> str:
+        async def operation(_timeout:float, _deadline:float) -> str:
             return "ok"
 
         result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
@@ -578,7 +647,7 @@ class TestTimeoutAndRetryHelpers:
         cast(Any, web_scraper)._timing_collector = RecordingCollector(recorded)
         web_scraper.config.timeouts.retry_max_attempts = 1
 
-        async def always_timeout(_timeout:float) -> str:
+        async def always_timeout(_timeout:float, _deadline:float) -> str:
             raise TimeoutError("boom")
 
         with pytest.raises(TimeoutError, match = "boom"):
@@ -595,7 +664,7 @@ class TestTimeoutAndRetryHelpers:
         """_run_with_timeout_retries should continue when timing collector record fails."""
         cast(Any, web_scraper)._timing_collector = FailingCollector()
 
-        async def operation(_timeout:float) -> str:
+        async def operation(_timeout:float, _deadline:float) -> str:
             return "ok"
 
         result = await web_scraper._run_with_timeout_retries(operation, description = "web_find(ID, test)")
@@ -606,7 +675,7 @@ class TestTimeoutAndRetryHelpers:
     async def test_run_with_timeout_retries_guard_clause(self, web_scraper:WebScrapingMixin) -> None:
         """_run_with_timeout_retries should guard against zero-attempt edge cases."""
 
-        async def never_called(timeout:float) -> None:
+        async def never_called(timeout:float, deadline:float) -> None:
             pytest.fail("operation should not run when attempts are zero")
 
         with (
@@ -667,7 +736,14 @@ class TestTimeoutAndRetryHelpers:
         second_timeout:float | None = None
         found = AsyncMock(spec = Element)
 
-        async def fake_find_once(selector_type:By, selector_value:str, timeout:float, *, parent:Element | None = None) -> Element:
+        async def fake_find_once(
+            selector_type:By,
+            selector_value:str,
+            timeout:float,
+            *,
+            parent:Element | None = None,
+            deadline:float | None = None,
+        ) -> Element:
             nonlocal first_timeout, second_timeout
             if selector_value == "first":
                 first_timeout = timeout
@@ -700,6 +776,29 @@ class TestTimeoutAndRetryHelpers:
             await web_scraper.web_find_first_available([(By.ID, "first"), (By.ID, "second")], timeout = 1.0)
 
         assert find_once.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_web_find_first_available_falls_back_after_hanging_primary(
+        self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage
+    ) -> None:
+        """A hung primary selector should consume only its slice before the backup runs."""
+        found = AsyncMock(spec = Element)
+
+        async def query_selector(selector:str, parent:Element | None = None) -> Element | None:
+            if selector == "#primary":
+                await asyncio.Event().wait()
+            return found
+
+        mock_page.query_selector.side_effect = query_selector
+        web_scraper.config.timeouts.retry_enabled = False
+
+        result, index = await web_scraper.web_find_first_available(
+            [(By.ID, "primary"), (By.ID, "backup")],
+            timeout = 0.08,
+        )
+
+        assert result is found
+        assert index == 1
 
     @pytest.mark.asyncio
     async def test_web_find_first_available_rejects_empty_selectors(self, web_scraper:WebScrapingMixin) -> None:
@@ -823,10 +922,10 @@ class TestSelectorTimeoutMessages:
         """web_find_all should execute via the timeout retry helper."""
         elements = [AsyncMock(spec = Element)]
 
-        async def fake_retry(operation:Callable[[float], Awaitable[list[Element]]], **kwargs:Any) -> list[Element]:
+        async def fake_retry(operation:Callable[[float, float], Awaitable[list[Element]]], **kwargs:Any) -> list[Element]:
             assert kwargs["description"] == "web_find_all(CLASS_NAME, hero)"
             assert kwargs["override"] == 1.5
-            result = await operation(0.42)
+            result = await operation(0.42, asyncio.get_running_loop().time() + 0.42)
             return result
 
         retry_mock = AsyncMock(side_effect = fake_retry)
@@ -1103,6 +1202,45 @@ class TestWebScrapingSessionManagement:
         assert scraper.page is None
 
     @pytest.mark.asyncio
+    async def test_close_browser_session_cancellation_does_not_start_process_wait(self) -> None:
+        """Cancellation during aclose should synchronously stop and kill without fresh wait budgets."""
+        scraper = WebScrapingMixin()
+
+        class Process:
+            returncode:int | None = None
+
+            def __init__(self) -> None:
+                self.killed = False
+
+            def kill(self) -> None:
+                self.killed = True
+
+        process = Process()
+        scraper.browser = MagicMock()
+        scraper.browser._process_pid = None
+        scraper.browser._process = process
+
+        async def hanging_aclose() -> None:
+            await asyncio.Event().wait()
+
+        scraper.browser.aclose = AsyncMock(side_effect = hanging_aclose)
+        stop_mock = scraper.browser.stop = MagicMock()
+        wait_mock = AsyncMock()
+        scraper._wait_for_browser_process_exit = wait_mock  # type: ignore[method-assign]
+
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.subprocess.Process", Process):
+            task = asyncio.create_task(scraper.close_browser_session())
+            await asyncio.sleep(0)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        stop_mock.assert_called_once()
+        wait_mock.assert_not_awaited()
+        assert process.killed
+        assert scraper.browser is None
+
+    @pytest.mark.asyncio
     async def test_wait_for_browser_process_exit_kills_after_timeout(self) -> None:
         """A browser process that does not exit after stop should be killed and reaped."""
         scraper = WebScrapingMixin()
@@ -1156,6 +1294,34 @@ class TestWebScrapingSessionManagement:
 
         assert process.wait_calls == 2
         assert process.kill_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_wait_for_browser_process_exit_kills_on_cancellation(self) -> None:
+        """Cancellation during graceful wait should kill immediately and propagate."""
+        scraper = WebScrapingMixin()
+
+        class HangingProcess:
+            returncode:int | None = None
+
+            def __init__(self) -> None:
+                self.killed = False
+
+            async def wait(self) -> int:
+                await asyncio.Event().wait()
+                raise AssertionError("unreachable")
+
+            def kill(self) -> None:
+                self.killed = True
+
+        process = HangingProcess()
+        task = asyncio.create_task(scraper._wait_for_browser_process_exit(cast(asyncio.subprocess.Process, process)))  # noqa: SLF001
+        await asyncio.sleep(0)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert process.killed
 
     def test_close_browser_session_nowait_cleans_up_resources(self) -> None:
         """Destructor cleanup should stop the browser without requiring an event loop."""
@@ -1280,7 +1446,7 @@ class TestWebScrolling:
             call_count["count"] += 1
             return call_count["count"] >= 3
 
-        result:bool = await web_scraper.web_await(condition, timeout = 1)
+        result:bool = await web_scraper.web_await(condition, timeout = 1.1)
         assert result is True
         assert call_count["count"] >= 3
 
@@ -1293,6 +1459,122 @@ class TestWebScrolling:
 
         with pytest.raises(TimeoutError):
             await web_scraper.web_await(condition, timeout = 0.05)
+
+    @pytest.mark.asyncio
+    async def test_web_await_bounds_hanging_target_refresh(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
+        """A browser target refresh that never resolves must remain inside the deadline."""
+
+        async def hanging_refresh() -> None:
+            await asyncio.Event().wait()
+
+        mock_browser.update_targets.side_effect = hanging_refresh
+
+        with pytest.raises(TimeoutError, match = "page readiness timed out"):
+            await web_scraper.web_await(lambda: True, timeout = 0.03, timeout_error_message = "page readiness timed out")
+
+    @pytest.mark.asyncio
+    async def test_web_await_short_budget_with_real_tab_has_no_hidden_sleep(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
+        """Refreshing a real Tab should not invoke Tab.__await__'s hidden 0.5-second sleep."""
+        mock_browser.target = MagicMock(type_ = "browser")
+        tab = Page(parent = mock_browser)
+        assert tab.browser is mock_browser
+        found = AsyncMock(spec = Element)
+        tab.query_selector = AsyncMock(return_value = found)
+        web_scraper.page = tab
+        tasks_before = asyncio.all_tasks()
+
+        result = await web_scraper.web_find(By.ID, "short-budget", timeout = 0.1)
+
+        assert result is found
+        mock_browser.update_targets.assert_awaited_once()
+        assert asyncio.all_tasks() == tasks_before
+
+    @pytest.mark.asyncio
+    async def test_web_await_cancels_hanging_refresh_without_background_work(
+        self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock
+    ) -> None:
+        """Deadline expiry should cancel the directly awaited refresh without detached tasks."""
+        refresh_cancelled = asyncio.Event()
+
+        async def hanging_refresh() -> None:
+            try:
+                await asyncio.Event().wait()
+            finally:
+                refresh_cancelled.set()
+
+        mock_browser.update_targets.side_effect = hanging_refresh
+        mock_browser.target = MagicMock(type_ = "browser")
+        tab = Page(parent = mock_browser)
+        assert tab.browser is mock_browser
+        web_scraper.page = tab
+        tasks_before = asyncio.all_tasks()
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_await(lambda: True, timeout = 0.03)
+
+        assert refresh_cancelled.is_set()
+        assert asyncio.all_tasks() == tasks_before
+
+    @pytest.mark.asyncio
+    async def test_web_await_zero_budget_cancels_first_async_refresh(
+        self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock
+    ) -> None:
+        """A zero budget should expire at the first suspension without running the condition."""
+        condition = Mock(return_value = True)
+
+        async def yielding_refresh() -> None:
+            await asyncio.sleep(0)
+
+        mock_browser.update_targets.side_effect = yielding_refresh
+        mock_browser.target = MagicMock(type_ = "browser")
+        tab = Page(parent = mock_browser)
+        assert tab.browser is mock_browser
+        web_scraper.page = tab
+
+        with pytest.raises(TimeoutError):
+            await web_scraper.web_await(condition, timeout = 0, apply_multiplier = False)
+
+        mock_browser.update_targets.assert_awaited_once()
+        condition.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_web_await_bounds_hanging_condition(self, web_scraper:WebScrapingMixin) -> None:
+        """An async condition that never resolves must remain inside the deadline."""
+
+        async def condition() -> bool:
+            await asyncio.Event().wait()
+            return True
+
+        with pytest.raises(TimeoutError, match = "condition timed out"):
+            await web_scraper.web_await(condition, timeout = 0.03, timeout_error_message = "condition timed out")
+
+    @pytest.mark.asyncio
+    async def test_web_await_preserves_refresh_timeout_error(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
+        """A refresh-originated TimeoutError should pass through without custom relabeling."""
+        mock_browser.update_targets.side_effect = TimeoutError("refresh failed")
+
+        with pytest.raises(TimeoutError, match = "refresh failed"):
+            await web_scraper.web_await(lambda: True, timeout = 1, timeout_error_message = "custom timeout")
+
+    @pytest.mark.asyncio
+    async def test_web_await_propagates_cancellation_without_retry(self, web_scraper:WebScrapingMixin) -> None:
+        """Explicit cancellation should propagate instead of becoming a timeout or another poll."""
+        calls = 0
+
+        async def condition() -> bool:
+            nonlocal calls
+            calls += 1
+            await asyncio.Event().wait()
+            return True
+
+        task = asyncio.create_task(web_scraper.web_await(condition, timeout = 10))
+        await asyncio.sleep(0)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+        assert calls == 1
 
     @pytest.mark.asyncio
     async def test_web_await_caps_sleep_to_remaining_timeout(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
@@ -1320,6 +1602,21 @@ class TestWebScrolling:
 
         with pytest.raises(TimeoutError):
             await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
+
+    @pytest.mark.asyncio
+    async def test_web_await_bounds_hanging_reattach(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
+        """A stale-session reattach that hangs must remain inside the polling deadline."""
+
+        async def condition() -> bool:
+            raise ProtocolException({"message": "Method not found", "code": -32601})
+
+        async def hanging_attach() -> None:
+            await asyncio.Event().wait()
+
+        cast(AsyncMock, mock_page.attach).side_effect = hanging_attach
+
+        with pytest.raises(TimeoutError, match = "reattach timed out"):
+            await web_scraper.web_await(condition, timeout = 0.03, timeout_error_message = "reattach timed out", apply_multiplier = False)
 
     @pytest.mark.asyncio
     async def test_web_await_reattach_bounded(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
@@ -2955,6 +3252,37 @@ class TestWebScrapingMixinPortRetry:
 
             # Should not trigger the root-specific error handling
             assert "Failed to start browser. This error often occurs when:" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_browser_startup_cancellation_cleans_partial_session(
+        self, scraper_with_startup_config:WebScrapingMixin, tmp_path:Path
+    ) -> None:
+        """Cancellation during profile setup should clear partial browser state and propagate."""
+
+        async def hanging_profile_setup(user_data_dir:str, profile_name:str | None) -> None:
+            await asyncio.Event().wait()
+
+        profile_dir = str(tmp_path / "profile")
+        cleanup_mock = MagicMock(wraps = scraper_with_startup_config._cleanup_session_resources)  # noqa: SLF001
+        with (
+            patch("kleinanzeigen_bot.utils.web_scraping_mixin.files.exists", AsyncMock(return_value = True)),
+            patch.object(scraper_with_startup_config, "_validate_chrome_version_configuration", new_callable = AsyncMock),
+            patch.object(scraper_with_startup_config, "_build_new_browser_launch_args", return_value = ([], None)),
+            patch.object(scraper_with_startup_config, "_resolve_effective_user_data_dir", new_callable = AsyncMock, return_value = profile_dir),
+            patch("kleinanzeigen_bot.utils.web_scraping_mixin._build_nodriver_config", return_value = MagicMock(user_data_dir = profile_dir)),
+            patch.object(scraper_with_startup_config, "_prepare_browser_profile", side_effect = hanging_profile_setup),
+            patch.object(scraper_with_startup_config, "_cleanup_session_resources", cleanup_mock),
+        ):
+            task = asyncio.create_task(scraper_with_startup_config.create_browser_session())
+            await asyncio.sleep(0)
+            task.cancel()
+
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+        cleanup_mock.assert_called_once()
+        assert scraper_with_startup_config.browser is None
+        assert scraper_with_startup_config.page is None
 
     @pytest.fixture
     def scraper(self) -> WebScrapingMixin:
