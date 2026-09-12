@@ -4,12 +4,33 @@
 """Tests for the files utility module."""
 import os
 import tempfile
+from contextvars import ContextVar
+from pathlib import Path
 
-from kleinanzeigen_bot.utils.files import abspath
+import pytest
+
+from kleinanzeigen_bot.utils.files import abspath, exists
 
 
 class TestFiles:
     """Test suite for files utility functions."""
+
+    @pytest.mark.asyncio
+    async def test_exists_preserves_task_context(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        context:ContextVar[str] = ContextVar("file_operation_context", default = "unset")
+        token = context.set("download")
+
+        def exists_with_context(_path:Path) -> bool:
+            assert context.get() == "download"
+            context.set("worker")
+            return True
+
+        monkeypatch.setattr(Path, "exists", exists_with_context)
+        try:
+            assert await exists("ad.yaml")
+            assert context.get() == "download"
+        finally:
+            context.reset(token)
 
     def test_abspath_without_relative_to(self) -> None:
         """Test abspath function without relative_to parameter."""

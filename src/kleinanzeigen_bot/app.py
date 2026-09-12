@@ -159,8 +159,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             await self.close_browser_session()
             if self._timing_collector is not None:
                 try:
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, self._timing_collector.flush)
+                    await asyncio.to_thread(self._timing_collector.flush)
                 except Exception as exc:  # noqa: BLE001
                     LOG.warning("Timing collector flush failed: %s", exc)
 

@@ -2501,8 +2501,11 @@ class TestAdExtractorDownload:
             call(staging_dir, final_dir),
         ]
 
+    @pytest.mark.parametrize("error_type", [OSError, TimeoutError])
     @pytest.mark.asyncio
-    async def test_download_ad_preserves_final_dir_when_yaml_write_fails(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_preserves_final_dir_when_yaml_write_fails(
+        self, extractor:extract_module.AdExtractor, tmp_path:Path, error_type:type[OSError],
+    ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
@@ -2516,7 +2519,7 @@ class TestAdExtractorDownload:
 
         with (
             patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = error_type("write failed")),
             patch.object(Path, "rename", autospec = True) as mock_rename,
         ):
             mock_extract_with_dir.return_value = (
@@ -2526,11 +2529,11 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            with pytest.raises(OSError, match = "write failed"):
+            with pytest.raises(error_type, match = "write failed"):
                 await extractor.download_ad(12345)
 
         assert final_dir.exists()
-        assert old_file.exists()
+        assert old_file.read_text() == "old content"
         assert not backup_dir.exists()
         assert not staging_dir.exists()
         mock_rename.assert_not_called()
