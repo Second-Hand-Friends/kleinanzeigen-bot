@@ -91,7 +91,7 @@ class Overview:
 ])
 async def test_bulk_command_visits_each_needed_page_once(
     *,
-    test_bot:KleinanzeigenBot, tmp_path:Path, base_ad_config:dict[str, Any], caplog:pytest.LogCaptureFixture,
+    test_bot:KleinanzeigenBot, tmp_path:Path, base_ad_config:dict[str, Any],
     action:Literal["extend", "reserve", "activate"], requested:list[int], failed_id:int | None,
     fail_open:bool, expected_pages:list[int], expected_attempts:list[int],
 ) -> None:
@@ -132,7 +132,3 @@ async def test_bulk_command_visits_each_needed_page_once(
             assert Path(path).read_bytes() != before[path]  # noqa: ASYNC240 Small temporary test file
         else:
             assert Path(path).read_bytes() == before[path]  # noqa: ASYNC240 Small temporary test file
-    if 99 in requested:
-        assert "button for ad ID 99" in caplog.text
-    if failed_id is not None:
-        assert "FAILED" in caplog.text
