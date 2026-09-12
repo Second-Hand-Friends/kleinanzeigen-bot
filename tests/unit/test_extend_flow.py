@@ -4,6 +4,7 @@
 """Tests for the extend command and extend_flow module."""
 
 import json
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,6 @@ from kleinanzeigen_bot import extend_flow, runtime_config
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.utils import dicts, misc, xdg_paths
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
 @pytest.fixture
@@ -90,6 +90,18 @@ class TestExtendCommand:
 
 class TestExtendAdsMethod:
     """Tests for the extend_ads() method."""
+
+    @pytest.fixture(autouse = True)
+    def overview(self, test_bot:KleinanzeigenBot) -> Any:
+        async def navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
+            return await callback(1)
+
+        rows = [MagicMock(attrs = {"data-adid": str(ad_id)}) for ad_id in (12345, 67890)]
+        with (
+            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = navigate),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = rows),
+        ):
+            yield
 
     @pytest.mark.asyncio
     async def test_extend_ads_skips_unpublished_ad(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
@@ -293,13 +305,7 @@ class TestExtendAdsMethod:
 
 
 class TestExtendAdMethod:
-    """Tests for the _extend_ad() method.
-
-    Note: These tests mock `navigate_paginated_ad_overview` rather than individual browser methods
-    (web_find, web_click, etc.) because the pagination helper involves complex multi-step browser
-    interactions that would require extensive, brittle mock choreography. Mocking at this level
-    keeps tests focused on _extend_ad's own logic (dialog handling, YAML persistence, error paths).
-    """
+    """Tests for current-page button handling and extension persistence."""
 
     @pytest.mark.asyncio
     async def test_extend_ad_success(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
@@ -311,23 +317,23 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
 
-            mock_paginate.return_value = True
+            mock_find.return_value = AsyncMock()
 
             result = await extend_flow._extend_ad(
-                web = test_bot, root_url = test_bot.root_url,
+                web = test_bot, page_num = 1,
                 ad_file = str(ad_file), ad_cfg = ad_cfg,
                 ad_cfg_orig = base_ad_config_with_id,
             )
 
             assert result is True
-            assert mock_paginate.call_count == 1
+            assert mock_find.call_count == 1
 
             # Verify updated_on was updated in the YAML file
             updated_config = dicts.load_dict(str(ad_file))
@@ -342,18 +348,18 @@ class TestExtendAdMethod:
         ad_file = tmp_path / "test_ad.yaml"
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
-        with patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
-            # Simulate button not found by having pagination return False (not found on any page)
-            mock_paginate.return_value = False
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find:
+            # The current row has no extend button.
+            mock_find.side_effect = TimeoutError("Button not found")
 
             result = await extend_flow._extend_ad(
-                web = test_bot, root_url = test_bot.root_url,
+                web = test_bot, page_num = 1,
                 ad_file = str(ad_file), ad_cfg = ad_cfg,
                 ad_cfg_orig = base_ad_config_with_id,
             )
 
             assert result is False
-            assert mock_paginate.call_count == 1
+            assert mock_find.call_count == 1
 
     @pytest.mark.asyncio
     async def test_extend_ad_dialog_timeout(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
@@ -365,20 +371,20 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
-            patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate,
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
         ):
             # Test mock datetime - timezone not relevant for timestamp formatting test
             mock_now.return_value = datetime(2025, 1, 28, 14, 30, 0)  # noqa: DTZ001
 
-            # Pagination succeeds (button found and clicked)
-            mock_paginate.return_value = True
+            # The extend button is available.
+            mock_find.return_value = AsyncMock()
             # Dialog close button times out
             mock_click.side_effect = TimeoutError("Dialog not found")
 
             result = await extend_flow._extend_ad(
-                web = test_bot, root_url = test_bot.root_url,
+                web = test_bot, page_num = 1,
                 ad_file = str(ad_file), ad_cfg = ad_cfg,
                 ad_cfg_orig = base_ad_config_with_id,
             )
@@ -395,79 +401,32 @@ class TestExtendAdMethod:
         ad_file = tmp_path / "test_ad.yaml"
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
-        with patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_paginate:
-            # Simulate unexpected exception during pagination
-            mock_paginate.side_effect = Exception("Unexpected error")
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find:
+            # Unexpected browser errors must propagate.
+            mock_find.side_effect = Exception("Unexpected error")
 
             with pytest.raises(Exception, match = "Unexpected error"):
                 await extend_flow._extend_ad(
-                    web = test_bot, root_url = test_bot.root_url,
+                    web = test_bot, page_num = 1,
                     ad_file = str(ad_file), ad_cfg = ad_cfg,
                     ad_cfg_orig = base_ad_config_with_id,
                 )
 
-    @pytest.mark.asyncio
-    async def test_extend_ad_with_web_mocks(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
-        """Test _extend_ad with web-level mocks to exercise the find_and_click_extend_button callback."""
-        ad_cfg = Ad.model_validate(base_ad_config_with_id)
-
-        # Create temporary YAML file
-        ad_file = tmp_path / "test_ad.yaml"
-        dicts.save_dict(str(ad_file), base_ad_config_with_id)
-
-        extend_button_mock = AsyncMock()
-        extend_button_mock.click = AsyncMock()
-
-        pagination_section = MagicMock()
-
-        find_call_count = {"count": 0}
-
-        async def mock_web_find(selector_type:By, selector_value:str, **kwargs:Any) -> Element:
-            find_call_count["count"] += 1
-            # Ad list container (called by pagination helper)
-            if selector_type == By.ID and selector_value == "my-manageitems-adlist":
-                return MagicMock()
-            # Pagination section (called by pagination helper)
-            if selector_type == By.CSS_SELECTOR and selector_value == ".Pagination":
-                # Raise TimeoutError on first call (pagination detection) to indicate single page
-                if find_call_count["count"] == 2:
-                    raise TimeoutError("No pagination")
-                return pagination_section
-            # Extend button (called by find_and_click_extend_button callback)
-            if selector_type == By.XPATH and "Verlängern" in selector_value:
-                return extend_button_mock
-            raise TimeoutError(f"Unexpected find: {selector_type} {selector_value}")
-
-        with (
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = mock_web_find),
-            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "timeout", return_value = 10),
-            patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
-        ):
-            # Test mock datetime - timezone not relevant for timestamp formatting test
-            mock_now.return_value = datetime(2025, 1, 28, 15, 0, 0)  # noqa: DTZ001
-
-            result = await extend_flow._extend_ad(
-                web = test_bot, root_url = test_bot.root_url,
-                ad_file = str(ad_file), ad_cfg = ad_cfg,
-                ad_cfg_orig = base_ad_config_with_id,
-            )
-
-            assert result is True
-            # Verify the extend button was found and clicked
-            extend_button_mock.click.assert_awaited_once()
-
-            # Verify updated_on was updated
-            updated_config = dicts.load_dict(str(ad_file))
-            assert updated_config["updated_on"] == "2025-01-28T15:00:00"
-
 
 class TestExtendEdgeCases:
     """Tests for edge cases and boundary conditions."""
+
+    @pytest.fixture(autouse = True)
+    def overview(self, test_bot:KleinanzeigenBot) -> Any:
+        async def navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
+            return await callback(1)
+
+        rows = [MagicMock(attrs = {"data-adid": str(ad_id)}) for ad_id in (12345, 67890)]
+        with (
+            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = navigate),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = rows),
+        ):
+            yield
 
     @pytest.mark.asyncio
     async def test_extend_ads_exactly_8_days(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
