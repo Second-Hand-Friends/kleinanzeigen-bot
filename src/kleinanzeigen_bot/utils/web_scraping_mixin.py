@@ -833,8 +833,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         """Resolve the effective user data directory, handling args vs config conflicts."""
         effective = user_data_dir_from_args or self.browser_config.user_data_dir
         if user_data_dir_from_args and self.browser_config.user_data_dir:
-            arg_path, cfg_path = await asyncio.get_running_loop().run_in_executor(
-                None,
+            arg_path, cfg_path = await asyncio.to_thread(
                 _resolve_user_data_dir_paths,
                 user_data_dir_from_args,
                 self.browser_config.user_data_dir,
@@ -855,7 +854,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         prefs_file = profile_dir / "Preferences"
         if not await files.exists(prefs_file):
             LOG.info(" -> Setting chrome prefs [%s]...", prefs_file)
-            await asyncio.get_running_loop().run_in_executor(None, _write_initial_prefs, str(prefs_file))
+            await asyncio.to_thread(_write_initial_prefs, str(prefs_file))
 
     async def _add_browser_extensions(self, cfg:NodriverConfig) -> None:
         """Add configured browser extensions to the nodriver config."""

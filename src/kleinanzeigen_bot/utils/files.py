@@ -34,7 +34,7 @@ async def exists(path:str | Path) -> bool:
     :param path: Path to check
     :return: True if path exists, False otherwise
     """
-    return await asyncio.get_running_loop().run_in_executor(None, Path(path).exists)
+    return await asyncio.to_thread(Path(path).exists)
 
 
 async def is_dir(path:str | Path) -> bool:
@@ -44,4 +44,4 @@ async def is_dir(path:str | Path) -> bool:
     :param path: Path to check
     :return: True if path is a directory, False otherwise
     """
-    return await asyncio.get_running_loop().run_in_executor(None, Path(path).is_dir)
+    return await asyncio.to_thread(Path(path).is_dir)

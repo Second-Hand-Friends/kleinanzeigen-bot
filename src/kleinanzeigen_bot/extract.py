@@ -344,17 +344,16 @@ class AdExtractor(WebScrapingMixin):
         if self.config.download.preserve_local_settings and await files.exists(final_dir):
             existing_yaml_path = final_dir / f"{ad_file_stem}.yaml"
             # Fall back to glob if the rendered stem does not match (e.g. title changed)
-            loop = asyncio.get_running_loop()
             if not await files.exists(existing_yaml_path):
-                yaml_candidates = await loop.run_in_executor(
-                    None, lambda: sorted(final_dir.glob("*.yaml"))
+                yaml_candidates = await asyncio.to_thread(
+                    lambda: sorted(final_dir.glob("*.yaml"))
                 )
                 if len(yaml_candidates) == 1:
                     existing_yaml_path = yaml_candidates[0]
             if await files.exists(existing_yaml_path):
                 try:
-                    existing_data = await loop.run_in_executor(
-                        None, lambda: dicts.load_dict(str(existing_yaml_path), content_label = f"existing ad {ad_id}")
+                    existing_data = await asyncio.to_thread(
+                        dicts.load_dict, str(existing_yaml_path), content_label = f"existing ad {ad_id}"
                     )
                     # Collect candidate local-only values without mutating ad_cfg yet
                     # to avoid saving partially corrupted state if validation fails.
@@ -408,27 +407,26 @@ class AdExtractor(WebScrapingMixin):
         On any failure, restores the backup (if created by us) and removes staging,
         then re-raises.
         """
-        loop = asyncio.get_running_loop()
         ad_file_path = staging_dir / f"{ad_file_stem}.yaml"
         backup_dir = final_dir.with_name(f"{_BACKUP_DIR_PREFIX}{ad_file_stem}")
         final_yaml_path = final_dir / f"{ad_file_stem}.yaml"
         backup_created_by_us = False
         try:
-            await loop.run_in_executor(None, lambda: dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(mode = "json"), header = header_string))
+            await asyncio.to_thread(lambda: dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(mode = "json"), header = header_string))
 
             if await files.exists(backup_dir):
                 raise FileExistsError(_("Backup directory %s already exists. Aborting download for ad %s to avoid data loss.") % (backup_dir, ad_id))
 
             if await files.exists(final_dir):
-                await loop.run_in_executor(None, final_dir.rename, backup_dir)
+                await asyncio.to_thread(final_dir.rename, backup_dir)
                 backup_created_by_us = True
 
-            await loop.run_in_executor(None, staging_dir.rename, final_dir)
+            await asyncio.to_thread(staging_dir.rename, final_dir)
             LOG.info("Saved ad config to: %s", final_yaml_path)
 
             if await files.exists(backup_dir):
                 try:
-                    await loop.run_in_executor(None, _remove_tree_with_retries, backup_dir)
+                    await asyncio.to_thread(_remove_tree_with_retries, backup_dir)
                 except OSError as ex:
                     LOG.warning("Could not remove backup directory %s: %s", backup_dir, ex)
         except Exception:  # noqa: BLE001
@@ -436,12 +434,12 @@ class AdExtractor(WebScrapingMixin):
             # asyncio.CancelledError is a BaseException and is therefore not caught here.
             if backup_created_by_us and await files.exists(backup_dir) and not await files.exists(final_dir):
                 try:
-                    await loop.run_in_executor(None, backup_dir.rename, final_dir)
+                    await asyncio.to_thread(backup_dir.rename, final_dir)
                 except OSError as restore_ex:
                     LOG.error("Failed to restore backup directory %s to %s after download failure: %s", backup_dir, final_dir, restore_ex)
             if await files.exists(staging_dir):
                 try:
-                    await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)
+                    await asyncio.to_thread(_remove_tree_with_retries, staging_dir)
                 except OSError as cleanup_ex:
                     LOG.warning("Could not remove staging directory %s: %s", staging_dir, cleanup_ex)
             raise
@@ -495,10 +493,8 @@ class AdExtractor(WebScrapingMixin):
 
             image_paths:list[str] = []
             image_filename_prefix = f"{ad_file_stem}__img"
-            loop = asyncio.get_running_loop()
             for image_number, image_url in enumerate(image_urls, start = 1):
-                image_path = await loop.run_in_executor(
-                    None,
+                image_path = await asyncio.to_thread(
                     self._download_and_save_image_sync,
                     image_url,
                     directory,
@@ -552,14 +548,12 @@ class AdExtractor(WebScrapingMixin):
             img_nr = 1
             dl_counter = 0
 
-            loop = asyncio.get_running_loop()
-
             for img_element in images:
                 current_img_url = img_element.attrs["src"]  # URL of the image
                 if current_img_url is None:
                     continue
 
-                img_path = await loop.run_in_executor(None, self._download_and_save_image_sync, str(current_img_url), directory, img_fn_prefix, img_nr)
+                img_path = await asyncio.to_thread(self._download_and_save_image_sync, str(current_img_url), directory, img_fn_prefix, img_nr)
 
                 if img_path:
                     dl_counter += 1
@@ -939,15 +933,13 @@ class AdExtractor(WebScrapingMixin):
         legacy_dir = relative_directory / f"ad_{ad_id}"
         staging_dir = relative_directory / f"{_STAGING_DIR_PREFIX}{ad_file_stem}"
 
-        loop = asyncio.get_running_loop()
-
         if await files.exists(legacy_dir):
             if self.config.download.rename_existing_folders:
                 # Rename the old folder to the new name with title
                 if not await files.exists(final_dir):
                     LOG.info("Renaming folder from %s to %s for ad %s...", legacy_dir.name, final_dir.name, ad_id)
                     LOG.debug("Renaming: %s -> %s", legacy_dir, final_dir)
-                    await loop.run_in_executor(None, legacy_dir.rename, final_dir)
+                    await asyncio.to_thread(legacy_dir.rename, final_dir)
             else:
                 # Use the existing folder without renaming
                 final_dir = legacy_dir
@@ -956,7 +948,7 @@ class AdExtractor(WebScrapingMixin):
         if await files.exists(staging_dir):
             LOG.info("Removing stale staging directory: %s", staging_dir)
             try:
-                await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)
+                await asyncio.to_thread(_remove_tree_with_retries, staging_dir)
             except OSError as cleanup_ex:
                 LOG.warning("Could not remove stale staging directory %s: %s", staging_dir, cleanup_ex)
                 if await files.exists(staging_dir):
@@ -964,7 +956,7 @@ class AdExtractor(WebScrapingMixin):
                         _("Could not remove stale staging directory %s. Aborting extraction to avoid using a dirty staging directory.") % staging_dir
                     ) from cleanup_ex
 
-        await loop.run_in_executor(None, lambda: staging_dir.mkdir(exist_ok = True))
+        await asyncio.to_thread(staging_dir.mkdir, exist_ok = True)
         LOG.debug("Staging directory for ad: %s", staging_dir)
         LOG.info("Downloading ad to: %s", final_dir)
 
@@ -973,7 +965,7 @@ class AdExtractor(WebScrapingMixin):
         except Exception:  # noqa: BLE001 — intentional broad catch for staging directory cleanup on failure
             if await files.exists(staging_dir):
                 try:
-                    await loop.run_in_executor(None, _remove_tree_with_retries, staging_dir)
+                    await asyncio.to_thread(_remove_tree_with_retries, staging_dir)
                 except OSError as cleanup_ex:
                     LOG.warning("Could not remove staging directory %s: %s", staging_dir, cleanup_ex)
             raise
