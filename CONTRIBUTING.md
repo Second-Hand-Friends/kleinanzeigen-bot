@@ -214,6 +214,7 @@ All Python files must start with SPDX license headers:
 
 #### Timeout configuration
 
+- See [Browser timeout and cancellation contract](docs/ASYNC_TIMEOUTS.md) for the timeout inventory, total operation budgets, and cancellation behavior.
 - The default timeout (`timeouts.default`) already wraps all standard DOM helpers (`web_find`, `web_click`, etc.) via `WebScrapingMixin.timeout/_effective_timeout`. Use it unless a workflow clearly needs a different SLA.
 - Reserve `timeouts.quick_dom` for transient overlays (shipping dialogs, payment prompts, toast banners) that should render almost instantly; call `self.timeout("quick_dom")` in those spots to keep the UI responsive.
 - For single selectors that occasionally need more headroom, pass an inline override instead of creating a new config key, e.g. `custom = self.timeout(override=12.5); await self.web_find(..., timeout=custom)`.

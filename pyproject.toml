@@ -230,7 +230,6 @@ select = [
 ]
 ignore = [
   "ANN401",  # Dynamically typed expressions (typing.Any) are disallowed
-  "ASYNC109",  # Timeout parameters are passed through to browser helpers; replacing them with asyncio.timeout would change behavior
   "COM812",  # Trailing comma missing
   "D1",  # Missing docstring in ...
   "D200",  # One-line docstring should fit on one line
@@ -269,6 +268,15 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# Browser adapters accept configured relative durations; polling owns absolute deadlines.
+"src/kleinanzeigen_bot/utils/web_scraping_mixin.py" = ["ASYNC109"]
+"src/kleinanzeigen_bot/login_flow.py" = ["ASYNC109"]
+"src/kleinanzeigen_bot/captcha_flow.py" = ["ASYNC109"]
+"src/kleinanzeigen_bot/publishing_form.py" = ["ASYNC109"]
+# Test doubles mirror the browser adapters' keyword arguments.
+"tests/unit/test_web_scraping_mixin.py" = ["ASYNC109"]
+"tests/unit/test_login_flow.py" = ["ASYNC109"]
+"tests/unit/test_extract.py" = ["ASYNC109"]
 "scripts/**/*.py" = [
   "INP001", # File `...` is part of an implicit namespace package. Add an `__init__.py`.
 ]
