@@ -85,3 +85,15 @@ must never contact `kleinanzeigen.de`.
 `ASYNC109` is enabled globally. Its exceptions are limited to browser adapter
 modules that deliberately retain configured duration arguments, and the test
 modules whose doubles mirror those arguments.
+
+## Troubleshooting
+
+- For recurring selector or page-load `TimeoutError`, inspect the timing data and
+  the relevant configured timeout. If a caller supplies a total deadline, increasing
+  individual attempt budgets cannot extend it.
+- If retries or login fallbacks stop on `CancelledError`, check whether the caller
+  cancelled the task or its enclosing deadline expired. This propagation is
+  intentional; do not catch cancellation as selector absence.
+- For browser connection failures, Chrome 136+ security requirements, remote
+  debugging setup, and timeout tuning, see the
+  [Browser Troubleshooting Guide](BROWSER_TROUBLESHOOTING.md).

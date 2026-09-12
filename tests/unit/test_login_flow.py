@@ -837,7 +837,7 @@ class TestKleinanzeigenBotAuthentication:
             task.cancel()
 
             with pytest.raises(asyncio.CancelledError):
-                await task
+                await asyncio.gather(task)
 
         mock_sleep.assert_not_awaited()
         mock_classify.assert_not_awaited()

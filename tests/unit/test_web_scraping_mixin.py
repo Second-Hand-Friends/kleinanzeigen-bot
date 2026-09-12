@@ -1233,7 +1233,7 @@ class TestWebScrapingSessionManagement:
             await asyncio.sleep(0)
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
-                await task
+                await asyncio.gather(task)
 
         stop_mock.assert_called_once()
         wait_mock.assert_not_awaited()
@@ -1319,7 +1319,7 @@ class TestWebScrapingSessionManagement:
         task.cancel()
 
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.gather(task)
 
         assert process.killed
 
@@ -1572,7 +1572,7 @@ class TestWebScrolling:
         task.cancel()
 
         with pytest.raises(asyncio.CancelledError):
-            await task
+            await asyncio.gather(task)
 
         assert calls == 1
 
@@ -3278,7 +3278,7 @@ class TestWebScrapingMixinPortRetry:
             task.cancel()
 
             with pytest.raises(asyncio.CancelledError):
-                await task
+                await asyncio.gather(task)
 
         cleanup_mock.assert_called_once()
         assert scraper_with_startup_config.browser is None
