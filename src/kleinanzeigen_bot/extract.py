@@ -362,7 +362,7 @@ class AdExtractor(WebScrapingMixin):
                     # validated independently so a malformed APR doesn't block other fields.
                     preserved:dict[str, Any] = {}
 
-                    if "auto_price_reduction" in existing_data:
+                    if existing_data.get("auto_price_reduction") is not None:
                         try:
                             preserved["auto_price_reduction"] = AutoPriceReductionConfig.model_validate(
                                 dict(existing_data["auto_price_reduction"])

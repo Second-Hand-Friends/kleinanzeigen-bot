@@ -3331,9 +3331,22 @@ class TestAdExtractorDownload:
             "ad_12345_newtitle",   # mismatched — triggers glob fallback
         ],
     )
+    @pytest.mark.parametrize(
+        "apr_fields",
+        [
+            pytest.param({}, id = "absent"),
+            pytest.param({"auto_price_reduction": None}, id = "null"),
+            pytest.param({"auto_price_reduction": {}}, id = "empty-disabled"),
+            pytest.param(
+                {"auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1}},
+                id = "valid",
+            ),
+        ],
+    )
     @pytest.mark.asyncio
     async def test_download_ad_preserves_local_settings_when_enabled(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path, rendered_stem:str
+        self, extractor:extract_module.AdExtractor, tmp_path:Path, rendered_stem:str,
+        apr_fields:dict[str, Any], caplog:pytest.LogCaptureFixture
     ) -> None:
         """Re-downloading an existing ad with preserve_local_settings=True keeps local counters and overrides."""
         download_base = tmp_path / "downloaded-ads"
@@ -3354,7 +3367,7 @@ class TestAdExtractorDownload:
             "price_type": "NEGOTIABLE",
             "repost_count": 5,
             "price_reduction_count": 3,
-            "auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1},
+            **apr_fields,
             "republication_interval": 14,
         }
         await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
@@ -3378,10 +3391,16 @@ class TestAdExtractorDownload:
         assert saved_data["price"] == 100
         assert saved_data["repost_count"] == 5
         assert saved_data["price_reduction_count"] == 3
-        assert saved_data["auto_price_reduction"]["enabled"] is True
+        if apr_fields.get("auto_price_reduction") is None:
+            assert saved_data.get("auto_price_reduction") is None
+        else:
+            assert saved_data["auto_price_reduction"]["enabled"] is apr_fields["auto_price_reduction"].get("enabled", False)
+            for field, value in apr_fields["auto_price_reduction"].items():
+                assert saved_data["auto_price_reduction"][field] == value
         assert saved_data["republication_interval"] == 14
         assert isinstance(saved_data.get("content_hash"), str)
         assert len(saved_data["content_hash"]) == 64
+        assert not any("Could not preserve" in message for message in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_download_ad_logs_warning_when_preservation_fails(
@@ -3431,9 +3450,10 @@ class TestAdExtractorDownload:
         assert not staging_dir.exists()
         assert any("Could not preserve local settings" in message for message in caplog.messages)
 
+    @pytest.mark.parametrize("apr_value", [{"enabled": True}, False], ids = ["incomplete", "false"])
     @pytest.mark.asyncio
     async def test_download_ad_preserves_other_fields_when_apr_invalid(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path
+        self, extractor:extract_module.AdExtractor, tmp_path:Path, apr_value:Any, caplog:pytest.LogCaptureFixture
     ) -> None:
         """Malformed auto_price_reduction skips only that field; counters still preserved."""
         download_base = tmp_path / "downloaded-ads"
@@ -3455,7 +3475,7 @@ class TestAdExtractorDownload:
             "repost_count": 5,
             "price_reduction_count": 3,
             "republication_interval": 14,
-            "auto_price_reduction": {"enabled": True},  # missing required fields → validation fails
+            "auto_price_reduction": apr_value,
         }
         await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
 
@@ -3477,6 +3497,7 @@ class TestAdExtractorDownload:
         assert saved_data["republication_interval"] == 14
         # auto_price_reduction was not preserved (malformed), so it stays at the fresh download's value
         assert saved_data.get("auto_price_reduction") is None
+        assert any("Could not preserve auto_price_reduction" in message for message in caplog.messages)
 
 
 class TestRenderDownloadNameWithBudgetWarnings:
