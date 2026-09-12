@@ -3343,6 +3343,7 @@ class TestAdExtractorDownload:
             ),
         ],
     )
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_download_ad_preserves_local_settings_when_enabled(
         self, extractor:extract_module.AdExtractor, tmp_path:Path, rendered_stem:str,
@@ -3451,6 +3452,7 @@ class TestAdExtractorDownload:
         assert any("Could not preserve local settings" in message for message in caplog.messages)
 
     @pytest.mark.parametrize("apr_value", [{"enabled": True}, False], ids = ["incomplete", "false"])
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_download_ad_preserves_other_fields_when_apr_invalid(
         self, extractor:extract_module.AdExtractor, tmp_path:Path, apr_value:Any, caplog:pytest.LogCaptureFixture
