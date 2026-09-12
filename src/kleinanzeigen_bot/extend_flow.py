@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from . import published_ads
+from . import bulk_ad_actions, published_ads
 from .published_ads import ad_matches_id
 from .utils import dicts as _dicts
 
@@ -80,13 +80,16 @@ async def extend_ads(
         LOG.info("############################################")
         return
 
-    # Process extensions
-    success_count = 0
-    for idx, (ad_file, ad_cfg, ad_cfg_orig) in enumerate(ads_to_extend, start = 1):
-        LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads_to_extend), ad_cfg.title, ad_file)
-        if await _extend_ad(web, root_url, ad_file, ad_cfg, ad_cfg_orig):
-            success_count += 1
-        await web.web_sleep()
+    async def process_ad(entry:bulk_ad_actions.AdEntry, page_num:int) -> bool:
+        ad_file, ad_cfg, ad_cfg_orig = entry
+        return await _extend_ad(web, ad_file, ad_cfg, ad_cfg_orig, page_num = page_num)
+
+    def report_missing(ad_cfg:Ad) -> None:
+        LOG.error(" -> FAILED: Could not find extend button for ad ID %s", ad_cfg.id)
+
+    success_count = await bulk_ad_actions.process_ads(
+        web, root_url, ads_to_extend, process_ad = process_ad, report_missing = report_missing
+    )
 
     LOG.info("############################################")
     LOG.info("DONE: Extended %s", pluralize("ad", success_count))
@@ -95,34 +98,24 @@ async def extend_ads(
 
 async def _extend_ad(
     web:WebScrapingMixin,
-    root_url:str,
     ad_file:str,
     ad_cfg:Ad,
     ad_cfg_orig:dict[str, Any],
+    *,
+    page_num:int,
 ) -> bool:
     """Extends a single ad listing."""
     LOG.info("Extending ad '%s' (ID: %s)...", ad_cfg.title, ad_cfg.id)
 
     try:
-        # Navigate to ad management page and find extend button across all pages
         extend_button_xpath = f'//li[@data-adid="{ad_cfg.id}"]//button[contains(., "Verlängern")]'
-
-        async def find_and_click_extend_button(page_num:int) -> bool:
-            """Try to find and click extend button on current page."""
-            try:
-                extend_button = await web.web_find(By.XPATH, extend_button_xpath, timeout = web.timeout("quick_dom"))
-                LOG.info("Found extend button on page %s", page_num)
-                await extend_button.click()
-                return True  # Success - stop pagination
-            except TimeoutError:
-                LOG.debug("Extend button not found on page %s", page_num)
-                return False  # Continue to next page
-
-        success = await web.navigate_paginated_ad_overview(find_and_click_extend_button, page_url = f"{root_url}/m-meine-anzeigen.html")
-
-        if not success:
+        try:
+            extend_button = await web.web_find(By.XPATH, extend_button_xpath, timeout = web.timeout("quick_dom"))
+        except TimeoutError:
             LOG.error(" -> FAILED: Could not find extend button for ad ID %s", ad_cfg.id)
             return False
+        LOG.info("Found extend button on page %s", page_num)
+        await extend_button.click()
 
         # Handle confirmation dialog
         # After clicking "Verlängern", a dialog appears with:

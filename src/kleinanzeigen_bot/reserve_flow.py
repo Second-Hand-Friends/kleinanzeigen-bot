@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from . import published_ads
+from . import bulk_ad_actions, published_ads
 from .published_ads import ad_matches_id
 
 if TYPE_CHECKING:
@@ -87,12 +87,15 @@ async def set_reservation_state(
         LOG.info("############################################")
         return
 
-    success_count = 0
-    for idx, (ad_file, ad_cfg, _ad_cfg_orig) in enumerate(ads_to_change, start = 1):
-        LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ads_to_change), ad_cfg.title, ad_file)
-        if await _change_ad_state(web, root_url, ad_cfg, action = action):
-            success_count += 1
-        await web.web_sleep()
+    async def process_ad(entry:bulk_ad_actions.AdEntry, page_num:int) -> bool:
+        return await _change_ad_state(web, root_url, entry[1], action = action, page_num = page_num)
+
+    def report_missing(ad_cfg:Ad) -> None:
+        LOG.error(" -> FAILED: Could not find '%s' button for ad ID %s", _BUTTON_LABELS[action], ad_cfg.id)
+
+    success_count = await bulk_ad_actions.process_ads(
+        web, root_url, ads_to_change, process_ad = process_ad, report_missing = report_missing
+    )
 
     LOG.info("############################################")
     if action == "reserve":
@@ -138,6 +141,7 @@ async def _change_ad_state(
     ad_cfg:Ad,
     *,
     action:ReserveAction,
+    page_num:int,
 ) -> bool:
     """Clicks the reserve/activate button for a single ad in the manage-ads overview."""
     if action == "reserve":
@@ -148,26 +152,17 @@ async def _change_ad_state(
     label = _BUTTON_LABELS[action]
     button_xpath = f'//li[@data-adid="{ad_cfg.id}"]//button[contains(., "{label}")]'
 
-    async def find_and_click_button(page_num:int) -> bool:
-        try:
-            button = await web.web_find(By.XPATH, button_xpath, timeout = web.timeout("quick_dom"))
-            LOG.info("Found '%s' button on page %s", label, page_num)
-            await button.click()
-            return True
-        except TimeoutError:
-            LOG.debug("'%s' button not found on page %s", label, page_num)
-            return False
-
     try:
-        success = await web.navigate_paginated_ad_overview(
-            find_and_click_button, page_url = f"{root_url}/m-meine-anzeigen.html"
-        )
-    except TimeoutError as ex:
-        LOG.error(" -> FAILED: Timeout while switching ad '%s': %s", ad_cfg.title, ex)
+        button = await web.web_find(By.XPATH, button_xpath, timeout = web.timeout("quick_dom"))
+    except TimeoutError:
+        LOG.error(" -> FAILED: Could not find '%s' button for ad ID %s", label, ad_cfg.id)
         return False
 
-    if not success:
-        LOG.error(" -> FAILED: Could not find '%s' button for ad ID %s", label, ad_cfg.id)
+    LOG.info("Found '%s' button on page %s", label, page_num)
+    try:
+        await button.click()
+    except TimeoutError as ex:
+        LOG.error(" -> FAILED: Timeout while switching ad '%s': %s", ad_cfg.title, ex)
         return False
 
     await _dismiss_confirmation_dialog(web)

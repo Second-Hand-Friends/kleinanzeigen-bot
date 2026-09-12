@@ -112,6 +112,18 @@ class TestReserveCommand:
 class TestSetReservationState:
     """Tests for the set_reservation_state() method."""
 
+    @pytest.fixture(autouse = True)
+    def overview(self, test_bot:KleinanzeigenBot) -> Any:
+        async def navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
+            return await callback(1)
+
+        rows = [MagicMock(attrs = {"data-adid": str(ad_id)}) for ad_id in (12345, 67890)]
+        with (
+            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = navigate),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = rows),
+        ):
+            yield
+
     @pytest.mark.asyncio
     async def test_skips_unpublished_ad(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]) -> None:
         """An ad without an ID was never published — there is nothing to reserve."""
@@ -293,13 +305,9 @@ class TestChangeAdState:
         button = MagicMock()
         button.click = AsyncMock()
 
-        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
-            return await callback(1)
-
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
             patch(
                 "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
@@ -309,7 +317,7 @@ class TestChangeAdState:
             mock_find.return_value = button
 
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = action,
+                test_bot, test_bot.root_url, ad_cfg, action = action, page_num = 1,
             )
 
             assert result is True
@@ -319,53 +327,17 @@ class TestChangeAdState:
             assert label in xpath
 
     @pytest.mark.asyncio
-    async def test_button_missing_on_page_continues_pagination(
+    async def test_button_lookup_timeout_is_reported_as_failure(
         self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]
     ) -> None:
-        """The ad may sit on a later page, so a miss must not abort the search."""
-        ad_cfg = Ad.model_validate(base_ad_config_with_id)
-        button = MagicMock()
-        button.click = AsyncMock()
-        visited_pages:list[int] = []
-
-        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
-            for page_num in (1, 2):
-                visited_pages.append(page_num)
-                if await callback(page_num):
-                    return True
-            return False
-
-        with (
-            # Page 1 has no matching row, page 2 does.
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = [TimeoutError, button]),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
-            patch(
-                "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
-                new_callable = AsyncMock,
-                return_value = [{"id": 12345, "state": reserve_flow.STATE_RESERVED}],
-            ),
-        ):
-            result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
-            )
-
-            assert result is True
-            assert visited_pages == [1, 2]
-            button.click.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_navigation_timeout_is_reported_as_failure(
-        self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any]
-    ) -> None:
-        """A timeout while loading the overview must be caught, not propagated to the caller."""
+        """A button lookup timeout must be caught, not propagated to the caller."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
         with patch.object(
-            test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock, side_effect = TimeoutError("overview did not load")
+            test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("overview did not load")
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve", page_num = 1,
             )
 
             assert result is False
@@ -377,11 +349,11 @@ class TestChangeAdState:
         """A missing button means the state did not change — that must not read as success."""
         ad_cfg = Ad.model_validate(base_ad_config_with_id)
 
-        with patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock) as mock_nav:
-            mock_nav.return_value = False
+        with patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_nav:
+            mock_nav.side_effect = TimeoutError("Button not found")
 
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve", page_num = 1,
             )
 
             assert result is False
@@ -395,13 +367,9 @@ class TestChangeAdState:
         button = MagicMock()
         button.click = AsyncMock()
 
-        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
-            return await callback(1)
-
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
             patch(
                 "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
@@ -409,7 +377,7 @@ class TestChangeAdState:
             ),
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve", page_num = 1,
             )
 
             assert result is True
@@ -423,13 +391,9 @@ class TestChangeAdState:
         button = MagicMock()
         button.click = AsyncMock()
 
-        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
-            return await callback(1)
-
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
             patch(
                 "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
@@ -437,7 +401,7 @@ class TestChangeAdState:
             ),
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve", page_num = 1,
             )
 
         assert result is False
@@ -451,13 +415,9 @@ class TestChangeAdState:
         button = MagicMock()
         button.click = AsyncMock()
 
-        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
-            return await callback(1)
-
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
             patch(
                 "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
@@ -465,7 +425,7 @@ class TestChangeAdState:
             ),
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve", page_num = 1,
             )
 
         assert result is False
@@ -479,13 +439,9 @@ class TestChangeAdState:
         button = MagicMock()
         button.click = AsyncMock()
 
-        async def fake_navigate(callback:Callable[[int], Awaitable[bool]], page_url:str) -> bool:  # noqa: ARG001
-            return await callback(1)
-
         with (
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = button),
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_bot, "navigate_paginated_ad_overview", side_effect = fake_navigate),
             patch(
                 "kleinanzeigen_bot.reserve_flow.published_ads.fetch_published_ads",
                 new_callable = AsyncMock,
@@ -493,7 +449,7 @@ class TestChangeAdState:
             ),
         ):
             result = await reserve_flow._change_ad_state(  # noqa: SLF001
-                test_bot, test_bot.root_url, ad_cfg, action = "reserve",
+                test_bot, test_bot.root_url, ad_cfg, action = "reserve", page_num = 1,
             )
 
         assert result is False
