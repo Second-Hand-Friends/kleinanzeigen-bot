@@ -16,6 +16,7 @@ captcha mechanics (:mod:`captcha_flow`), submit/confirm/ad-id recovery
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable
+from gettext import gettext as _
 from typing import Any, Final
 
 from nodriver.core.connection import ProtocolException
@@ -69,7 +70,7 @@ async def open_ad_for_edit(web:WebScrapingMixin, *, root_url:str, ad_id:int | No
         return True
 
     if not await web.navigate_paginated_ad_overview(find_ad, open_page = False, max_pages = max_pages):
-        raise TimeoutError(f"Could not reach edit form for ad {ad_id} through the ad overview")
+        raise TimeoutError(_("Could not reach edit form for ad %s through the ad overview") % ad_id)
 
 
 async def check_publishing_result(web:WebScrapingMixin) -> bool:

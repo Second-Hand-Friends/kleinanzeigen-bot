@@ -182,6 +182,8 @@ kleinanzeigen_bot/login_flow.py:
 
 #################################################
 kleinanzeigen_bot/publishing_workflow.py:
+  open_ad_for_edit:
+    "Could not reach edit form for ad %s through the ad overview": "Das Bearbeitungsformular für Anzeige %s konnte über die Anzeigenübersicht nicht erreicht werden"
 
 #################################################
 

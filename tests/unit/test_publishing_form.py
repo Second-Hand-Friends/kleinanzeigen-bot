@@ -673,6 +673,54 @@ class TestCategorySuggestionPicker:
         return elem
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("picker_present", [True, False])
+    async def test_missing_category_segment_resolves_rendered_picker(self, test_bot:KleinanzeigenBot, picker_present:bool) -> None:
+        """Missing category links use offered suggestions only when a picker exists."""
+        missing_segment = TimeoutError("missing cat_outdated")
+        category_link = MagicMock()
+        category_link.click = AsyncMock()
+        radio = self._radio("87", "suggestion-87")
+        selected:list[str] = []
+        label = MagicMock()
+
+        async def select_suggestion() -> None:
+            selected.append("87")
+
+        label.click = AsyncMock(side_effect = select_suggestion)
+
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == 'a[aria-describedby="ad-category-path"]':
+                return category_link
+            if selector_value == "ad-category-picker" and picker_present:
+                return MagicMock()
+            return None
+
+        async def click(selector_type:Any, selector_value:str, **_kwargs:Any) -> None:
+            if selector_value == "cat_outdated":
+                raise missing_segment
+
+        async def find(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            assert selector_value == "#ad-category-picker label[for='suggestion-87']"
+            return label
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [radio]) as find_radios,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            if picker_present:
+                await set_category(test_bot, category = "80/87/outdated", ad_file = "ad.yaml")
+            else:
+                with pytest.raises(TimeoutError) as raised:
+                    await set_category(test_bot, category = "80/87/outdated", ad_file = "ad.yaml")
+                assert raised.value is missing_segment
+                find_radios.assert_not_awaited()
+
+        assert selected == (["87"] if picker_present else [])
+
+    @pytest.mark.asyncio
     async def test_picker_absent_leaves_flow_unchanged(self, test_bot:KleinanzeigenBot) -> None:
         """No picker -> no-op, no find_all / label click."""
         with (

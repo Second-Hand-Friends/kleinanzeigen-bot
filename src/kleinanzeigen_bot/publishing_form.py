@@ -118,7 +118,13 @@ async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str
         # Preserve the form session established by the category link. Reloading
         # this page directly can lose the edit context and fail with HTTP 400/403.
         for segment in category.split("/"):
-            await web.web_click(By.ID, f"cat_{segment}")
+            try:
+                await web.web_click(By.ID, f"cat_{segment}")
+            except TimeoutError:
+                if await web.web_probe(By.ID, "ad-category-picker", timeout = web.timeout("quick_dom")) is None:
+                    raise
+                await resolve_category_suggestions(web, category)
+                return
             await web.web_sleep()
         weiter_btn = await web.web_find(By.TEXT, "Weiter")
         await weiter_btn.click()

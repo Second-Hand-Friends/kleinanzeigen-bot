@@ -1336,7 +1336,7 @@ async def test_open_ad_for_edit_uses_overview_clicks(test_bot:KleinanzeigenBot, 
         patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock, side_effect = navigate),
     ):
         if found_page is None:
-            with pytest.raises(TimeoutError, match = "Could not reach edit form"):
+            with pytest.raises(TimeoutError, match = "12345"):
                 await open_ad_for_edit(test_bot, root_url = test_bot.root_url, ad_id = 12345, max_pages = 11)
         else:
             await open_ad_for_edit(test_bot, root_url = test_bot.root_url, ad_id = 12345, max_pages = 11)
