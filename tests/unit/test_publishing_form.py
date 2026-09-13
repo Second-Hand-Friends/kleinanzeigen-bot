@@ -547,6 +547,21 @@ class TestCategoryProbeBehavior:
     """Tests for category marker probing without retry backoff."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", ["Haus & Garten > Möbel & Wohnen > Regale", "unknown"])
+    async def test_unknown_category_alias_fails_before_browser_navigation(self, test_bot:KleinanzeigenBot, category:str) -> None:
+        """Unresolved aliases fail without retrying a nonexistent DOM ID."""
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as click,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_page,
+            pytest.raises(CategoryResolutionError) as raised,
+        ):
+            await set_category(test_bot, category = category, ad_file = "ad.yaml")
+
+        assert category in str(raised.value)
+        click.assert_not_awaited()
+        open_page.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
         """In _set_category, category marker lookup should go through web_probe."""
         category_marker = MagicMock()
