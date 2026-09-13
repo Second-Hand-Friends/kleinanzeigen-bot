@@ -1646,6 +1646,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         page_url:str = "https://www.kleinanzeigen.de/m-meine-anzeigen.html",
         *,
         max_pages:int = 10,
+        open_page:bool = True,
     ) -> bool:
         """
         Navigate through paginated ad overview page, calling page_action on each page.
@@ -1657,6 +1658,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             page_action: Async callable that receives current_page number and returns True if action succeeded/should stop
             page_url: URL of the paginated overview page (default: kleinanzeigen ad management page)
             max_pages: Maximum number of pages to navigate (safety limit)
+            open_page: Open page_url first; False preserves an overview reached through site navigation
 
         Returns:
             True if page_action returned True on any page, False otherwise
@@ -1671,11 +1673,12 @@ class WebScrapingMixin:  # noqa: PLR0904
 
             success = await self.navigate_paginated_ad_overview(find_ad_callback)
         """
-        try:
-            await self.web_open(page_url)
-        except TimeoutError:
-            LOG.warning("Failed to open ad overview page at %s: timeout", page_url)
-            return False
+        if open_page:
+            try:
+                await self.web_open(page_url)
+            except TimeoutError:
+                LOG.warning("Failed to open ad overview page at %s: timeout", page_url)
+                return False
 
         await self.web_sleep(2000, 3000)
 

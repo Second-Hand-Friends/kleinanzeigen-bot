@@ -547,6 +547,21 @@ class TestCategoryProbeBehavior:
     """Tests for category marker probing without retry backoff."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", ["Haus & Garten > Möbel & Wohnen > Regale", "unknown"])
+    async def test_unknown_category_alias_fails_before_browser_navigation(self, test_bot:KleinanzeigenBot, category:str) -> None:
+        """Unresolved aliases fail without retrying a nonexistent DOM ID."""
+        with (
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as click,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_page,
+            pytest.raises(CategoryResolutionError) as raised,
+        ):
+            await set_category(test_bot, category = category, ad_file = "ad.yaml")
+
+        assert category in str(raised.value)
+        click.assert_not_awaited()
+        open_page.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
         """In _set_category, category marker lookup should go through web_probe."""
         category_marker = MagicMock()
@@ -564,9 +579,51 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
-            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
+            await set_category(test_bot, category = "185/249", ad_file = "data/my_ads/ad.yaml")
 
         mock_probe.assert_any_await(By.ID, "ad-category-path")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", ["80/87", "161/172/cd_player"])
+    async def test_set_category_selects_path_without_reloading_form(self, test_bot:KleinanzeigenBot, category:str) -> None:
+        """Category selection retains the edit session and selects every path level."""
+        selected:list[str] = []
+        segments = category.split("/")
+        category_link = MagicMock()
+        category_link.click = AsyncMock()
+        continue_button = MagicMock()
+
+        async def click(selector_type:By, selector_value:str, **_kwargs:Any) -> None:
+            if selector_value == "ad-description":
+                return
+            assert selector_type == By.ID
+            assert selector_value == f"cat_{segments[len(selected)]}"
+            selected.append(segments[len(selected)])
+
+        async def continue_selection() -> None:
+            assert selected == segments
+
+        continue_button.click = AsyncMock(side_effect = continue_selection)
+
+        async def find(selector_type:By, selector_value:str, **_kwargs:Any) -> Any:
+            assert (selector_type, selector_value) == (By.TEXT, "Weiter")
+            return continue_button
+
+        async def probe(selector_type:By, selector_value:str, **_kwargs:Any) -> Any:
+            return category_link if selector_value == 'a[aria-describedby="ad-category-path"]' else None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_page,
+        ):
+            await set_category(test_bot, category = category, ad_file = "ad.yaml")
+
+        assert selected == segments
+        continue_button.click.assert_awaited_once()
+        open_page.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_set_category_without_explicit_category_requires_probe_match(self, test_bot:KleinanzeigenBot) -> None:
@@ -576,7 +633,7 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             pytest.raises(AssertionError, match = "No category specified"),
         ):
-            await set_category(test_bot, root_url = test_bot.root_url, category = None, ad_file = "data/my_ads/ad.yaml")
+            await set_category(test_bot, category = None, ad_file = "data/my_ads/ad.yaml")
 
 
 class TestCategorySuggestionPicker:
@@ -603,7 +660,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
-            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
+            await set_category(test_bot, category = "185/249", ad_file = "data/my_ads/ad.yaml")
 
         # The fallback web_find(By.TEXT, "Kategorie") should have been called.
         mock_find.assert_any_await(By.TEXT, "Kategorie")
@@ -629,6 +686,54 @@ class TestCategorySuggestionPicker:
             elem.attrs["id"] = radio_id
         elem.click = AsyncMock()
         return elem
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("picker_present", [True, False])
+    async def test_missing_category_segment_resolves_rendered_picker(self, test_bot:KleinanzeigenBot, picker_present:bool) -> None:
+        """Missing category links use offered suggestions only when a picker exists."""
+        missing_segment = TimeoutError("missing cat_outdated")
+        category_link = MagicMock()
+        category_link.click = AsyncMock()
+        radio = self._radio("87", "suggestion-87")
+        selected:list[str] = []
+        label = MagicMock()
+
+        async def select_suggestion() -> None:
+            selected.append("87")
+
+        label.click = AsyncMock(side_effect = select_suggestion)
+
+        async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == 'a[aria-describedby="ad-category-path"]':
+                return category_link
+            if selector_value == "ad-category-picker" and picker_present:
+                return MagicMock()
+            return None
+
+        async def click(selector_type:Any, selector_value:str, **_kwargs:Any) -> None:
+            if selector_value == "cat_outdated":
+                raise missing_segment
+
+        async def find(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+            assert selector_value == "#ad-category-picker label[for='suggestion-87']"
+            return label
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [radio]) as find_radios,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            if picker_present:
+                await set_category(test_bot, category = "80/87/outdated", ad_file = "ad.yaml")
+            else:
+                with pytest.raises(TimeoutError) as raised:
+                    await set_category(test_bot, category = "80/87/outdated", ad_file = "ad.yaml")
+                assert raised.value is missing_segment
+                find_radios.assert_not_awaited()
+
+        assert selected == (["87"] if picker_present else [])
 
     @pytest.mark.asyncio
     async def test_picker_absent_leaves_flow_unchanged(self, test_bot:KleinanzeigenBot) -> None:

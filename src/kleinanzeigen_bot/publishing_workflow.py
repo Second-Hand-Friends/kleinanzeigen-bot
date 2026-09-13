@@ -16,6 +16,7 @@ captcha mechanics (:mod:`captcha_flow`), submit/confirm/ad-id recovery
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable
+from gettext import gettext as _
 from typing import Any, Final
 
 from nodriver.core.connection import ProtocolException
@@ -48,6 +49,28 @@ class PostPublishPersistenceError(RuntimeError):
         self.ad_title = ad_title
         super().__init__(f"Post-publish persistence failed for '{ad_title}' (ad ID {ad_id})")
         self.original = original
+
+
+async def open_ad_for_edit(web:WebScrapingMixin, *, root_url:str, ad_id:int | None, max_pages:int = 10) -> None:
+    """Reach the edit form through site navigation, preserving its session context."""
+    await web.web_open(root_url, reload_if_already_open = True)
+    await web.dismiss_consent_banner()
+    await web.web_click(By.ID, "nav-menu-item-my-ads")
+    await web.web_click(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]')
+
+    async def find_ad(_page_num:int) -> bool:
+        edit_link = await web.web_probe(
+            By.CSS_SELECTOR,
+            f'a[href="/p-anzeige-bearbeiten.html?adId={ad_id}"]',
+            timeout = web.timeout("quick_dom"),
+        )
+        if edit_link is None:
+            return False
+        await edit_link.click()
+        return True
+
+    if not await web.navigate_paginated_ad_overview(find_ad, open_page = False, max_pages = max_pages):
+        raise TimeoutError(_("Could not reach edit form for ad %s through the ad overview") % ad_id)
 
 
 async def check_publishing_result(web:WebScrapingMixin) -> bool:
@@ -158,7 +181,9 @@ async def publish_ad(
             )
 
         LOG.info("Updating ad '%s'...", ad_cfg.title)
-        await web.web_open(f"{root_url}/p-anzeige-bearbeiten.html?adId={ad_cfg.id}", reload_if_already_open = True)
+        # Each populated page contains at least one ad, so the complete API
+        # listing supplies a sufficient bound without limiting updates to page 10.
+        await open_ad_for_edit(web, root_url = root_url, ad_id = ad_cfg.id, max_pages = max(10, len(published_ads_list)))
 
     await web.dismiss_consent_banner()
 
@@ -168,7 +193,7 @@ async def publish_ad(
 
     await _publishing_form.fill_ad_form(
         web, ad_file, ad_cfg, mode,
-        root_url = root_url, ad_defaults = config.ad_defaults,
+        ad_defaults = config.ad_defaults,
     )
 
     ad_id = await _publishing_submission.submit_and_confirm_ad(
