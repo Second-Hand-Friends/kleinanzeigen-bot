@@ -459,12 +459,14 @@ def test_deleting_config_rejects_invalid_value(minimal_config:dict[str, object])
         Config.model_validate(cfg)
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("mode", ["SSO", "NAVIGATION"])
 def test_login_entry_mode_accepts_supported_values(mode:str) -> None:
     config = Config.model_validate({"login": {"username": "dummy", "password": "dummy", "entry_mode": mode}})  # noqa: S106
     assert config.login.entry_mode == mode
 
 
+@pytest.mark.unit
 def test_login_entry_mode_rejects_unknown_value() -> None:
     with pytest.raises(ValueError, match = "entry_mode"):
         Config.model_validate({"login": {"username": "dummy", "password": "dummy", "entry_mode": "UNKNOWN"}})  # noqa: S106
