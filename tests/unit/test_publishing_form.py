@@ -564,9 +564,51 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
-            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
+            await set_category(test_bot, category = "185/249", ad_file = "data/my_ads/ad.yaml")
 
         mock_probe.assert_any_await(By.ID, "ad-category-path")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", ["80/87", "161/172/cd_player"])
+    async def test_set_category_selects_path_without_reloading_form(self, test_bot:KleinanzeigenBot, category:str) -> None:
+        """Category selection retains the edit session and selects every path level."""
+        selected:list[str] = []
+        segments = category.split("/")
+        category_link = MagicMock()
+        category_link.click = AsyncMock()
+        continue_button = MagicMock()
+
+        async def click(selector_type:By, selector_value:str, **_kwargs:Any) -> None:
+            if selector_value == "ad-description":
+                return
+            assert selector_type == By.ID
+            assert selector_value == f"cat_{segments[len(selected)]}"
+            selected.append(segments[len(selected)])
+
+        async def continue_selection() -> None:
+            assert selected == segments
+
+        continue_button.click = AsyncMock(side_effect = continue_selection)
+
+        async def find(selector_type:By, selector_value:str, **_kwargs:Any) -> Any:
+            assert (selector_type, selector_value) == (By.TEXT, "Weiter")
+            return continue_button
+
+        async def probe(selector_type:By, selector_value:str, **_kwargs:Any) -> Any:
+            return category_link if selector_value == 'a[aria-describedby="ad-category-path"]' else None
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_page,
+        ):
+            await set_category(test_bot, category = category, ad_file = "ad.yaml")
+
+        assert selected == segments
+        continue_button.click.assert_awaited_once()
+        open_page.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_set_category_without_explicit_category_requires_probe_match(self, test_bot:KleinanzeigenBot) -> None:
@@ -576,7 +618,7 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             pytest.raises(AssertionError, match = "No category specified"),
         ):
-            await set_category(test_bot, root_url = test_bot.root_url, category = None, ad_file = "data/my_ads/ad.yaml")
+            await set_category(test_bot, category = None, ad_file = "data/my_ads/ad.yaml")
 
 
 class TestCategorySuggestionPicker:
@@ -603,7 +645,7 @@ class TestCategorySuggestionPicker:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
-            await set_category(test_bot, root_url = test_bot.root_url, category = "185/249", ad_file = "data/my_ads/ad.yaml")
+            await set_category(test_bot, category = "185/249", ad_file = "data/my_ads/ad.yaml")
 
         # The fallback web_find(By.TEXT, "Kategorie") should have been called.
         mock_find.assert_any_await(By.TEXT, "Kategorie")

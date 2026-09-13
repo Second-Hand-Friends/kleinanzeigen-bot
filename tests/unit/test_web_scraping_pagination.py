@@ -21,7 +21,8 @@ class TestNavigatePaginatedAdOverview:
         raise TimeoutError("Unexpected find")
 
     @pytest.mark.asyncio
-    async def test_single_page_action_succeeds(self) -> None:
+    @pytest.mark.parametrize("open_page", [True, False])
+    async def test_single_page_action_succeeds(self, open_page:bool) -> None:
         """Test pagination on single page where action succeeds."""
         mixin = WebScrapingMixin()
 
@@ -29,17 +30,18 @@ class TestNavigatePaginatedAdOverview:
         callback = AsyncMock(return_value = True)
 
         with (
-            patch.object(mixin, "web_open", new_callable = AsyncMock),
+            patch.object(mixin, "web_open", new_callable = AsyncMock) as open_mock,
             patch.object(mixin, "web_sleep", new_callable = AsyncMock),
             patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
             patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(mixin, "timeout", return_value = 10),
         ):
-            result = await mixin.navigate_paginated_ad_overview(callback)
+            result = await mixin.navigate_paginated_ad_overview(callback, open_page = open_page)
 
             assert result is True
             callback.assert_awaited_once_with(1)
+            assert open_mock.await_count == int(open_page)
 
     @pytest.mark.asyncio
     async def test_single_page_action_returns_false(self) -> None:

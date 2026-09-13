@@ -25,8 +25,9 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
 )
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
-from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError
+from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError, open_ad_for_edit
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.web_scraping_mixin import By
 from tests.conftest import build_published_ads, build_update_ad
 
 
@@ -586,12 +587,14 @@ class TestKleinanzeigenBotPublishAdsBasics:
         ],
         ids = ["replace", "modify"],
     )
+    @pytest.mark.parametrize("published_count", [0, 11])
     async def test_publish_ad_keeps_pre_submit_timeouts_retryable(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mode:AdUpdateStrategy,
         expected_path:str,
+        published_count:int,
     ) -> None:
         """Timeouts before submit boundary should remain plain retryable failures and force reload."""
         ad_cfg = Ad.model_validate(base_ad_config | {"id": 12345, "shipping_type": "NOT_APPLICABLE", "price_type": "NOT_APPLICABLE"})
@@ -602,12 +605,17 @@ class TestKleinanzeigenBotPublishAdsBasics:
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as web_open_mock,
             patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_workflow.open_ad_for_edit", new_callable = AsyncMock) as edit_mock,
             patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock, side_effect = TimeoutError("image upload timeout")),
             pytest.raises(TimeoutError, match = "image upload timeout"),
         ):
-            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], mode)
+            await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, build_published_ads(*[(i, "ACTIVE") for i in range(published_count)]), mode)
 
-        web_open_mock.assert_awaited_once_with(expected_url, reload_if_already_open = True)
+        if mode == AdUpdateStrategy.MODIFY:
+            edit_mock.assert_awaited_once_with(test_bot, root_url = test_bot.root_url, ad_id = ad_cfg.id, max_pages = max(10, published_count))
+            web_open_mock.assert_not_awaited()
+        else:
+            web_open_mock.assert_awaited_once_with(expected_url, reload_if_already_open = True)
 
 
 class TestDisplayCounterProgression:
@@ -892,6 +900,7 @@ class TestPublishAdPostSubmitUncertainty:
         test_bot.page = mock_page
 
         common_patches:list[Any] = [
+            patch("kleinanzeigen_bot.publishing_workflow.open_ad_for_edit", new_callable = AsyncMock),
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_form.set_category", new_callable = AsyncMock),
@@ -1135,6 +1144,12 @@ class TestWantedShippingSelection:
 class TestAutoPriceReductionDispatch:
     """Price reduction dispatch tests across REPLACE and MODIFY modes."""
 
+    @pytest.fixture(autouse = True)
+    def mock_edit_navigation(self) -> Iterator[None]:
+        """Isolate price reduction dispatch from browser navigation."""
+        with patch("kleinanzeigen_bot.publishing_workflow.open_ad_for_edit", new_callable = AsyncMock):
+            yield
+
     @pytest.mark.asyncio
     async def test_auto_price_reduction_conditional_on_mode_and_on_update(
         self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], tmp_path:Path
@@ -1290,3 +1305,45 @@ class TestAutoPriceReductionDispatch:
         # Verify the path argument is the absolute path (fallback behavior)
         assert len(recorded_path) == 1
         assert recorded_path[0] == ad_file, f"Expected absolute path fallback, got: {recorded_path[0]}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("found_page", [1, 2, 11, None])
+async def test_open_ad_for_edit_uses_overview_clicks(test_bot:KleinanzeigenBot, found_page:int | None) -> None:
+    """Find the exact edit link across pages without opening an edit deeplink."""
+    edit_link = MagicMock()
+    edit_link.click = AsyncMock()
+    page = 0
+
+    async def probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
+        assert selector_value == 'a[href="/p-anzeige-bearbeiten.html?adId=12345"]'
+        return edit_link if page == found_page else None
+
+    async def navigate(action:Any, *, open_page:bool, max_pages:int) -> bool:
+        nonlocal page
+        assert open_page is False
+        assert max_pages == 11
+        for page in range(1, max_pages + 1):
+            if await action(page):
+                return True
+        return False
+
+    with (
+        patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_mock,
+        patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
+        patch.object(test_bot, "web_click", new_callable = AsyncMock) as click_mock,
+        patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+        patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock, side_effect = navigate),
+    ):
+        if found_page is None:
+            with pytest.raises(TimeoutError, match = "Could not reach edit form"):
+                await open_ad_for_edit(test_bot, root_url = test_bot.root_url, ad_id = 12345, max_pages = 11)
+        else:
+            await open_ad_for_edit(test_bot, root_url = test_bot.root_url, ad_id = 12345, max_pages = 11)
+
+    open_mock.assert_awaited_once_with(test_bot.root_url, reload_if_already_open = True)
+    assert click_mock.await_args_list == [
+        call(By.ID, "nav-menu-item-my-ads"),
+        call(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]'),
+    ]
+    assert edit_link.click.await_count == (0 if found_page is None else 1)

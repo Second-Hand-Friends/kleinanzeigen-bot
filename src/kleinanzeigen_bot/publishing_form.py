@@ -87,7 +87,7 @@ async def _find_in_dialog(
     raise TimeoutError(error_message)
 
 
-async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | None, ad_file:str) -> None:
+async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str) -> None:
     """Set or verify the ad category on the publishing form.
 
     Clicks through the category picker to select the configured category path,
@@ -103,16 +103,23 @@ async def set_category(web:WebScrapingMixin, *, root_url:str, category:str | Non
 
     if category:
         await web.web_sleep()  # workaround for https://github.com/Second-Hand-Friends/kleinanzeigen-bot/issues/39
-        # The redesigned publishing form uses a link with text "WÃ¤hle deine Kategorie".
-        # Fall back to the shorter "Kategorie" text for older page variants.
-        category_link = await web.web_probe(By.TEXT, "W\u00e4hle deine Kategorie", timeout = web.timeout("quick_dom"))
+        # Target the actual change link; a text search for "Kategorie" can
+        # match the category label instead of the clickable anchor.
+        category_link = await web.web_probe(
+            By.CSS_SELECTOR, 'a[aria-describedby="ad-category-path"]', timeout = web.timeout("quick_dom")
+        )
+        if category_link is None:
+            category_link = await web.web_probe(By.TEXT, "W\u00e4hle deine Kategorie", timeout = web.timeout("quick_dom"))
         if category_link is None:
             category_link = await web.web_find(By.TEXT, "Kategorie")
         await category_link.click()
         await web.web_sleep()
 
-        category_url = f"{root_url}/p-kategorie-aendern.html#?path={category}"
-        await web.web_open(category_url)
+        # Preserve the form session established by the category link. Reloading
+        # this page directly can lose the edit context and fail with HTTP 400/403.
+        for segment in category.split("/"):
+            await web.web_click(By.ID, f"cat_{segment}")
+            await web.web_sleep()
         weiter_btn = await web.web_find(By.TEXT, "Weiter")
         await weiter_btn.click()
         await web.web_sleep()
@@ -1401,7 +1408,6 @@ async def fill_ad_form(
     ad_cfg:Ad,
     mode:AdUpdateStrategy,
     *,
-    root_url:str,
     ad_defaults:AdDefaults,
 ) -> None:
     """Fill the ad creation/edit form — category, attributes, shipping, price,
@@ -1416,7 +1422,7 @@ async def fill_ad_form(
     #############################
     # set category (before title to avoid form reset clearing title)
     #############################
-    await set_category(web, root_url = root_url, category = ad_cfg.category, ad_file = ad_file)
+    await set_category(web, category = ad_cfg.category, ad_file = ad_file)
     await web.web_sleep()  # wait for category-dependent fields to render before setting attributes
 
     #############################
