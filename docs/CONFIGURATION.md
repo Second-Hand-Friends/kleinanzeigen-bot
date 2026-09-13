@@ -343,13 +343,19 @@ update_check:
 
 ### login
 
-Login credentials.
+Login credentials and login entry selection.
 
 ```yaml
 login:
   username: "${KLEINANZEIGEN_BOT_USERNAME}"
   password: "${KLEINANZEIGEN_BOT_PASSWORD}"
+  entry_mode: SSO
 ```
+
+- `SSO` (default): Use the direct `/m-einloggen-sso.html` entry. This preserves the previous login behavior and avoids relying on login-page JavaScript in headless browsers.
+- `NAVIGATION`: Click **Meins → Meine Anzeigen** on the homepage instead. Set `login.entry_mode: NAVIGATION` to opt in to this route.
+
+The choice is explicit and independent of the browser's headless mode. Neither entry mode guarantees avoidance of IP-range blocks.
 
 > **Security Note:** Never commit your credentials to version control. Use environment variables (`${KLEINANZEIGEN_BOT_USERNAME}`, `${KLEINANZEIGEN_BOT_PASSWORD}`) to keep credentials out of `config.yaml`. Plain-text values without `${}` are still supported for local-only use.
 

@@ -5,7 +5,7 @@ import asyncio
 import inspect
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -412,8 +412,19 @@ class TestKleinanzeigenBotAuthentication:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("has_welcome_popup", [False, True])
-    async def test_login_flow_completes_successfully(self, test_bot:KleinanzeigenBot, has_welcome_popup:bool) -> None:
-        """Verify login follows the homepage menu, dismissing an optional welcome popup."""
+    @pytest.mark.parametrize(("entry_mode", "arguments", "direct_sso"), [
+        ("SSO", [], True),
+        ("SSO", ["--headless"], True),
+        ("NAVIGATION", [], False),
+        ("NAVIGATION", ["--headless=new"], False),
+    ])
+    async def test_login_flow_completes_successfully(
+        self, test_bot:KleinanzeigenBot, has_welcome_popup:bool,
+        entry_mode:Literal["SSO", "NAVIGATION"], arguments:list[str], direct_sso:bool,
+    ) -> None:
+        """Verify configured entry selection and shared authentication continuation."""
+        test_bot.config.login.entry_mode = entry_mode
+        test_bot.browser_config.arguments = arguments
         welcome_close = AsyncMock() if has_welcome_popup else None
         with (
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = welcome_close),
@@ -436,13 +447,19 @@ class TestKleinanzeigenBotAuthentication:
             await test_bot.login()
 
             opened_urls = [call.args[0] for call in mock_open.call_args_list]
-            assert opened_urls == [test_bot.root_url]
-            assert mock_click.await_args_list == [
-                call(By.ID, "nav-menu-item-my-ads", timeout = test_bot.timeout("page_load")),
-                call(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]', timeout = test_bot.timeout("page_load")),
-            ]
-            if welcome_close is not None:
-                welcome_close.click.assert_awaited_once()
+            if direct_sso:
+                assert opened_urls == [test_bot.root_url, f"{test_bot.root_url}/m-einloggen-sso.html"]
+                mock_click.assert_not_awaited()
+                if welcome_close is not None:
+                    welcome_close.click.assert_not_awaited()
+            else:
+                assert opened_urls == [test_bot.root_url]
+                assert mock_click.await_args_list == [
+                    call(By.ID, "nav-menu-item-my-ads", timeout = test_bot.timeout("page_load")),
+                    call(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]', timeout = test_bot.timeout("page_load")),
+                ]
+                if welcome_close is not None:
+                    welcome_close.click.assert_awaited_once()
             mock_logged_in.assert_awaited()
             mock_fill.assert_awaited_once()
             mock_after_login.assert_awaited_once()
@@ -473,6 +490,7 @@ class TestKleinanzeigenBotAuthentication:
     @pytest.mark.asyncio
     async def test_login_flow_raises_when_state_remains_inconclusive(self, test_bot:KleinanzeigenBot) -> None:
         """Post-login inconclusive state should fail fast with diagnostics."""
+        test_bot.config.login.entry_mode = "NAVIGATION"
         with (
             patch.object(test_bot, "web_open"),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
@@ -637,11 +655,12 @@ class TestKleinanzeigenBotAuthentication:
             LoginDetectionResult(is_logged_in = False, reason = "bogus")  # type: ignore[arg-type]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("click_results", [[TimeoutError("sso timeout")], [None, TimeoutError("sso timeout")]])
-    async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot, click_results:list[object]) -> None:
-        """SSO navigation timeout should trigger diagnostics and re-raise."""
+    @pytest.mark.parametrize("click_results", [[TimeoutError("sso timeout")], [None, TimeoutError("sso timeout")], None])
+    async def test_login_flow_raises_when_sso_navigation_times_out(self, test_bot:KleinanzeigenBot, click_results:list[object] | None) -> None:
+        """Timeouts on either entry route should trigger diagnostics and re-raise."""
+        test_bot.config.login.entry_mode = "SSO" if click_results is None else "NAVIGATION"
         with (
-            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock, side_effect = [None, TimeoutError("sso timeout")] if click_results is None else None),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click_results),
             patch("kleinanzeigen_bot.login_flow.fill_login_data_and_send", new_callable = AsyncMock) as mock_fill,

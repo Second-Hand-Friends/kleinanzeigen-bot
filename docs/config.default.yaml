@@ -239,6 +239,9 @@ login:
   # kleinanzeigen.de login password
   password: changeme
 
+  # login entry: SSO uses the direct SSO URL (default, preserves previous behavior); NAVIGATION uses homepage navigation via Meins > Meine Anzeigen. Choose explicitly; the browser's headless mode does not change this setting
+  entry_mode: SSO
+
 # ################################################################################
 captcha:
 

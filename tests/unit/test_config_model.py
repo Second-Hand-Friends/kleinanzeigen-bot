@@ -56,6 +56,7 @@ def test_minimal_config_validation() -> None:
     }
     config = Config.model_validate(minimal_cfg)
     assert config.login.username == "dummy"
+    assert config.login.entry_mode == "SSO"
     assert config.login.password == "dummy"  # noqa: S105
     assert config.browser.suppress_unsupported_flag_warning is True
 
@@ -456,3 +457,14 @@ def test_deleting_config_rejects_invalid_value(minimal_config:dict[str, object])
     cfg = {**minimal_config, "deleting": {"after_delete": "INVALID"}}
     with pytest.raises(Exception, match = "after_delete"):
         Config.model_validate(cfg)
+
+
+@pytest.mark.parametrize("mode", ["SSO", "NAVIGATION"])
+def test_login_entry_mode_accepts_supported_values(mode:str) -> None:
+    config = Config.model_validate({"login": {"username": "dummy", "password": "dummy", "entry_mode": mode}})  # noqa: S106
+    assert config.login.entry_mode == mode
+
+
+def test_login_entry_mode_rejects_unknown_value() -> None:
+    with pytest.raises(ValueError, match = "entry_mode"):
+        Config.model_validate({"login": {"username": "dummy", "password": "dummy", "entry_mode": "UNKNOWN"}})  # noqa: S106
