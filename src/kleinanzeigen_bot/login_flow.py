@@ -181,10 +181,22 @@ async def login(
         return
 
     LOG.debug("Navigating to SSO login page (Auth0)...")
-    # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
-    # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
+    # Follow the homepage navigation so the site owns the login redirect and target URL.
     try:
-        await web.web_open(f"{root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
+        welcome_close = await web.web_probe(
+            By.CSS_SELECTOR,
+            'button[aria-label="Willkommens-Popup Schließen"]',
+            timeout = pre_login_gdpr_timeout,
+        )
+        if welcome_close is not None:
+            await welcome_close.click()
+            await web.web_sleep()
+        await web.web_click(By.ID, "nav-menu-item-my-ads", timeout = sso_navigation_timeout)
+        await web.web_click(
+            By.CSS_SELECTOR,
+            '#nav-sub-menu a[href="/m-meine-anzeigen.html"]',
+            timeout = sso_navigation_timeout,
+        )
     except TimeoutError:
         LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
         await capture_login_detection_diagnostics_if_enabled(
