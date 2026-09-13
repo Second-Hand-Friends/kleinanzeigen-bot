@@ -677,6 +677,16 @@
           "minLength": 1,
           "title": "Password",
           "type": "string"
+        },
+        "entry_mode": {
+          "default": "SSO",
+          "description": "login entry: SSO uses the direct SSO URL (default, preserves previous behavior); NAVIGATION uses homepage navigation via Meins > Meine Anzeigen. Choose explicitly; the browser's headless mode does not change this setting",
+          "enum": [
+            "SSO",
+            "NAVIGATION"
+          ],
+          "title": "Entry Mode",
+          "type": "string"
         }
       },
       "required": [

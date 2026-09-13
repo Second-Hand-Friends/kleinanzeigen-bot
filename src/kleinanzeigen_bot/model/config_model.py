@@ -251,6 +251,12 @@ class BrowserConfig(ContextualModel):
 class LoginConfig(ContextualModel):
     username:str = Field(..., min_length = 1, description = "kleinanzeigen.de login email or username")
     password:str = Field(..., min_length = 1, description = "kleinanzeigen.de login password")
+    entry_mode:Literal["SSO", "NAVIGATION"] = Field(
+        default = "SSO",
+        description = "login entry: SSO uses the direct SSO URL (default, preserves previous behavior); "
+        "NAVIGATION uses homepage navigation via Meins > Meine Anzeigen. "
+        "Choose explicitly; the browser's headless mode does not change this setting",
+    )
 
 
 class LocalPathRenamingConfig(ContextualModel):

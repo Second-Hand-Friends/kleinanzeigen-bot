@@ -415,6 +415,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             self,
             username = self.config.login.username,
             password = self.config.login.password,
+            entry_mode = self.config.login.entry_mode,
             captcha_config = self.config.captcha,
             root_url = self.root_url,
             log_file_path = self.log_file_path,

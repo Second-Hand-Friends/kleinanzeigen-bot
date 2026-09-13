@@ -18,7 +18,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from gettext import gettext as _
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 from nodriver.core.connection import ProtocolException
 
@@ -144,6 +144,7 @@ async def login(
     log_file_path:str | None,
     diagnostics_config:DiagnosticsConfig | None,
     diagnostics_output_dir_fn:Callable[[], Path],
+    entry_mode:Literal["SSO", "NAVIGATION"] = "SSO",
 ) -> None:
     """Perform the full login flow: pre-check, Auth0 SSO, form fill, post-verify.
 
@@ -156,6 +157,7 @@ async def login(
         log_file_path: Path to the bot's log file.
         diagnostics_config: Diagnostics configuration (or None if disabled).
         diagnostics_output_dir_fn: Callable returning the diagnostics output directory.
+        entry_mode: Explicit choice of direct SSO or homepage navigation.
     """
     # Reset the diagnostics guard at the start of each login attempt so that
     # subsequent login-detection diagnostics/pause runs again, even if a
@@ -181,10 +183,26 @@ async def login(
         return
 
     LOG.debug("Navigating to SSO login page (Auth0)...")
-    # m-einloggen-sso.html triggers immediate server-side redirect to Auth0
-    # This avoids waiting for JS on m-einloggen.html which may not execute in headless mode
     try:
-        await web.web_open(f"{root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
+        if entry_mode == "SSO":
+            # Preserve direct SSO for headless browsers where login-page JS may not execute.
+            await web.web_open(f"{root_url}/m-einloggen-sso.html", timeout = sso_navigation_timeout)
+        else:
+            # Let the site determine the login redirect and target URL through its navigation.
+            welcome_close = await web.web_probe(
+                By.CSS_SELECTOR,
+                'button[aria-label="Willkommens-Popup Schließen"]',
+                timeout = pre_login_gdpr_timeout,
+            )
+            if welcome_close is not None:
+                await welcome_close.click()
+                await web.web_sleep()
+            await web.web_click(By.ID, "nav-menu-item-my-ads", timeout = sso_navigation_timeout)
+            await web.web_click(
+                By.CSS_SELECTOR,
+                '#nav-sub-menu a[href="/m-meine-anzeigen.html"]',
+                timeout = sso_navigation_timeout,
+            )
     except TimeoutError:
         LOG.warning("Timeout navigating to SSO login page after %.1fs", sso_navigation_timeout)
         await capture_login_detection_diagnostics_if_enabled(
