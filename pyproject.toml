@@ -93,7 +93,7 @@ debug = "python -m pdb -m kleinanzeigen_bot"
 
 # build & packaging
 generate-schemas = "python scripts/generate_schemas.py"
-generate-config = { shell = "python -c \"from pathlib import Path; Path('docs/config.default.yaml').unlink(missing_ok=True)\" && python -m kleinanzeigen_bot --config docs/config.default.yaml create-config" }
+generate-config = "python scripts/generate_config.py"
 generate-readme-commands = "python scripts/generate_readme_commands.py"
 generate-artifacts = { composite = ["generate-schemas", "generate-config", "generate-readme-commands"] }
 compile.cmd = "python -O -m PyInstaller pyinstaller.spec --clean --workpath .temp"
@@ -107,7 +107,9 @@ deps                = "pdm list --fields name,version,groups"
 
 # format & lint
 format        = { composite = ["format:py", "format:yaml"] }
-"format:py"   = { shell = "autopep8 --recursive --in-place scripts src tests --verbose && python scripts/post_autopep8.py scripts src tests" }
+"format:py"   = { composite = ["format:autopep8", "format:post-autopep8"] }
+"format:autopep8" = "autopep8 --recursive --in-place scripts src tests --verbose"
+"format:post-autopep8" = "python scripts/post_autopep8.py scripts src tests"
 "format:yaml" = "yamlfix scripts/ src/ tests/"
 
 lint = { composite = ["lint:ruff", "lint:mypy", "lint:pyright", "lint:actions"] }
