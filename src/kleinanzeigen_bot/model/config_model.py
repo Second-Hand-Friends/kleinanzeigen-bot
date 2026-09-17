@@ -239,7 +239,11 @@ class BrowserConfig(ContextualModel):
     use_private_window:bool = Field(default = True, description = "open browser in private/incognito mode (recommended to avoid cookie conflicts)")
     user_data_dir:str | None = Field(
         default = "",
-        description = "custom browser profile directory (optional). Leave empty for auto-configured default",
+        description = (
+            "custom browser profile directory (optional). Leave empty to use a workspace-local profile "
+            "(portable mode: .temp/browser-profile beside the config file); a session kept in another "
+            "profile is then not reused, so the bot logs in again on every run"
+        ),
     )
     profile_name:str | None = Field(
         default = "",

@@ -290,7 +290,7 @@
             }
           ],
           "default": "",
-          "description": "custom browser profile directory (optional). Leave empty for auto-configured default",
+          "description": "custom browser profile directory (optional). Leave empty to use a workspace-local profile (portable mode: .temp/browser-profile beside the config file); a session kept in another profile is then not reused, so the bot logs in again on every run",
           "title": "User Data Dir"
         },
         "profile_name": {

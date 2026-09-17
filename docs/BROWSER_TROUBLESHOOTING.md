@@ -148,6 +148,41 @@ diagnostics:
 
 > **Migration note:** The legacy key `diagnostics.login_detection_capture` is no longer used. Switch to `diagnostics.capture_on.login_detection` as shown above. If you keep using the old key, login-detection diagnostics will not be triggered.
 
+### Issue: The bot logs in again on every run
+
+**Symptoms:**
+
+- `Logging in...` appears in the log on every run, although an earlier run logged in successfully
+- The login may end with `STILL_ON_PASSWORD_PAGE + IP_RANGE_BLOCKED` after a few runs
+
+**Cause:** the login lives in the browser profile, and each run only reuses the profile it is configured with. With an empty `browser.user_data_dir` the bot falls back to a workspace-local profile:
+
+- `--workspace-mode portable`: `<config dir>/.temp/browser-profile`
+- `--workspace-mode xdg`: `<XDG cache>/browser-profile`
+
+If your session lives somewhere else — because another caller sets an absolute `user_data_dir`, or because `--config` resolves to a different directory — the run starts without those cookies and has to log in again.
+
+**Diagnosis:** every run prints the profile it uses:
+
+```bash
+# Linux/macOS
+grep "Browser user data dir" kleinanzeigen_bot.log
+
+# Windows (PowerShell)
+Select-String -Path kleinanzeigen_bot.log -Pattern "Browser user data dir"
+```
+
+If that path is not the profile holding your session, the run cannot reuse it.
+
+**Fix:** point every invocation at the same profile by setting an absolute path:
+
+```yaml
+browser:
+  user_data_dir: "/home/you/.local/share/kleinanzeigen-bot/browser-profile"
+```
+
+**While the block page is shown:** do not keep retrying. Kleinanzeigen blocks the IP range temporarily and asks you to try again later, so repeated login attempts do not help — wait for the block to expire.
+
 ## Common Issues and Solutions
 
 ### Issue 1: "Failed to connect to browser" with "root" error
