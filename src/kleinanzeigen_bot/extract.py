@@ -42,6 +42,10 @@ _RMTREE_RETRY_DELAY_SECONDS:Final[float] = 0.25
 _LOG_SNIPPET_LIMIT:Final[int] = 120
 _ELLIPSIS:Final[str] = "..."
 _ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
+_ANONYMOUS_AD_REQUEST_TIMEOUT_SECONDS:Final[float] = 15.0
+_AD_DIMENSIONS_RE:Final[re.Pattern[str]] = re.compile(r'\{[^{}]*"ad_attributes"[^{}]*\}')
+# ad_type as published in the dimensions; the anonymous ad page uses "OFFERED", BelenConf "OFFER"
+_AD_TYPE_DIMENSION_TO_API:Final[dict[str, str]] = {"OFFER": "OFFER", "OFFERED": "OFFER", "WANTED": "WANTED"}
 _OWNED_AD_TITLE_DECORATION_PREFIXES:Final[tuple[str, ...]] = ("Gelöscht",)
 _OWNED_AD_TITLE_DECORATION_RE:Final[re.Pattern[str]] = re.compile(
     rf"^(?:{'|'.join(re.escape(prefix) for prefix in _OWNED_AD_TITLE_DECORATION_PREFIXES)})\s*•\s*"
@@ -823,12 +827,22 @@ class AdExtractor(WebScrapingMixin):
 
         # Get BelenConf data which contains accurate ad_type information
         belen_conf = await self.web_execute("window.BelenConf")
+        dimensions = self._dimensions_from_belen_conf(belen_conf)
 
-        # Extract ad type from BelenConf - more reliable than URL pattern matching
-        # BelenConf contains "ad_type":"WANTED" or "ad_type":"OFFER" in dimensions
-        ad_type_from_conf = None
-        if isinstance(belen_conf, dict):
-            ad_type_from_conf = belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("ad_type")
+        # The redesigned (Astro) ad page defines neither window.BelenConf nor the legacy ad details
+        # markup, so the canonical dimensions have to come from somewhere else. The same ad URL served
+        # to an anonymous visitor still returns the classic layout including those dimensions
+        # (ad_attributes, ad_type, l3_category_id) - see issue #1257.
+        if not dimensions:
+            dimensions = await self._fetch_anonymous_ad_dimensions(ad_id) or {}
+            if not dimensions:
+                LOG.warning(
+                    "Ad %s: neither BelenConf nor the anonymous fallback delivered ad dimensions; "
+                    "category attributes may stay incomplete and publishing can fail.", ad_id)
+
+        # Extract ad type from the dimensions - more reliable than URL pattern matching
+        # The dimensions contain "ad_type":"WANTED" or "ad_type":"OFFER"/"OFFERED"
+        ad_type_from_conf = _AD_TYPE_DIMENSION_TO_API.get(dimensions.get("ad_type", ""))
         info["type"] = ad_type_from_conf if ad_type_from_conf in {"OFFER", "WANTED"} else ("OFFER" if "s-anzeige" in self.page.url else "WANTED")
 
         info["category"] = await self._extract_category_from_ad_page()
@@ -836,7 +850,7 @@ class AdExtractor(WebScrapingMixin):
         # append subcategory and change e.g. category "161/172" to "161/172/lautsprecher_kopfhoerer"
         # take subcategory from third_category_name as key 'art_s' sometimes is a special attribute (e.g. gender for clothes)
         # the subcategory isn't really necessary, but when set, the appropriate special attribute gets preselected
-        if isinstance(belen_conf, dict) and (third_category_id := belen_conf.get("universalAnalyticsOpts", {}).get("dimensions", {}).get("l3_category_id")):
+        if third_category_id := dimensions.get("l3_category_id"):
             info["category"] += f"/{third_category_id}"
 
         info["title"] = title
@@ -857,7 +871,7 @@ class AdExtractor(WebScrapingMixin):
 
         info["description"] = description_text.strip()
 
-        info["special_attributes"] = await self._extract_special_attributes_from_ad_page(belen_conf)
+        info["special_attributes"] = await self._extract_special_attributes_from_ad_page(dimensions)
 
         if "schaden_s" in info["special_attributes"]:
             # change f to  'nein' and 't' to 'ja'
@@ -1021,20 +1035,77 @@ class AdExtractor(WebScrapingMixin):
 
         return category
 
-    async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any] | None) -> dict[str, str]:
+    @staticmethod
+    def _dimensions_from_belen_conf(belen_conf:dict[str, Any] | None) -> dict[str, Any]:
+        """Return the canonical ad dimensions from ``window.BelenConf``, or an empty dict if absent.
+
+        The redesigned (Astro) ad page does not define ``window.BelenConf`` at all.
         """
-        Extracts the special attributes from an ad page.
+        if not isinstance(belen_conf, dict):
+            return {}
+        opts = belen_conf.get("universalAnalyticsOpts")
+        dimensions = opts.get("dimensions") if isinstance(opts, dict) else None
+        return dimensions if isinstance(dimensions, dict) else {}
+
+    async def _fetch_anonymous_ad_dimensions(self, ad_id:int) -> dict[str, Any] | None:
+        """Fetch the canonical ad dimensions of ``ad_id`` with a single anonymous request.
+
+        The redesigned ad page carries neither ``window.BelenConf`` nor the legacy ad details
+        markup, but the same URL served to an anonymous visitor still embeds the canonical
+        dimensions (``ad_attributes``, ``ad_type``, ``l3_category_id``). Exactly one request is
+        made, without session cookies, and only when the already loaded page had no dimensions.
+
+        :return: the dimension dictionary, or ``None`` when the request or the extraction failed
+        """
+        url = f"https://www.kleinanzeigen.de/s-anzeige/{ad_id}"
+
+        def _fetch() -> str:
+            request = urllib_request.Request(url, headers = {"Accept-Language": "de-DE,de;q=0.9"})
+            with urllib_request.urlopen(request, timeout = _ANONYMOUS_AD_REQUEST_TIMEOUT_SECONDS) as response:  # noqa: S310
+                return cast(str, response.read().decode("utf-8", errors = "replace"))
+
+        try:
+            page_html = await asyncio.to_thread(_fetch)
+        except (urllib_error.URLError, urllib_error.HTTPError, ValueError, OSError) as ex:
+            LOG.warning("Ad %s: anonymous fallback request failed: %s", ad_id, ex)
+            return None
+
+        dimensions = self._parse_ad_dimensions_html(page_html)
+        if dimensions is None:
+            LOG.warning("Ad %s: anonymous fallback response contains no usable ad dimensions.", ad_id)
+        return dimensions
+
+    @staticmethod
+    def _parse_ad_dimensions_html(page_html:str) -> dict[str, Any] | None:
+        """Extract the canonical ad dimensions embedded in an ad page's HTML.
+
+        The dimensions are the JSON object carrying ``ad_attributes`` inside ``window.BelenConf``
+        (``universalAnalyticsOpts.dimensions``); the surrounding object uses JavaScript literal
+        syntax, the dimensions themselves are plain JSON.
+
+        :return: the dimension dictionary, or ``None`` when the page has none
+        """
+        match = _AD_DIMENSIONS_RE.search(page_html)
+        if not match:
+            return None
+        try:
+            dimensions = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+        return dimensions if isinstance(dimensions, dict) else None
+
+    async def _extract_special_attributes_from_ad_page(self, dimensions:dict[str, Any] | None) -> dict[str, str]:
+        """
+        Extracts the special attributes from the canonical ad dimensions.
         If no items are available then special_attributes is empty
 
+        :param dimensions: the dimensions as returned by ``window.BelenConf``
+            (``universalAnalyticsOpts.dimensions``) or by :meth:`_fetch_anonymous_ad_dimensions`
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
-        if isinstance(belen_conf, dict):
-            opts = belen_conf.get("universalAnalyticsOpts", {})
-            special_attributes_str = opts.get("dimensions", {}).get("ad_attributes")
-        else:
-            special_attributes_str = None
+        special_attributes_str = dimensions.get("ad_attributes") if isinstance(dimensions, dict) else None
         if not special_attributes_str:
             return await self._extract_special_attributes_from_dom()
         special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
