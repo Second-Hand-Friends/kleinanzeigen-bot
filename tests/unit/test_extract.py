@@ -1603,7 +1603,7 @@ class TestAdExtractorCategory:
     # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
-        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
+        belen_conf:dict[str, Any] = {"ad_attributes": ""}
         with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
             result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
             assert result == {}
@@ -1614,9 +1614,7 @@ class TestAdExtractorCategory:
         """Test extraction of special attributes when not empty."""
 
         special_atts = {
-            "universalAnalyticsOpts": {
-                "dimensions": {"ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"}
-            }
+            "ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"
         }
         result = await extractor._extract_special_attributes_from_ad_page(special_atts)
         assert len(result) == 5
@@ -1636,7 +1634,7 @@ class TestAdExtractorCategory:
     # pylint: disable=protected-access
     async def test_extract_special_attributes_dom_fallback_when_missing(self, extractor:extract_module.AdExtractor) -> None:
         """When ad_attributes is missing, special attributes should be extracted via DOM fallback."""
-        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {}}}
+        belen_conf:dict[str, Any] = {}
         with patch.object(
             extractor,
             "_extract_special_attributes_from_dom",
@@ -3666,3 +3664,111 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert len(rendered) <= 15
         assert "Very Long Title Here" not in rendered
         assert "12345678901234567890" not in rendered
+
+
+class TestAdExtractorAnonymousFallback:
+    """Tests for the anonymous dimension fallback used when the ad page has no window.BelenConf."""
+
+    # pylint: disable=protected-access
+
+    def test_parse_ad_dimensions_from_anonymous_page(self) -> None:
+        """The dimensions embedded in the anonymous ad page are read from the surrounding JS literal."""
+        dimensions = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json")
+        page_html = (
+            "<html><script>window.BelenConf = { jsBaseUrl: 'https://static.kleinanzeigen.de/static/js', isBrowse: 'true', "
+            'universalAnalyticsOpts: { account: "UA-24356365-9", dimensions: '
+            + json.dumps(dimensions)
+            + ", extraDimensions: {dimension73: '1'}, sendPageView: true, }, "
+            "tnsPhoneVerificationBundleUrl: 'https://www.kleinanzeigen.de/bffstatic' }</script></html>"
+        )
+
+        parsed = extract_module.AdExtractor._parse_ad_dimensions_html(page_html)
+
+        assert parsed is not None
+        assert parsed["ad_attributes"] == dimensions["ad_attributes"]
+        assert parsed["l3_category_id"] == dimensions["l3_category_id"]
+        assert parsed["ad_type"] == dimensions["ad_type"]
+
+    def test_parse_ad_dimensions_without_usable_dimensions(self) -> None:
+        """Pages without dimensions or with malformed dimensions yield None instead of raising."""
+        assert extract_module.AdExtractor._parse_ad_dimensions_html("<html><body>Nothing to see here</body></html>") is None
+        assert extract_module.AdExtractor._parse_ad_dimensions_html('{"ad_attributes":}') is None
+
+    def test_dimensions_from_belen_conf(self) -> None:
+        """BelenConf yields its dimensions; anything unexpected yields an empty dict."""
+        assert extract_module.AdExtractor._dimensions_from_belen_conf(
+            {"universalAnalyticsOpts": {"dimensions": {"ad_type": "OFFER"}}}
+        ) == {"ad_type": "OFFER"}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf(None) == {}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": "unexpected"}) == {}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": {"dimensions": "unexpected"}}) == {}
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_uses_anonymous_dimensions_when_belen_conf_is_missing(
+        self, test_extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """Without window.BelenConf the dimensions are taken from one anonymous request."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        fallback_mock = AsyncMock(return_value = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json"))
+
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Test Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(return_value = None),
+            _fetch_anonymous_ad_dimensions = fallback_mock,
+            _extract_category_from_ad_page = AsyncMock(return_value = "17/23"),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (15.0, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ):
+            ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        fallback_mock.assert_awaited_once_with(12345)
+        assert ad_cfg.type == "OFFER"
+        assert ad_cfg.category == "17/23/gesellschaftsspiele"
+        assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_skips_anonymous_request_when_belen_conf_is_present(
+        self, test_extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """The classic ad page provides the dimensions itself, so no extra request is made."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        fallback_mock = AsyncMock(return_value = None)
+
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Test Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(
+                return_value = {
+                    "universalAnalyticsOpts": {
+                        "dimensions": {"ad_type": "OFFER", "l3_category_id": "gesellschaftsspiele", "ad_attributes": "art_s:gesellschaftsspiele"}
+                    }
+                }
+            ),
+            _fetch_anonymous_ad_dimensions = fallback_mock,
+            _extract_category_from_ad_page = AsyncMock(return_value = "17/23"),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (15.0, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ):
+            ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        fallback_mock.assert_not_awaited()
+        assert ad_cfg.type == "OFFER"
+        assert ad_cfg.category == "17/23/gesellschaftsspiele"
+        assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
