@@ -158,28 +158,31 @@ diagnostics:
 **Cause:** the login lives in the browser profile, and each run only reuses the profile it is configured with. With an empty `browser.user_data_dir` the bot falls back to a workspace-local profile:
 
 - `--workspace-mode portable`: `<config dir>/.temp/browser-profile`
-- `--workspace-mode xdg`: `<XDG cache>/browser-profile`
+- `--workspace-mode xdg`: `<platformdirs.user_cache_dir("kleinanzeigen-bot")>/browser-profile`, e.g. `~/.cache/kleinanzeigen-bot/browser-profile` on Linux
 
 If your session lives somewhere else — because another caller sets an absolute `user_data_dir`, or because `--config` resolves to a different directory — the run starts without those cookies and has to log in again.
 
-**Diagnosis:** every run prints the profile it uses:
+**Diagnosis:** local browser runs log the profile they use; sessions connected through `--remote-debugging-port` log the session URL instead:
 
 ```bash
-# Linux/macOS
+# portable workspace: the default log sits next to the config file
 grep "Browser user data dir" kleinanzeigen_bot.log
 
-# Windows (PowerShell)
-Select-String -Path kleinanzeigen_bot.log -Pattern "Browser user data dir"
+# otherwise point at the log of that run: pass --logfile when starting the bot, or look in the
+# workspace log (portable: <config dir>/<log_basename>.log, xdg: <XDG state dir>/<log_basename>.log)
 ```
 
 If that path is not the profile holding your session, the run cannot reuse it.
 
-**Fix:** point every invocation at the same profile by setting an absolute path:
+**Fix:** point every invocation at the same profile, and keep the session:
 
 ```yaml
 browser:
   user_data_dir: "/home/you/.local/share/kleinanzeigen-bot/browser-profile"
+  use_private_window: false  # the default true adds --incognito, which keeps no cookies between runs
 ```
+
+Also check `browser.arguments`: a `--user-data-dir=...` argument wins over `browser.user_data_dir` (the bot logs `using the argument value`), so remove it or make both point to the same directory.
 
 **While the block page is shown:** do not keep retrying. Kleinanzeigen blocks the IP range temporarily and asks you to try again later, so repeated login attempts do not help — wait for the block to expire.
 
