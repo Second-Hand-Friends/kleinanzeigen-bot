@@ -3217,10 +3217,12 @@ class TestConditionSelector:
         assert handled is False
 
     @pytest.mark.asyncio
-    async def test_condition_no_trigger_id_uses_aria_haspopup_fallback(self, test_bot:KleinanzeigenBot) -> None:
-        """When trigger_info lacks an id, fall back to button[aria-haspopup] CSS probes."""
+    async def test_condition_no_trigger_id_uses_marked_button_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        """An ID-less condition trigger must not select the earlier photo-tips button."""
         hp_btn = MagicMock()
         hp_btn.click = AsyncMock()
+        photo_tips_btn = MagicMock()
+        photo_tips_btn.click = AsyncMock()
         dialog = MagicMock()
         radio = MagicMock()
         radio_attrs = MagicMock()
@@ -3240,8 +3242,10 @@ class TestConditionSelector:
             """Async side effect for mocking web_probe calls."""
             if selector_type == By.CSS_SELECTOR and 'input[type="radio"]' in selector_value and '"ok"' in selector_value:
                 return radio
-            if selector_type == By.CSS_SELECTOR and "aria-haspopup" in selector_value:
+            if selector_type == By.CSS_SELECTOR and selector_value == 'button[data-kab-condition-trigger="true"]':
                 return hp_btn
+            if selector_type == By.CSS_SELECTOR and "aria-haspopup" in selector_value:
+                return photo_tips_btn
             return None
 
         async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element:
@@ -3264,6 +3268,7 @@ class TestConditionSelector:
 
         assert handled is True
         hp_btn.click.assert_awaited_once()
+        photo_tips_btn.click.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_condition_no_trigger_id_and_no_aria_haspopup_raises(self, test_bot:KleinanzeigenBot) -> None:
