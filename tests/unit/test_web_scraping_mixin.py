@@ -818,6 +818,65 @@ class TestTimeoutAndRetryHelpers:
         assert text == "dummy-user"
         assert index == 1
 
+    @pytest.mark.asyncio
+    async def test_web_text_first_available_keeps_empty_visible_text_without_fallback(self, web_scraper:WebScrapingMixin) -> None:
+        """Without the fallback flag an unrendered element still yields empty text (existing behaviour)."""
+        mock_element = AsyncMock(spec = Element)
+        with (
+            patch.object(web_scraper, "web_find_first_available", new_callable = AsyncMock, return_value = (mock_element, 0)),
+            patch.object(web_scraper, "extract_visible_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(web_scraper, "extract_text_content", new_callable = AsyncMock, return_value = "angemeldet als: user@example.com") as text_content,
+        ):
+            text, index = await web_scraper.web_text_first_available([(By.CLASS_NAME, "mr-medium")], key = "login_detection")
+
+        assert not text
+        assert index == 0
+        text_content.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_web_text_first_available_falls_back_to_text_content_when_visible_text_empty(self, web_scraper:WebScrapingMixin) -> None:
+        """Elements inside display:none subtrees have no selection text; textContent must be used instead."""
+        mock_element = AsyncMock(spec = Element)
+        with (
+            patch.object(web_scraper, "web_find_first_available", new_callable = AsyncMock, return_value = (mock_element, 0)),
+            patch.object(web_scraper, "extract_visible_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(web_scraper, "extract_text_content", new_callable = AsyncMock, return_value = "angemeldet als: user@example.com"),
+        ):
+            text, index = await web_scraper.web_text_first_available(
+                [(By.CLASS_NAME, "mr-medium")], key = "login_detection", fallback_to_text_content = True
+            )
+
+        assert text == "angemeldet als: user@example.com"
+        assert index == 0
+
+    @pytest.mark.asyncio
+    async def test_web_text_first_available_prefers_visible_text_over_fallback(self, web_scraper:WebScrapingMixin) -> None:
+        """When visible text is present the fallback must not be consulted."""
+        mock_element = AsyncMock(spec = Element)
+        with (
+            patch.object(web_scraper, "web_find_first_available", new_callable = AsyncMock, return_value = (mock_element, 1)),
+            patch.object(web_scraper, "extract_visible_text", new_callable = AsyncMock, return_value = "dummy-user"),
+            patch.object(web_scraper, "extract_text_content", new_callable = AsyncMock) as text_content,
+        ):
+            text, index = await web_scraper.web_text_first_available(
+                [(By.ID, "a"), (By.ID, "b")], key = "login_detection", fallback_to_text_content = True
+            )
+
+        assert text == "dummy-user"
+        assert index == 1
+        text_content.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_extract_text_content_returns_element_apply_result(self, web_scraper:WebScrapingMixin) -> None:
+        """Reading textContent runs in the page and returns the script result as string."""
+        mock_element = AsyncMock(spec = Element)
+        mock_element.apply = AsyncMock(return_value = "angemeldet als: user@example.com")
+
+        text = await web_scraper.extract_text_content(mock_element)
+
+        assert text == "angemeldet als: user@example.com"
+        mock_element.apply.assert_awaited_once()
+
 
 class TestSelectorTimeoutMessages:
     """Ensure selector helpers provide informative timeout messages."""

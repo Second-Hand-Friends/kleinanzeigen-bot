@@ -861,12 +861,18 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
     quick_dom_timeout = web.timeout("quick_dom")
     tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
 
+    # The redesigned (Astro) start page renders the logged-in marker
+    # (<p class="mr-medium" data-testid="logged-in-user" title="<email>">angemeldet als: <email></p>)
+    # inside a header that is `display: none` at load time. Selection-based visible-text
+    # extraction returns "" for unrendered subtrees, which made valid sessions look logged out
+    # and triggered needless Auth0 logins. textContent/title still carry the account e-mail.
     try:
         user_info, matched_selector = await web.web_text_first_available(
             _LOGIN_DETECTION_SELECTORS,
             timeout = quick_dom_timeout,
             key = "quick_dom",
             description = "login_detection(quick_logged_in)",
+            fallback_to_text_content = True,
         )
         if username_lower in user_info.lower():
             matched_selector_display = (
@@ -894,6 +900,7 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
             timeout = login_check_timeout,
             key = "login_detection",
             description = "login_detection(selector_group)",
+            fallback_to_text_content = True,
         )
         if username_lower in user_info.lower():
             matched_selector_display = (

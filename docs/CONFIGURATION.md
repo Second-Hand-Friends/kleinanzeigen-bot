@@ -391,6 +391,7 @@ The bot uses a layered DOM-first approach to detect login status:
 
     - Looks for `.mr-medium` element containing username
     - Falls back to `#user-email` ID
+    - Uses the visible (selection-based) text first and falls back to `textContent`/`title` when the marker is not rendered (e.g. inside a `display: none` header on the redesigned start page)
     - Uses `login_detection` timeout (see [config.default.yaml](./config.default.yaml) for current default)
     - Minimizes bot-like behavior by avoiding JSON API requests
 

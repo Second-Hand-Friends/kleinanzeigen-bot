@@ -64,6 +64,22 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
+    async def test_has_logged_in_marker_requests_text_content_fallback(self, test_bot:KleinanzeigenBot) -> None:
+        """The marker on the redesigned start page sits in a display:none header, so the selection-based
+        text is empty; the lookup must request the textContent fallback to recognise the session."""
+        with patch.object(
+            test_bot,
+            "web_text_first_available",
+            new_callable = AsyncMock,
+            return_value = ("angemeldet als: dummy_user", 0),
+        ) as text_lookup:
+            assert await has_logged_in_marker(test_bot, username = "dummy_user") is True
+
+        text_lookup.assert_awaited_once()
+        assert text_lookup.await_args is not None
+        assert text_lookup.await_args.kwargs["fallback_to_text_content"] is True
+
+    @pytest.mark.asyncio
     async def test_has_logged_out_cta_requires_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
         matched_element = MagicMock(spec = Element)
         with (
