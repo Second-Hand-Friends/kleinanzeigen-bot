@@ -32,6 +32,9 @@ LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
+# Matches the ad_attributes tracking string in the classic ad page layout,
+# e.g. "ad_attributes":"art_s:tische|condition_s:alright|versand_s:f"
+_AD_ATTRIBUTES_RE:Final[re.Pattern[str]] = re.compile(r'"ad_attributes"\s*:\s*"([^"]*)"')
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 _ISLAND_ENVELOPE_LENGTH:Final[int] = 2
@@ -1021,6 +1024,18 @@ class AdExtractor(WebScrapingMixin):
 
         return category
 
+    @staticmethod
+    def _parse_ad_attributes(ad_attributes:str) -> dict[str, str]:
+        """Parse the ``ad_attributes`` tracking string into API key/value pairs.
+
+        ``versand_s`` is dropped because shipping is modelled separately.
+
+        :param ad_attributes: e.g. ``"art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"``
+        :return: a dictionary (possibly empty) mapping attribute names to their values
+        """
+        parsed = dict(item.split(":", 1) for item in ad_attributes.split("|") if ":" in item)
+        return {key: value for key, value in parsed.items() if not key.endswith(".versand_s") and key != "versand_s"}
+
     async def _extract_special_attributes_from_ad_page(self, belen_conf:dict[str, Any] | None) -> dict[str, str]:
         """
         Extracts the special attributes from an ad page.
@@ -1035,11 +1050,68 @@ class AdExtractor(WebScrapingMixin):
             special_attributes_str = opts.get("dimensions", {}).get("ad_attributes")
         else:
             special_attributes_str = None
-        if not special_attributes_str:
-            return await self._extract_special_attributes_from_dom()
-        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
-        special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith(".versand_s") and k != "versand_s"}
+        if special_attributes_str:
+            return self._parse_ad_attributes(special_attributes_str)
+
+        special_attributes = await self._extract_special_attributes_from_dom()
+        if special_attributes:
+            return special_attributes
+
+        # The redesigned (Astro) detail page exposes neither window.BelenConf nor
+        # the #viewad-details rows, so both sources above come up empty and the ad
+        # would silently lose its category attributes. The classic layout is still
+        # served to logged-out clients, so fall back to a single anonymous request.
+        return await self._extract_special_attributes_anonymously()
+
+    async def _extract_special_attributes_anonymously(self) -> dict[str, str]:
+        """Re-fetch the current ad page anonymously and read its attributes.
+
+        The redesigned detail page is served per account; the same URL requested
+        without a session still returns the classic layout, which carries the
+        canonical ``ad_attributes`` tracking string. At most one extra request is
+        made per ad, after the regular interaction delay.
+
+        :return: a dictionary (possibly empty) mapping attribute names to their values
+        """
+        ad_url = self.page.url
+        if not ad_url.startswith(("http://", "https://")):
+            LOG.warning("Cannot extract category attributes: unexpected ad page URL [%s].", ad_url)
+            return {}
+
+        await self.web_sleep()
+        page_source = await asyncio.to_thread(self._fetch_page_source_sync, ad_url, self.timeout("page_load"))
+        if page_source is None:
+            LOG.warning(
+                "Category attributes are incomplete for [%s]: the ad page exposed no attribute source "
+                "and the anonymous fallback request failed. Publishing this ad may fail on required attributes.",
+                ad_url,
+            )
+            return {}
+
+        match = _AD_ATTRIBUTES_RE.search(page_source)
+        if match is None:
+            LOG.warning(
+                "Category attributes are incomplete for [%s]: no attribute source found on the ad page "
+                "or in the anonymous fallback response. Publishing this ad may fail on required attributes.",
+                ad_url,
+            )
+            return {}
+
+        special_attributes = self._parse_ad_attributes(html.unescape(match.group(1)))
+        LOG.debug("Extracted special attributes from anonymous fallback request: %s", special_attributes)
         return special_attributes
+
+    @staticmethod
+    def _fetch_page_source_sync(url:str, timeout:float) -> str | None:
+        """Fetch a URL without cookies and return its decoded body, or None on failure."""
+        try:
+            with urllib_request.urlopen(url, timeout = timeout) as response:  # noqa: S310 Audit URL open for permitted schemes.
+                charset = response.headers.get_content_charset() or "utf-8"
+                return cast("bytes", response.read()).decode(charset, errors = "replace")
+        except (urllib_error.URLError, urllib_error.HTTPError, OSError, ValueError) as ex:
+            # URLError/HTTPError: network or server errors; OSError: socket timeouts; ValueError: malformed URL
+            LOG.debug("Anonymous fallback request to %s failed: %s", url, ex)
+            return None
 
     async def _extract_special_attributes_from_dom(self) -> dict[str, str]:
         """Extract special attributes from the ad details section as a fallback.

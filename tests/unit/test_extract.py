@@ -4,6 +4,7 @@
 import json  # isort: skip
 import asyncio
 import errno
+import logging
 import shutil
 import stat
 from pathlib import Path
@@ -1604,9 +1605,13 @@ class TestAdExtractorCategory:
     async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
         belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
-        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
+        with (
+            patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "_extract_special_attributes_anonymously", new_callable = AsyncMock, return_value = {}) as anonymous_fallback,
+        ):
             result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
             assert result == {}
+            anonymous_fallback.assert_awaited_once()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1719,6 +1724,91 @@ class TestAdExtractorCategory:
             result = await extractor._extract_special_attributes_from_dom()
 
         assert result == {}
+
+    @pytest.mark.parametrize(
+        ("ad_attributes", "expected"),
+        [
+            ("versand_s:t|condition_s:alright", {"condition_s": "alright"}),
+            ("wohnzimmer.versand_s:f|art_s:tische", {"art_s": "tische"}),
+            ("", {}),
+            ("malformed", {}),
+            ("note_s:size:large|art_s:tische", {"note_s": "size:large", "art_s": "tische"}),
+        ],
+    )
+    def test_parse_ad_attributes(self, ad_attributes:str, expected:dict[str, str]) -> None:
+        """Shipping keys are dropped and values may themselves contain a colon."""
+        assert extract_module.AdExtractor._parse_ad_attributes(ad_attributes) == expected
+
+    @pytest.mark.asyncio
+    async def test_extract_special_attributes_uses_anonymous_fallback(self, extractor:extract_module.AdExtractor) -> None:
+        """The redesigned page exposes neither source, so the anonymous response supplies the attributes."""
+        page_source = (
+            '<script>window.BelenConf={"universalAnalyticsOpts":{"dimensions":'
+            '{"ad_attributes":"versand_s:f|art_s:tische|condition_s:alright"}}}</script>'
+        )
+        extractor.page = MagicMock(url = "https://www.kleinanzeigen.de/s-anzeige/x/123-80-88")
+
+        with (
+            patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}),
+            patch.object(extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = page_source) as fetch,
+        ):
+            result = await extractor._extract_special_attributes_from_ad_page(None)
+
+        assert result == {"art_s": "tische", "condition_s": "alright"}
+        assert fetch.call_count == 1, "at most one extra request per ad"
+
+    @pytest.mark.asyncio
+    async def test_extract_special_attributes_anonymous_fallback_unescapes_values(self, extractor:extract_module.AdExtractor) -> None:
+        """HTML-escaped tracking payloads are decoded before parsing."""
+        extractor.page = MagicMock(url = "https://www.kleinanzeigen.de/s-anzeige/x/123-80-88")
+
+        with (
+            patch.object(extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = '"ad_attributes":"art_s:b&amp;o"'),
+        ):
+            result = await extractor._extract_special_attributes_anonymously()
+
+        assert result == {"art_s": "b&o"}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("page_source", [None, "<html>no tracking payload</html>"])
+    async def test_extract_special_attributes_anonymous_fallback_reports_incomplete(
+        self,
+        extractor:extract_module.AdExtractor,
+        caplog:pytest.LogCaptureFixture,
+        page_source:str | None,
+    ) -> None:
+        """A failed or unusable fallback is reported, not silently treated as 'no attributes'."""
+        extractor.page = MagicMock(url = "https://www.kleinanzeigen.de/s-anzeige/x/123-80-88")
+
+        with (
+            patch.object(extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = page_source),
+            caplog.at_level(logging.WARNING),
+        ):
+            result = await extractor._extract_special_attributes_anonymously()
+
+        assert result == {}
+        assert "incomplete" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_extract_special_attributes_anonymous_fallback_rejects_non_http_url(
+        self,
+        extractor:extract_module.AdExtractor,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Only http(s) ad URLs are re-requested."""
+        extractor.page = MagicMock(url = "file:///etc/passwd")
+
+        with (
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync") as fetch,
+            caplog.at_level(logging.WARNING),
+        ):
+            result = await extractor._extract_special_attributes_anonymously()
+
+        assert result == {}
+        fetch.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_special_attributes_falls_back_when_belen_conf_is_missing(self, extractor:extract_module.AdExtractor) -> None:

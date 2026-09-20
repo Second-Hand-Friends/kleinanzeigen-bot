@@ -658,6 +658,13 @@ kleinanzeigen_bot/price_reduction.py:
 #################################################
 kleinanzeigen_bot/extract.py:
 #################################################
+  _extract_special_attributes_anonymously:
+    "Cannot extract category attributes: unexpected ad page URL [%s].": "Kategorie-Merkmale können nicht ermittelt werden: unerwartete Anzeigen-URL [%s]."
+    ? "Category attributes are incomplete for [%s]: no attribute source found on the ad page or in the anonymous fallback response. Publishing this ad may fail on required attributes."
+    : "Kategorie-Merkmale für [%s] sind unvollständig: weder auf der Anzeigenseite noch in der anonymen Ersatzabfrage wurde eine Merkmalsquelle gefunden. Das Veröffentlichen dieser Anzeige kann an Pflichtfeldern scheitern."
+    ? "Category attributes are incomplete for [%s]: the ad page exposed no attribute source and the anonymous fallback request failed. Publishing this ad may fail on required attributes."
+    : "Kategorie-Merkmale für [%s] sind unvollständig: die Anzeigenseite bot keine Merkmalsquelle und die anonyme Ersatzabfrage schlug fehl. Das Veröffentlichen dieser Anzeige kann an Pflichtfeldern scheitern."
+
   _resolve_download_title:
     "Removed owned-ad status decoration from downloaded ad %s title.": "Statuspräfix aus dem Titel der eigenen heruntergeladenen Anzeige %s entfernt."
 
