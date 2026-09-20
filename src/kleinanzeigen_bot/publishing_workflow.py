@@ -32,7 +32,7 @@ from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import Config
 from .published_ads import PublishedAd, PublishedAdsFetchIncompleteError, ad_matches_id
 from .utils import loggers as _loggers
-from .utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
+from .utils.exceptions import AdBatchError, AdFormValidationError, CategoryResolutionError, PublishSubmissionUncertainError
 from .utils.i18n import pluralize
 from .utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
@@ -279,6 +279,25 @@ def _published_ad_ids(ads:list[PublishedAd]) -> set[int]:
     return result
 
 
+def _report_batch_result(mode:AdUpdateStrategy, succeeded:int, failed:int) -> None:
+    """Log the completed batch and propagate failures to the CLI exit handler."""
+    LOG.info("############################################")
+    if mode == AdUpdateStrategy.MODIFY:
+        if failed:
+            LOG.info("DONE: updated %s (%s failed)", pluralize("ad", succeeded), failed)
+        else:
+            LOG.info("DONE: updated %s", pluralize("ad", succeeded))
+    elif failed:
+        LOG.info("DONE: (Re-)published %s (%s failed)", pluralize("ad", succeeded), failed)
+    else:
+        LOG.info("DONE: (Re-)published %s", pluralize("ad", succeeded))
+    LOG.info("############################################")
+    if failed:
+        if mode == AdUpdateStrategy.MODIFY:
+            raise AdBatchError(_("Failed to update %s") % pluralize("ad", failed))
+        raise AdBatchError(_("Failed to publish %s") % pluralize("ad", failed))
+
+
 async def publish_ads(
     web:WebScrapingMixin,
     ad_cfgs:list[tuple[str, Ad, dict[str, Any]]],
@@ -380,6 +399,12 @@ async def publish_ads(
                 )
                 failed_count += 1
                 break
+            except AdFormValidationError as ex:
+                if capture_diagnostics:
+                    await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                LOG.error("Form rejected for '%s': %s. Correct the ad configuration before retrying.", ad_cfg.title, ex)
+                failed_count += 1
+                break
             except PublishSubmissionUncertainError as ex:
                 if capture_diagnostics:
                     await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
@@ -451,15 +476,7 @@ async def publish_ads(
                 root_url = root_url,
             )
 
-    LOG.info("############################################")
-    if failed_count > 0:
-        LOG.info(
-            "DONE: (Re-)published %s (%s failed after retries)",
-            pluralize("ad", count - failed_count), failed_count,
-        )
-    else:
-        LOG.info("DONE: (Re-)published %s", pluralize("ad", count))
-    LOG.info("############################################")
+    _report_batch_result(AdUpdateStrategy.REPLACE, count - failed_count, failed_count)
 
 
 async def update_ads(
@@ -532,6 +549,12 @@ async def update_ads(
                 break
             except asyncio.CancelledError:
                 raise
+            except AdFormValidationError as ex:
+                if capture_diagnostics:
+                    await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
+                LOG.error("Form rejected for '%s': %s. Correct the ad configuration before retrying.", ad_cfg.title, ex)
+                failed_count += 1
+                break
             except PublishSubmissionUncertainError as ex:
                 if capture_diagnostics:
                     await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
@@ -596,12 +619,4 @@ async def update_ads(
                     ad_cfg.title,
                 )
 
-    LOG.info("############################################")
-    if failed_count > 0:
-        LOG.info(
-            "DONE: updated %s (%s failed after retries)",
-            pluralize("ad", count - failed_count), failed_count,
-        )
-    else:
-        LOG.info("DONE: updated %s", pluralize("ad", count))
-    LOG.info("############################################")
+    _report_batch_result(AdUpdateStrategy.MODIFY, count - failed_count, failed_count)

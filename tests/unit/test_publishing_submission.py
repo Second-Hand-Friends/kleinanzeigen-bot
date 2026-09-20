@@ -5,7 +5,7 @@
 
 from collections.abc import Awaitable, Callable
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,7 +13,7 @@ from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
-from kleinanzeigen_bot.utils.exceptions import PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
 
@@ -58,6 +58,46 @@ def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
         return None
 
     return execute
+
+
+class TestFormValidation:
+    """Explicit rejection must terminate confirmation without ID recovery."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("empty_checks", [0, 1, 2], ids = ["immediate", "first-poll", "later-poll"])
+    async def test_reports_rejection_without_uncertain_submission_recovery(
+        self, test_bot:KleinanzeigenBot, empty_checks:int,
+    ) -> None:
+        # Use the real polling loop: it retries predicate exceptions, so rejection
+        # must be carried out of the predicate instead of raised inside it.
+        test_bot.browser = MagicMock(update_targets = AsyncMock())
+        errors = ["Art: Bitte gib einen Wert ein.", "Marke: Bitte gib einen Wert ein."]
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "timeout", return_value = 3.0),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "https://example.invalid/edit"),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock) as submit,
+            patch("kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page", new_callable = AsyncMock, return_value = False),
+            patch(
+                "kleinanzeigen_bot.publishing_submission._get_form_validation_errors",
+                new_callable = AsyncMock, side_effect = [[] for _ in range(empty_checks)] + [errors],
+            ) as validation,
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock) as tracking,
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads", new_callable = AsyncMock) as published,
+            pytest.raises(AdFormValidationError) as exc_info,
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+            )
+
+        assert str(exc_info.value) == "Ad form validation failed: " + "; ".join(errors)
+        assert validation.await_count == empty_checks + 1
+        submit.assert_awaited_once()
+        tracking.assert_not_awaited()
+        published.assert_not_awaited()
 
 
 class TestTrackingFallback:
@@ -500,6 +540,7 @@ class TestPublishedAdsRecovery:
             return bool(await condition())
 
         with (
+            patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -542,6 +583,7 @@ class TestPublishedAdsRecovery:
             return bool(await condition())
 
         with (
+            patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -573,6 +615,7 @@ class TestPublishedAdsRecovery:
             return bool(await condition())
 
         with (
+            patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -616,6 +659,7 @@ class TestPublishedAdsRecovery:
             return bool(await condition())
 
         with (
+            patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),

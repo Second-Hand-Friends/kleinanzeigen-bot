@@ -19,7 +19,7 @@ from . import captcha_flow, published_ads
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import CaptchaConfig
 from .utils import loggers as _loggers
-from .utils.exceptions import PublishSubmissionUncertainError
+from .utils.exceptions import AdFormValidationError, PublishSubmissionUncertainError
 from .utils.misc import ainput
 from .utils.web_scraping_mixin import By, WebScrapingMixin
 
@@ -164,6 +164,59 @@ _SUBMIT_LABELS:Final[tuple[str, ...]] = (
 )
 
 
+async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
+    """Read visible field errors from the ad form without collecting field values."""
+    result = await web.web_execute(r"""
+    (() => {
+        const form = document.getElementById('ad-title')?.closest('form');
+        if (!form) return [];
+        const visible = element => element && element.getClientRects().length > 0
+            && getComputedStyle(element).visibility !== 'hidden';
+        const text = element => (element?.innerText || '').replace(/\s+/g, ' ').trim();
+        const labels = [...form.querySelectorAll('label')];
+        const labelFor = element => {
+            let scope = element;
+            for (let depth = 0; depth < 6 && scope && scope !== form; depth++, scope = scope.parentElement) {
+                const controls = [scope, ...scope.querySelectorAll('input[id], select[id], textarea[id], button[id]')];
+                const matches = new Set();
+                for (const control of controls) {
+                    const label = labels.find(candidate => control.id && candidate.htmlFor === control.id);
+                    if (label && text(label)) matches.add(text(label));
+                }
+                if (matches.size === 1) return [...matches][0];
+                if (matches.size > 1) break;
+                const localLabels = scope.querySelectorAll('label');
+                if (localLabels.length === 1) return text(localLabels[0]);
+            }
+            return element.matches('input, select, textarea, button') ? element.getAttribute('name') || element.id || '' : '';
+        };
+        const errors = new Set();
+        const reportedElements = new Set();
+        const add = (element, message) => {
+            if (!message) return;
+            const label = labelFor(element);
+            errors.add(label ? `${label}: ${message}` : message);
+        };
+        for (const field of form.querySelectorAll('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid')) {
+            if (!visible(field)) continue;
+            const references = field.getAttribute('aria-errormessage')
+                || (field.getAttribute('aria-invalid') === 'true' ? field.getAttribute('aria-describedby') : '') || '';
+            const messages = references.trim().split(/\s+/).map(id => document.getElementById(id))
+                .filter(element => element && form.contains(element) && visible(element))
+                .map(element => { reportedElements.add(element); return text(element); }).filter(Boolean);
+            add(field, messages.join(' ') || field.validationMessage);
+        }
+        // The redesigned category controls reuse id="attribute-error" and do not
+        // consistently mark their inputs aria-invalid. Read every visible error.
+        for (const error of form.querySelectorAll('[id$="-error"]')) {
+            if (visible(error) && !reportedElements.has(error)) add(error, text(error));
+        }
+        return [...errors];
+    })()
+    """)
+    return [error for error in result if isinstance(error, str) and error.strip()] if isinstance(result, list) else []
+
+
 async def _click_submit_button(web:WebScrapingMixin) -> None:
     """Find and click the submit button across page variants.
 
@@ -202,6 +255,42 @@ async def _click_submit_button(web:WebScrapingMixin) -> None:
     await web.web_sleep()
 
 
+async def _handle_post_submit_prompts(web:WebScrapingMixin, *, has_images:bool) -> None:
+    """Dismiss optional prompts before waiting for publication confirmation."""
+    quick_dom = web.timeout("quick_dom")
+
+    # PostListingForm v2 may show an "Effektiver verkaufen" upsell
+    # dialog after clicking submit.  Dismiss it so the actual form
+    # POST can proceed.
+    upsell_dialog_text = await web.web_probe(By.TEXT, "Effektiver verkaufen", timeout = quick_dom)
+    if upsell_dialog_text is not None:
+        LOG.info("Dismissing upsell dialog...")
+        dismiss_btn = await web.web_find(By.TEXT, "Ohne Hochschieben weiter", timeout = quick_dom)
+        await dismiss_btn.click()
+        await web.web_sleep(500)  # let the dialog close animation finish
+
+    imprint_btn = await web.web_probe(By.ID, "imprint-guidance-submit", timeout = quick_dom)
+    if imprint_btn is not None:
+        await imprint_btn.click()
+
+    # check for no image question
+    if not has_images:
+        image_hint_button = await web.web_probe(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = quick_dom)
+        if image_hint_button is not None:
+            await image_hint_button.click()
+
+    #############################
+    # wait for payment form if commercial account is used
+    #############################
+    payment_form = await web.web_probe(By.ID, "myftr-shppngcrt-frm", timeout = quick_dom)
+    if payment_form is not None:
+        LOG.warning("############################################")
+        LOG.warning("# Payment form detected! Please proceed with payment.")
+        LOG.warning("############################################")
+        await web.web_scroll_page_down()
+        await ainput(_("Press a key to continue..."))
+
+
 async def submit_and_confirm_ad(
     web:WebScrapingMixin,
     ad_file:str,
@@ -219,6 +308,7 @@ async def submit_and_confirm_ad(
         The published ad ID.
 
     Raises:
+        AdFormValidationError: The form explicitly rejected the submitted values.
         PublishSubmissionUncertainError: The submission may have succeeded
             but the ad ID could not be recovered.
         RuntimeError: An internal invariant was violated (ad_id is None
@@ -248,61 +338,37 @@ async def submit_and_confirm_ad(
     pre_submit_referrer = str(await web.web_execute("document.referrer") or "")
     await _click_submit_button(web)
 
-    # Everything after the first click is uncertain: the ad may already have been submitted.
+    # After the first click, only explicit form rejection proves submission failed.
     ad_id:int | None = None
     idless_success_detected = False
+    validation_errors:list[str] = []
     try:
-        quick_dom = web.timeout("quick_dom")
+        validation_errors = await _get_form_validation_errors(web)
+        if validation_errors:
+            raise AdFormValidationError(_("Ad form validation failed: %s") % "; ".join(validation_errors))
 
-        # PostListingForm v2 may show an "Effektiver verkaufen" upsell
-        # dialog after clicking submit.  Dismiss it so the actual form
-        # POST can proceed.
-        upsell_dialog_text = await web.web_probe(By.TEXT, "Effektiver verkaufen", timeout = quick_dom)
-        if upsell_dialog_text is not None:
-            LOG.info("Dismissing upsell dialog...")
-            dismiss_btn = await web.web_find(By.TEXT, "Ohne Hochschieben weiter", timeout = quick_dom)
-            await dismiss_btn.click()
-            await web.web_sleep(500)  # let the dialog close animation finish
-
-        imprint_btn = await web.web_probe(By.ID, "imprint-guidance-submit", timeout = quick_dom)
-        if imprint_btn is not None:
-            await imprint_btn.click()
-
-        # check for no image question
-        if not ad_cfg.images:
-            image_hint_button = await web.web_probe(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = quick_dom)
-            if image_hint_button is not None:
-                await image_hint_button.click()
-
-        #############################
-        # wait for payment form if commercial account is used
-        #############################
-        payment_form = await web.web_probe(By.ID, "myftr-shppngcrt-frm", timeout = quick_dom)
-        if payment_form is not None:
-            LOG.warning("############################################")
-            LOG.warning("# Payment form detected! Please proceed with payment.")
-            LOG.warning("############################################")
-            await web.web_scroll_page_down()
-            await ainput(_("Press a key to continue..."))
+        await _handle_post_submit_prompts(web, has_images = bool(ad_cfg.images))
 
         confirmation_timeout = web.timeout("publishing_confirmation")
 
         async def _check_confirmation_state() -> bool:
-            """Check whether the submitted ad has reached a confirmed state.
-
-            Polls the confirmation page indicators and returns the ad ID when
-            confirmation is detected, or raises on timeout.
-            """
-            nonlocal idless_success_detected
+            """Stop polling on confirmation or explicit form rejection."""
+            nonlocal idless_success_detected, validation_errors
             url = str(await web.web_execute("window.location.href"))
             if "p-anzeige-aufgeben-bestaetigung.html?adId=" in url:
                 return True
             if await _is_idless_publish_success_page(web):
                 idless_success_detected = True
                 return True
-            return False
+            validation_errors = await _get_form_validation_errors(web)
+            # web_await retries predicate exceptions. Return a terminal state
+            # and raise outside it so deterministic rejection fails promptly.
+            return bool(validation_errors)
 
         await web.web_await(_check_confirmation_state, timeout = confirmation_timeout)
+
+        if validation_errors:
+            raise AdFormValidationError(_("Ad form validation failed: %s") % "; ".join(validation_errors))
 
         if idless_success_detected:
             if mode == AdUpdateStrategy.MODIFY:

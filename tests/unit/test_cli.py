@@ -18,7 +18,7 @@ import pytest
 
 from kleinanzeigen_bot import cli, runtime_config
 from kleinanzeigen_bot.utils import i18n, loggers
-from kleinanzeigen_bot.utils.exceptions import CaptchaEncountered
+from kleinanzeigen_bot.utils.exceptions import AdBatchError, CaptchaEncountered
 
 pytestmark = pytest.mark.unit
 
@@ -150,12 +150,13 @@ class TestCliMain:
     def _fake_bot() -> SimpleNamespace:
         return SimpleNamespace(close_browser_session = lambda: None, run = lambda args: object())
 
-    def test_main_forwards_unhandled_exceptions_to_error_handler(self, monkeypatch:pytest.MonkeyPatch) -> None:
+    @pytest.mark.parametrize("error", [RuntimeError("boom"), AdBatchError("Failed to publish 1 ad")])
+    def test_main_forwards_unhandled_exceptions_to_error_handler(self, monkeypatch:pytest.MonkeyPatch, error:Exception) -> None:
         handled:dict[str, object] = {}
 
         class FailingLoop:
             def run_until_complete(self, _coro:object) -> None:
-                raise RuntimeError("boom")
+                raise error
 
         def handle_exception(exc_type:object, exc:object, _traceback:object) -> None:
             handled.update(exc_type = exc_type, exc = exc)
@@ -168,8 +169,8 @@ class TestCliMain:
         with pytest.raises(SystemExit) as exc_info:
             cli.main(["script.py", "version"])
 
-        assert handled["exc_type"] is RuntimeError
-        assert str(handled["exc"]) == "boom"
+        assert handled["exc_type"] is type(error)
+        assert handled["exc"] is error
         assert exc_info.value.code == 1
 
     def test_main_reraises_captcha(self, monkeypatch:pytest.MonkeyPatch) -> None:
