@@ -12,6 +12,7 @@ from string import Formatter
 
 import json, mimetypes, re, shutil  # isort: skip
 import urllib.error as urllib_error
+import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +36,7 @@ BREADCRUMB_RE = re.compile(r"/c(\d+)")
 # Matches the ad_attributes tracking string in the classic ad page layout,
 # e.g. "ad_attributes":"art_s:tische|condition_s:alright|versand_s:f"
 _AD_ATTRIBUTES_RE:Final[re.Pattern[str]] = re.compile(r'"ad_attributes"\s*:\s*"([^"]*)"')
+_TRUSTED_AD_PAGE_HOSTS:Final[frozenset[str]] = frozenset({"kleinanzeigen.de", "www.kleinanzeigen.de"})
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
 _ISLAND_ENVELOPE_LENGTH:Final[int] = 2
@@ -61,6 +63,41 @@ _LABEL_TO_KEY:Final[dict[str, str]] = {
     "zustand": "condition_s",
 }
 DOWNLOAD_CREATION_DATE_SELECTOR:Final[str] = "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)"
+
+
+def is_trusted_ad_page_url(url:str) -> bool:
+    """Whether a URL may be requested by the anonymous attribute fallback.
+
+    Only https on a Kleinanzeigen host. Applied to the initial URL and to every
+    redirect target, so neither can point the request at an internal address.
+    """
+    try:
+        parsed = urllib_parse.urlparse(url)
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and (parsed.hostname or "").lower() in _TRUSTED_AD_PAGE_HOSTS
+
+
+class _TrustedHostRedirectHandler(urllib_request.HTTPRedirectHandler):
+    """Follows redirects only while they stay on a trusted host.
+
+    Returning ``None`` makes urllib raise the underlying ``HTTPError`` instead of
+    following the redirect, which the caller treats as a failed fetch.
+    """
+
+    def redirect_request(  # noqa: PLR0917 signature is fixed by urllib
+        self,
+        req:urllib_request.Request,
+        fp:Any,
+        code:int,
+        msg:str,
+        headers:Any,
+        newurl:str,
+    ) -> urllib_request.Request | None:
+        if not is_trusted_ad_page_url(newurl):
+            LOG.debug("Blocked untrusted redirect target during anonymous fallback: %s", newurl)
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _is_retryable_rmtree_error(error:BaseException) -> bool:
@@ -1074,7 +1111,7 @@ class AdExtractor(WebScrapingMixin):
         :return: a dictionary (possibly empty) mapping attribute names to their values
         """
         ad_url = self.page.url
-        if not ad_url.startswith(("http://", "https://")):
+        if not is_trusted_ad_page_url(ad_url):
             LOG.warning("Cannot extract category attributes: unexpected ad page URL [%s].", ad_url)
             return {}
 
@@ -1103,13 +1140,19 @@ class AdExtractor(WebScrapingMixin):
 
     @staticmethod
     def _fetch_page_source_sync(url:str, timeout:float) -> str | None:
-        """Fetch a URL without cookies and return its decoded body, or None on failure."""
+        """Fetch a trusted URL without cookies and return its decoded body, or None on failure.
+
+        Redirects are followed only while they stay on a trusted host, so a
+        redirect cannot steer the request at an internal address.
+        """
+        opener = urllib_request.build_opener(_TrustedHostRedirectHandler)
         try:
-            with urllib_request.urlopen(url, timeout = timeout) as response:  # noqa: S310 Audit URL open for permitted schemes.
+            with opener.open(url, timeout = timeout) as response:  # noqa: S310 Audit URL open for permitted schemes.
                 charset = response.headers.get_content_charset() or "utf-8"
                 return cast("bytes", response.read()).decode(charset, errors = "replace")
         except (urllib_error.URLError, urllib_error.HTTPError, OSError, ValueError) as ex:
-            # URLError/HTTPError: network or server errors; OSError: socket timeouts; ValueError: malformed URL
+            # URLError/HTTPError: network, server or blocked-redirect errors;
+            # OSError: socket timeouts; ValueError: malformed URL
             LOG.debug("Anonymous fallback request to %s failed: %s", url, ex)
             return None
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Final, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.error import URLError
+from urllib.request import Request
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -1790,21 +1791,70 @@ class TestAdExtractorCategory:
             result = await extractor._extract_special_attributes_anonymously()
 
         assert result == {}
-        assert "incomplete" in caplog.text
+        # Level only, not wording: #1257 asks for missing attributes to be reported
+        # rather than silently recorded as "this ad has none".
+        assert any(record.levelno == logging.WARNING for record in caplog.records)
+
+    @pytest.mark.parametrize(
+        ("url", "trusted"),
+        [
+            ("https://www.kleinanzeigen.de/s-anzeige/x/123-80-88", True),
+            ("https://kleinanzeigen.de/s-anzeige/x/123-80-88", True),
+            ("http://www.kleinanzeigen.de/s-anzeige/x/123-80-88", False),  # plaintext
+            ("https://kleinanzeigen.de.evil.example/x", False),  # suffix lookalike
+            ("https://evil.example/x", False),
+            ("https://127.0.0.1/x", False),
+            ("https://[::1]/x", False),
+            ("file:///etc/passwd", False),
+            ("", False),
+            ("https://[oops", False),  # urlparse raises ValueError
+        ],
+    )
+    def test_is_trusted_ad_page_url(self, url:str, trusted:bool) -> None:
+        """Only https on a Kleinanzeigen host may be requested."""
+        assert extract_module.is_trusted_ad_page_url(url) is trusted
+
+    @pytest.mark.parametrize(
+        ("newurl", "followed"),
+        [
+            ("https://www.kleinanzeigen.de/s-anzeige/x/123-80-88", True),
+            ("https://evil.example/x", False),
+            ("http://www.kleinanzeigen.de/x", False),
+            ("https://169.254.169.254/latest/meta-data/", False),
+        ],
+    )
+    def test_redirect_handler_only_follows_trusted_targets(self, newurl:str, followed:bool) -> None:
+        """A redirect cannot steer the fallback request off the trusted host."""
+        handler = extract_module._TrustedHostRedirectHandler()
+        request = Request("https://www.kleinanzeigen.de/s-anzeige/x/123-80-88")  # noqa: S310 trusted literal
+
+        result = handler.redirect_request(request, MagicMock(), 301, "Moved", {}, newurl)
+
+        assert (result is not None) is followed
+
+    @pytest.mark.asyncio
+    async def test_extract_special_attributes_anonymous_fallback_rejects_untrusted_host(
+        self,
+        extractor:extract_module.AdExtractor,
+    ) -> None:
+        """An unexpected ad page host is never re-requested."""
+        extractor.page = MagicMock(url = "https://evil.example/s-anzeige/x/123-80-88")
+
+        with patch.object(extract_module.AdExtractor, "_fetch_page_source_sync") as fetch:
+            result = await extractor._extract_special_attributes_anonymously()
+
+        assert result == {}
+        fetch.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_special_attributes_anonymous_fallback_rejects_non_http_url(
         self,
         extractor:extract_module.AdExtractor,
-        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Only http(s) ad URLs are re-requested."""
+        """Only https ad URLs are re-requested."""
         extractor.page = MagicMock(url = "file:///etc/passwd")
 
-        with (
-            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync") as fetch,
-            caplog.at_level(logging.WARNING),
-        ):
+        with patch.object(extract_module.AdExtractor, "_fetch_page_source_sync") as fetch:
             result = await extractor._extract_special_attributes_anonymously()
 
         assert result == {}
@@ -1826,17 +1876,20 @@ class TestAdExtractorCategory:
         response.__enter__.return_value = response
         response.__exit__.return_value = False
 
-        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", return_value = response) as urlopen:
-            result = extract_module.AdExtractor._fetch_page_source_sync("https://example.invalid/ad", 7.5)
+        with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
+            result = extract_module.AdExtractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 7.5)
 
         assert result == expected
-        assert urlopen.call_args.kwargs["timeout"] == 7.5
+        assert build_opener.return_value.open.call_args.kwargs["timeout"] == 7.5
+        assert build_opener.call_args.args == (extract_module._TrustedHostRedirectHandler,)
 
     @pytest.mark.parametrize("error", [URLError("boom"), OSError("timed out"), ValueError("bad url")])
     def test_fetch_page_source_sync_returns_none_on_error(self, error:Exception) -> None:
         """Network, socket and URL errors are swallowed so the download can continue."""
-        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", side_effect = error):
-            assert extract_module.AdExtractor._fetch_page_source_sync("https://example.invalid/ad", 5.0) is None
+        with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = error
+            assert extract_module.AdExtractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 5.0) is None
 
     @pytest.mark.asyncio
     async def test_extract_special_attributes_falls_back_when_belen_conf_is_missing(self, extractor:extract_module.AdExtractor) -> None:
