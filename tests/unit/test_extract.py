@@ -1810,6 +1810,34 @@ class TestAdExtractorCategory:
         assert result == {}
         fetch.assert_not_called()
 
+    @pytest.mark.parametrize(
+        ("charset", "expected"),
+        [
+            ("utf-8", "Grün"),
+            ("iso-8859-1", "GrÃ¼n"),  # body is utf-8 bytes; a declared latin-1 charset decodes them differently
+            (None, "Grün"),  # no charset declared -> utf-8
+        ],
+    )
+    def test_fetch_page_source_sync_decodes_body(self, charset:str | None, expected:str) -> None:
+        """The response is decoded with the declared charset, defaulting to utf-8."""
+        response = MagicMock()
+        response.headers.get_content_charset.return_value = charset
+        response.read.return_value = "Grün".encode()
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+
+        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", return_value = response) as urlopen:
+            result = extract_module.AdExtractor._fetch_page_source_sync("https://example.invalid/ad", 7.5)
+
+        assert result == expected
+        assert urlopen.call_args.kwargs["timeout"] == 7.5
+
+    @pytest.mark.parametrize("error", [URLError("boom"), OSError("timed out"), ValueError("bad url")])
+    def test_fetch_page_source_sync_returns_none_on_error(self, error:Exception) -> None:
+        """Network, socket and URL errors are swallowed so the download can continue."""
+        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", side_effect = error):
+            assert extract_module.AdExtractor._fetch_page_source_sync("https://example.invalid/ad", 5.0) is None
+
     @pytest.mark.asyncio
     async def test_extract_special_attributes_falls_back_when_belen_conf_is_missing(self, extractor:extract_module.AdExtractor) -> None:
         """Use the DOM fallback when BelenConf is unavailable."""
