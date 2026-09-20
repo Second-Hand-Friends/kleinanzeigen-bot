@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Exercise form-validation selectors in an isolated browser on offline HTML."""
 
+import json
 import platform
 from pathlib import Path
 
@@ -17,8 +18,7 @@ pytestmark = [pytest.mark.itest, pytest.mark.slow, pytest.mark.asyncio]
 @pytest.mark.flaky(reruns = 5, reruns_delay = 10, only_rerun = ["Failed to connect to browser"])
 async def test_visible_field_errors_are_labelled_without_reading_values(tmp_path:Path) -> None:
     """Cover native, ARIA and repeated category error IDs from the new form."""
-    page = tmp_path / "validation.html"
-    page.write_text("""<!doctype html><html lang="en"><body>
+    html = """<!doctype html><html lang="en"><body>
         <div id="outside-error">Outside the ad form</div>
         <form>
             <label for="ad-title">Title</label><input id="ad-title" value="Private title">
@@ -57,7 +57,7 @@ async def test_visible_field_errors_are_labelled_without_reading_values(tmp_path
             <input aria-invalid="true" aria-describedby="hint-only">
             <div id="hint-only">A hint is not an error message</div>
         </form>
-        </body></html>""", encoding = "utf-8")
+        </body></html>"""
 
     web = WebScrapingMixin()
     web.browser_config.user_data_dir = str(tmp_path / "browser-profile")
@@ -66,7 +66,14 @@ async def test_visible_field_errors_are_labelled_without_reading_values(tmp_path
         web.browser_config.arguments.append("--no-sandbox")
     try:
         await web.create_browser_session()
-        await web.web_open(page.as_uri())
+        await web.web_open("about:blank")
+        # Snap Chromium cannot read the host's /tmp fixture through a file URL.
+        # Populate an isolated blank document so the test stays fully offline.
+        await web.web_execute(f"""(() => {{
+            document.open();
+            document.write({json.dumps(html)});
+            document.close();
+        }})()""")
         await web.web_await(
             lambda: web.web_execute("document.getElementById('native') !== null"),
             timeout = 10,
