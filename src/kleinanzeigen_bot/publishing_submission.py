@@ -199,10 +199,13 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
         };
         for (const field of form.querySelectorAll('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid')) {
             if (!visible(field)) continue;
-            const references = field.getAttribute('aria-errormessage')
+            const errorReferences = field.getAttribute('aria-errormessage');
+            const references = errorReferences
                 || (field.getAttribute('aria-invalid') === 'true' ? field.getAttribute('aria-describedby') : '') || '';
             const messages = references.trim().split(/\s+/).map(id => document.getElementById(id))
                 .filter(element => element && form.contains(element) && visible(element))
+                // Descriptions can be hints; the live brand control marks its error text-critical.
+                .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], .text-critical'))
                 .map(element => { reportedElements.add(element); return text(element); }).filter(Boolean);
             add(field, messages.join(' ') || field.validationMessage);
         }

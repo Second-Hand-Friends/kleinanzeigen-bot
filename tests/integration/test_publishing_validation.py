@@ -14,6 +14,7 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 pytestmark = [pytest.mark.itest, pytest.mark.slow, pytest.mark.asyncio]
 
 
+@pytest.mark.flaky(reruns = 5, reruns_delay = 10, only_rerun = ["Failed to connect to browser"])
 async def test_visible_field_errors_are_labelled_without_reading_values(tmp_path:Path) -> None:
     """Cover native, ARIA and repeated category error IDs from the new form."""
     page = tmp_path / "validation.html"
@@ -36,7 +37,7 @@ async def test_visible_field_errors_are_labelled_without_reading_values(tmp_path
             <div>
                 <label for="brand">Marke</label>
                 <input id="brand" value="private-brand" aria-invalid="true" aria-describedby="brand-description">
-                <div id="brand-description">Bitte gib einen Wert ein.</div>
+                <div id="brand-description" class="text-critical">Bitte gib einen Wert ein.</div>
             </div>
             <div>
                 <label for="price">Preis</label>
@@ -53,16 +54,24 @@ async def test_visible_field_errors_are_labelled_without_reading_values(tmp_path
             <div hidden><input required><div id="hidden-error">Hidden error</div></div>
             <div style="visibility:hidden" id="invisible-error">Invisible error</div>
             <input hidden aria-invalid="true" aria-errormessage="outside-error">
+            <input aria-invalid="true" aria-describedby="hint-only">
+            <div id="hint-only">A hint is not an error message</div>
         </form>
         </body></html>""", encoding = "utf-8")
 
     web = WebScrapingMixin()
+    web.browser_config.user_data_dir = str(tmp_path / "browser-profile")
     web.browser_config.arguments.append("--headless=new")
     if platform.system() == "Linux":
         web.browser_config.arguments.append("--no-sandbox")
     try:
         await web.create_browser_session()
         await web.web_open(page.as_uri())
+        await web.web_await(
+            lambda: web.web_execute("document.getElementById('native') !== null"),
+            timeout = 10,
+            timeout_error_message = "Offline validation fixture did not load",
+        )
         native_message = await web.web_execute("document.getElementById('native').validationMessage")
         errors = await publishing_submission._get_form_validation_errors(web)
         assert set(errors) == {
