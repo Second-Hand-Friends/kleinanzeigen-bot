@@ -1015,6 +1015,7 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
     # so use JS to locate the trigger.
     trigger_info = await web.web_execute("""
     (() => {
+        document.querySelectorAll('[data-kab-condition-trigger]').forEach(el => el.removeAttribute('data-kab-condition-trigger'));
         const labels = document.querySelectorAll('label[for*=".condition"]');
         for (const lbl of labels) {
             // Walk up to find a common ancestor, then search for the button within it
@@ -1022,6 +1023,7 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
             for (let depth = 0; depth < 5 && ancestor; depth++) {
                 const btn = ancestor.querySelector('button[aria-haspopup="dialog"], button[aria-haspopup="true"]');
                 if (btn) {
+                    btn.setAttribute('data-kab-condition-trigger', 'true');
                     return JSON.stringify({found: true, id: btn.id || '', ariaControls: btn.getAttribute('aria-controls') || ''});
                 }
                 ancestor = ancestor.parentElement;
@@ -1066,16 +1068,12 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
 
     try:
         # Click the trigger button via JS (we located it above but need the actual element).
-        # Use CSS to find the dialog-open button by id if available, otherwise by text.
+        # Use its ID when available; otherwise use the marker on the located button.
         if trigger_id:
             trigger_btn = await web.web_find(By.ID, trigger_id, timeout = short_timeout)
             await trigger_btn.click()
         else:
-            hp_btn:Element | None = None
-            for hp_sel in ("button[aria-haspopup='dialog']", "button[aria-haspopup='true']"):
-                hp_btn = await web.web_probe(By.CSS_SELECTOR, hp_sel, timeout = short_timeout)
-                if hp_btn is not None:
-                    break
+            hp_btn = await web.web_probe(By.CSS_SELECTOR, 'button[data-kab-condition-trigger="true"]', timeout = short_timeout)
             if hp_btn is None:
                 raise TimeoutError(_("Condition dialog trigger button not found"))
             await hp_btn.click()
