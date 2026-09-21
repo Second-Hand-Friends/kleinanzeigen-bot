@@ -372,7 +372,7 @@ jobs:
 
     steps:
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
     - name: Create and push multi-arch manifest
       run: |
@@ -427,7 +427,7 @@ jobs:
 
 
     - name: Publish unit-test coverage
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v5.0.0
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -440,7 +440,7 @@ jobs:
 
 
     - name: Publish integration-test coverage
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v5.0.0
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
@@ -453,7 +453,7 @@ jobs:
 
 
     - name: Publish smoke-test coverage
-      uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v5.0.0
+      uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v5.0.0
       # https://github.com/codecov/codecov-action
       with:
         slug: ${{ github.repository }}
