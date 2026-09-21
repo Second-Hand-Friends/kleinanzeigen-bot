@@ -4,6 +4,7 @@
 import asyncio
 import errno
 import html
+import http.client as http_client
 import os
 import stat
 import time
@@ -1126,9 +1127,11 @@ class AdExtractor(WebScrapingMixin):
             with opener.open(request, timeout = timeout) as response:
                 charset = response.headers.get_content_charset() or "utf-8"
                 return cast("bytes", response.read()).decode(charset, errors = "replace")
-        except (urllib_error.URLError, urllib_error.HTTPError, OSError, ValueError) as ex:
+        except (urllib_error.URLError, urllib_error.HTTPError, OSError, ValueError, http_client.HTTPException) as ex:
             # URLError/HTTPError: network, server or blocked-redirect errors;
-            # OSError: socket timeouts; ValueError: malformed URL
+            # OSError: socket timeouts; ValueError: malformed URL;
+            # HTTPException: truncated or malformed response while reading the body - it does not
+            # inherit from OSError, so without it an IncompleteRead would abort the whole download
             LOG.debug("Anonymous fallback request to %s failed: %s", url, ex)
             return None
 

@@ -6,6 +6,7 @@ import asyncio
 import errno
 import shutil
 import stat
+from http.client import IncompleteRead
 from pathlib import Path
 from typing import Any, Final, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
@@ -3870,7 +3871,16 @@ class TestAdExtractorAnonymousFallback:
         assert build_opener.return_value.open.call_args.kwargs["timeout"] == 7.5
         assert isinstance(build_opener.call_args.args[0], extract_module._TrustedHostRedirectHandler)
 
-    @pytest.mark.parametrize("error", [URLError("boom"), OSError("timed out"), ValueError("bad url")])
+    @pytest.mark.parametrize(
+        "error",
+        [
+            URLError("boom"),
+            OSError("timed out"),
+            ValueError("bad url"),
+            # HTTPException does not inherit from OSError; it must not escape the fallback
+            IncompleteRead(b"partial"),
+        ],
+    )
     def test_fetch_page_source_sync_returns_none_on_error(self, test_extractor:extract_module.AdExtractor, error:Exception) -> None:
         """Network, socket and URL errors are swallowed so the download can continue."""
         with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
