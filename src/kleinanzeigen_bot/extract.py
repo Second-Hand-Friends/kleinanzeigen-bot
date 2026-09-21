@@ -7,12 +7,13 @@ import html
 import os
 import stat
 import time
+from collections.abc import Callable
 from gettext import gettext as _
 from string import Formatter
 
 import json, mimetypes, re, shutil  # isort: skip
-from nodriver.cdp import target as cdp_target  # isort: skip
 import urllib.error as urllib_error
+import urllib.parse as urllib_parse
 import urllib.request as urllib_request
 from datetime import datetime
 from pathlib import Path
@@ -50,7 +51,6 @@ _AD_ATTRIBUTES_RE:Final[re.Pattern[str]] = re.compile(r'"ad_attributes"\s*:\s*"(
 # ad_type as published in the dimensions; the anonymous ad page uses "OFFERED", BelenConf "OFFER"
 _AD_TYPE_DIMENSION_TO_API:Final[dict[str, str]] = {"OFFER": "OFFER", "OFFERED": "OFFER", "WANTED": "WANTED"}
 _AD_PAGE_URL_PREFIX:Final[str] = "https://www.kleinanzeigen.de/s-anzeige/"
-_ANONYMOUS_LOAD_POLL_INTERVAL_SECONDS:Final[float] = 0.2
 _OWNED_AD_TITLE_DECORATION_PREFIXES:Final[tuple[str, ...]] = ("Gelöscht",)
 _OWNED_AD_TITLE_DECORATION_RE:Final[re.Pattern[str]] = re.compile(
     rf"^(?:{'|'.join(re.escape(prefix) for prefix in _OWNED_AD_TITLE_DECORATION_PREFIXES)})\s*•\s*"
@@ -67,6 +67,31 @@ _LABEL_TO_KEY:Final[dict[str, str]] = {
     "zustand": "condition_s",
 }
 DOWNLOAD_CREATION_DATE_SELECTOR:Final[str] = "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)"
+
+
+class _TrustedHostRedirectHandler(urllib_request.HTTPRedirectHandler):
+    """Follows redirects only while ``is_trusted`` accepts the target.
+
+    Returning ``None`` makes urllib raise the underlying ``HTTPError`` instead of
+    following the redirect, which the caller treats as a failed fetch.
+    """
+
+    def __init__(self, is_trusted:Callable[[str], bool]) -> None:
+        self._is_trusted = is_trusted
+
+    def redirect_request(  # noqa: PLR0917 signature is fixed by urllib
+        self,
+        req:urllib_request.Request,
+        fp:Any,
+        code:int,
+        msg:str,
+        headers:Any,
+        newurl:str,
+    ) -> urllib_request.Request | None:
+        if not self._is_trusted(newurl):
+            LOG.debug("Blocked untrusted redirect target during anonymous fallback: %s", newurl)
+            return None
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
 def _is_retryable_rmtree_error(error:BaseException) -> bool:
@@ -1057,16 +1082,16 @@ class AdExtractor(WebScrapingMixin):
 
         The redesigned ad page carries neither ``window.BelenConf`` nor the legacy ad details
         markup, but the same URL served to an anonymous visitor still embeds the canonical
-        dimensions (``ad_attributes``, ``ad_type``, ``l3_category_id``). Exactly one page load is
-        performed, in a throwaway incognito context, after the regular interaction delay, and
-        only when the already loaded page had no dimensions.
+        dimensions (``ad_attributes``, ``ad_type``, ``l3_category_id``). Exactly one request is
+        made, without session cookies, after the regular interaction delay, and only when the
+        already loaded page had no dimensions.
 
         :return: the dimension dictionary, or ``None`` when the request or the extraction failed
         """
         url = f"{_AD_PAGE_URL_PREFIX}{ad_id}"
 
         await self.web_sleep()
-        page_html = await self._fetch_page_source_anonymously(url)
+        page_html = await asyncio.to_thread(self._fetch_page_source_sync, url, self.timeout("page_load"))
         if page_html is None:
             LOG.warning("Ad %s: anonymous fallback request failed.", ad_id)
             return None
@@ -1076,49 +1101,36 @@ class AdExtractor(WebScrapingMixin):
             LOG.warning("Ad %s: anonymous fallback response contains no usable ad dimensions.", ad_id)
         return dimensions
 
-    async def _fetch_page_source_anonymously(self, url:str) -> str | None:
-        """Load ``url`` in a throwaway incognito context and return its HTML, or None on failure.
+    def _is_trusted_ad_page_url(self, url:str) -> bool:
+        """Whether the anonymous fallback may request ``url``: https on a Kleinanzeigen host.
 
-        This deliberately uses the running browser instead of an HTTP client: an ``urllib``
-        request carries a ``Python-urllib`` user agent and a non-browser TLS fingerprint, which
-        would mark the run as automated from the same IP as the logged-in session. The extra
-        browser context has its own cookie jar, so the ad page is served the logged-out (classic)
-        layout while the session itself stays untouched.
+        Reuses :meth:`WebScrapingMixin._is_kleinanzeigen_page` for the host check and only adds
+        the scheme requirement, so there is a single definition of "our host".
         """
-        page_timeout = self.effective_timeout("page_load")
-        tab = None
-        context_id = None
         try:
-            async with asyncio.timeout(page_timeout):
-                # a fresh context owns no window yet, so the target has to be created with one;
-                # create_context returns before navigation finishes, hence the explicit get()
-                tab = await self.browser.create_context("about:blank", new_window = True)
-                # nodriver types `tab.target` loosely; at runtime it carries the TargetInfo
-                context_id = getattr(tab.target, "browser_context_id", None)
-                await tab.get(url)
-                while True:
-                    location = str(await tab.evaluate("document.location.href"))
-                    ready_state = str(await tab.evaluate("document.readyState"))
-                    if location.startswith(_AD_PAGE_URL_PREFIX) and ready_state == "complete":
-                        break
-                    await asyncio.sleep(_ANONYMOUS_LOAD_POLL_INTERVAL_SECONDS)
-                return str(await tab.get_content())
-        except Exception as ex:  # noqa: BLE001 the fallback must never abort the download
+            scheme = urllib_parse.urlparse(url).scheme
+        except ValueError:
+            return False
+        return scheme == "https" and self._is_kleinanzeigen_page(url)
+
+    def _fetch_page_source_sync(self, url:str, timeout:float) -> str | None:
+        """Fetch a trusted URL without cookies and return its decoded body, or None on failure.
+
+        The caller builds the URL from the ad id, so it is trusted by construction; redirects are
+        followed only while they stay on a trusted host, so one cannot steer the request at an
+        internal address.
+        """
+        opener = urllib_request.build_opener(_TrustedHostRedirectHandler(self._is_trusted_ad_page_url))
+        request = urllib_request.Request(url, headers = {"Accept-Language": "de-DE,de;q=0.9"})  # noqa: S310 caller builds the URL
+        try:
+            with opener.open(request, timeout = timeout) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                return cast("bytes", response.read()).decode(charset, errors = "replace")
+        except (urllib_error.URLError, urllib_error.HTTPError, OSError, ValueError) as ex:
+            # URLError/HTTPError: network, server or blocked-redirect errors;
+            # OSError: socket timeouts; ValueError: malformed URL
             LOG.debug("Anonymous fallback request to %s failed: %s", url, ex)
             return None
-        finally:
-            await self._dispose_browser_context(tab, context_id)
-
-    async def _dispose_browser_context(self, tab:Any, context_id:Any) -> None:
-        """Close a throwaway incognito context, ignoring teardown failures."""
-        try:
-            if context_id is not None:
-                # disposing the context also closes every target inside it
-                await self.browser.send(cdp_target.dispose_browser_context(context_id))
-            elif tab is not None:
-                await tab.close()
-        except Exception as ex:  # noqa: BLE001 teardown must not mask the extraction result
-            LOG.debug("Failed to dispose the anonymous browser context: %s", ex)
 
     @staticmethod
     def _parse_ad_dimensions_html(page_html:str) -> dict[str, Any] | None:

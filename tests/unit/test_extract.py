@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Final, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.error import URLError
+from urllib.request import Request
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -3805,79 +3806,104 @@ class TestAdExtractorAnonymousFallback:
 
         assert parsed == {"ad_attributes": "art_s:b&o"}
 
+    @pytest.mark.parametrize(
+        ("url", "trusted"),
+        [
+            ("https://www.kleinanzeigen.de/s-anzeige/123", True),
+            ("https://kleinanzeigen.de/s-anzeige/123", True),
+            ("http://www.kleinanzeigen.de/s-anzeige/123", False),  # plaintext
+            ("https://kleinanzeigen.de.evil.example/x", False),  # suffix lookalike
+            ("https://evil.example/x", False),
+            ("https://127.0.0.1/x", False),
+            ("https://169.254.169.254/latest/meta-data/", False),
+            ("file:///etc/passwd", False),
+            ("", False),
+        ],
+    )
+    def test_is_trusted_ad_page_url(self, test_extractor:extract_module.AdExtractor, url:str, trusted:bool) -> None:
+        """Only https on a Kleinanzeigen host may be requested."""
+        assert test_extractor._is_trusted_ad_page_url(url) is trusted
+
+    @pytest.mark.parametrize(
+        ("newurl", "followed"),
+        [
+            ("https://www.kleinanzeigen.de/s-anzeige/123", True),
+            ("https://evil.example/x", False),
+            ("http://www.kleinanzeigen.de/x", False),
+            ("https://169.254.169.254/latest/meta-data/", False),
+        ],
+    )
+    def test_redirect_handler_only_follows_trusted_targets(
+        self, test_extractor:extract_module.AdExtractor, newurl:str, followed:bool
+    ) -> None:
+        """A redirect cannot steer the fallback request off the trusted host."""
+        handler = extract_module._TrustedHostRedirectHandler(test_extractor._is_trusted_ad_page_url)
+        request = Request("https://www.kleinanzeigen.de/s-anzeige/123")  # noqa: S310 trusted literal
+
+        result = handler.redirect_request(request, MagicMock(), 301, "Moved", {}, newurl)
+
+        assert (result is not None) is followed
+
+    @pytest.mark.parametrize(
+        ("charset", "expected"),
+        [
+            ("utf-8", "Grün"),
+            ("iso-8859-1", "GrÃ¼n"),  # body is utf-8 bytes; a declared latin-1 charset decodes them differently
+            (None, "Grün"),  # no charset declared -> utf-8
+        ],
+    )
+    def test_fetch_page_source_sync_decodes_body(
+        self, test_extractor:extract_module.AdExtractor, charset:str | None, expected:str
+    ) -> None:
+        """The response is decoded with the declared charset, defaulting to utf-8."""
+        response = MagicMock()
+        response.headers.get_content_charset.return_value = charset
+        response.read.return_value = "Grün".encode()
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+
+        with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
+            result = test_extractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 7.5)
+
+        assert result == expected
+        assert build_opener.return_value.open.call_args.kwargs["timeout"] == 7.5
+        assert isinstance(build_opener.call_args.args[0], extract_module._TrustedHostRedirectHandler)
+
+    @pytest.mark.parametrize("error", [URLError("boom"), OSError("timed out"), ValueError("bad url")])
+    def test_fetch_page_source_sync_returns_none_on_error(self, test_extractor:extract_module.AdExtractor, error:Exception) -> None:
+        """Network, socket and URL errors are swallowed so the download can continue."""
+        with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = error
+            assert test_extractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 5.0) is None
+
     @pytest.mark.asyncio
-    async def test_fetch_page_source_anonymously_uses_isolated_context(self, test_extractor:extract_module.AdExtractor) -> None:
-        """The page is loaded in a throwaway context, which is disposed afterwards."""
-        tab = AsyncMock()
-        tab.target = MagicMock(browser_context_id = "ctx-1")
-        tab.evaluate = AsyncMock(side_effect = ["https://www.kleinanzeigen.de/s-anzeige/12345", "complete"])
-        tab.get_content = AsyncMock(return_value = "<html>anon</html>")
-        browser = MagicMock()
-        browser.create_context = AsyncMock(return_value = tab)
-        browser.send = AsyncMock()
-        test_extractor.browser = browser
-
-        result = await test_extractor._fetch_page_source_anonymously("https://www.kleinanzeigen.de/s-anzeige/12345")
-
-        assert result == "<html>anon</html>"
-        # a fresh context has no window of its own, so one must be requested
-        assert browser.create_context.await_args.kwargs["new_window"] is True
-        tab.get.assert_awaited_once_with("https://www.kleinanzeigen.de/s-anzeige/12345")
-        browser.send.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_source_anonymously_disposes_context_on_failure(self, test_extractor:extract_module.AdExtractor) -> None:
-        """A failure while loading must still tear the extra context down."""
-        tab = AsyncMock()
-        tab.target = MagicMock(browser_context_id = "ctx-1")
-        tab.get = AsyncMock(side_effect = RuntimeError("navigation blew up"))
-        browser = MagicMock()
-        browser.create_context = AsyncMock(return_value = tab)
-        browser.send = AsyncMock()
-        test_extractor.browser = browser
-
-        assert await test_extractor._fetch_page_source_anonymously("https://www.kleinanzeigen.de/s-anzeige/12345") is None
-        browser.send.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_fetch_page_source_anonymously_survives_dispose_failure(self, test_extractor:extract_module.AdExtractor) -> None:
-        """A context that refuses to go away must not mask the extracted page source."""
-        tab = AsyncMock()
-        tab.target = MagicMock(browser_context_id = "ctx-1")
-        tab.evaluate = AsyncMock(side_effect = ["https://www.kleinanzeigen.de/s-anzeige/12345", "complete"])
-        tab.get_content = AsyncMock(return_value = "<html>anon</html>")
-        browser = MagicMock()
-        browser.create_context = AsyncMock(return_value = tab)
-        browser.send = AsyncMock(side_effect = RuntimeError("dispose failed"))
-        test_extractor.browser = browser
-
-        assert await test_extractor._fetch_page_source_anonymously("https://www.kleinanzeigen.de/s-anzeige/12345") == "<html>anon</html>"
-
-    @pytest.mark.asyncio
-    async def test_fetch_anonymous_ad_dimensions_paces_request_and_builds_ad_url(
+    async def test_fetch_anonymous_ad_dimensions_paces_request_and_uses_configured_timeout(
         self, test_extractor:extract_module.AdExtractor
     ) -> None:
-        """The single extra page load happens after the interaction delay, on the ad's own URL."""
+        """The single extra request is paced and uses the configured page_load timeout."""
         dimensions = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json")
         page_html = "<script>window.BelenConf = { universalAnalyticsOpts: { dimensions: " + json.dumps(dimensions) + " } }</script>"
 
         with (
             patch.object(test_extractor, "web_sleep", new_callable = AsyncMock) as web_sleep,
-            patch.object(extract_module.AdExtractor, "_fetch_page_source_anonymously", new_callable = AsyncMock, return_value = page_html) as fetch,
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = page_html) as fetch,
         ):
             result = await test_extractor._fetch_anonymous_ad_dimensions(12345)
 
         assert result is not None
         assert result["ad_attributes"] == dimensions["ad_attributes"]
         web_sleep.assert_awaited_once()
-        assert fetch.await_count == 1, "at most one extra page load per ad"
-        fetch.assert_awaited_once_with("https://www.kleinanzeigen.de/s-anzeige/12345")
+        assert fetch.call_count == 1, "at most one extra request per ad"
+        fetch.assert_called_once_with("https://www.kleinanzeigen.de/s-anzeige/12345", test_extractor.timeout("page_load"))
 
     @pytest.mark.asyncio
-    async def test_fetch_anonymous_ad_dimensions_returns_none_when_load_fails(self, test_extractor:extract_module.AdExtractor) -> None:
-        """A failed page load is reported as None rather than raising."""
+    async def test_fetch_anonymous_ad_dimensions_returns_none_when_request_fails(
+        self, test_extractor:extract_module.AdExtractor
+    ) -> None:
+        """A failed request is reported as None rather than raising."""
         with (
             patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(extract_module.AdExtractor, "_fetch_page_source_anonymously", new_callable = AsyncMock, return_value = None),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = None),
         ):
             assert await test_extractor._fetch_anonymous_ad_dimensions(12345) is None
