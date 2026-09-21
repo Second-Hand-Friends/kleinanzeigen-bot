@@ -11,6 +11,7 @@ from gettext import gettext as _
 from string import Formatter
 
 import json, mimetypes, re, shutil  # isort: skip
+from nodriver.cdp import target as cdp_target  # isort: skip
 import urllib.error as urllib_error
 import urllib.request as urllib_request
 from datetime import datetime
@@ -42,10 +43,14 @@ _RMTREE_RETRY_DELAY_SECONDS:Final[float] = 0.25
 _LOG_SNIPPET_LIMIT:Final[int] = 120
 _ELLIPSIS:Final[str] = "..."
 _ELLIPSIS_LEN:Final[int] = len(_ELLIPSIS)
-_ANONYMOUS_AD_REQUEST_TIMEOUT_SECONDS:Final[float] = 15.0
 _AD_DIMENSIONS_RE:Final[re.Pattern[str]] = re.compile(r'\{[^{}]*"ad_attributes"[^{}]*\}')
+# Narrower fallback for the dimensions object above: a single dimension value containing a curly
+# brace (e.g. click_campaign_parameters) truncates that match, but the attributes are still usable.
+_AD_ATTRIBUTES_RE:Final[re.Pattern[str]] = re.compile(r'"ad_attributes"\s*:\s*"([^"]*)"')
 # ad_type as published in the dimensions; the anonymous ad page uses "OFFERED", BelenConf "OFFER"
 _AD_TYPE_DIMENSION_TO_API:Final[dict[str, str]] = {"OFFER": "OFFER", "OFFERED": "OFFER", "WANTED": "WANTED"}
+_AD_PAGE_URL_PREFIX:Final[str] = "https://www.kleinanzeigen.de/s-anzeige/"
+_ANONYMOUS_LOAD_POLL_INTERVAL_SECONDS:Final[float] = 0.2
 _OWNED_AD_TITLE_DECORATION_PREFIXES:Final[tuple[str, ...]] = ("Gelöscht",)
 _OWNED_AD_TITLE_DECORATION_RE:Final[re.Pattern[str]] = re.compile(
     rf"^(?:{'|'.join(re.escape(prefix) for prefix in _OWNED_AD_TITLE_DECORATION_PREFIXES)})\s*•\s*"
@@ -1052,28 +1057,68 @@ class AdExtractor(WebScrapingMixin):
 
         The redesigned ad page carries neither ``window.BelenConf`` nor the legacy ad details
         markup, but the same URL served to an anonymous visitor still embeds the canonical
-        dimensions (``ad_attributes``, ``ad_type``, ``l3_category_id``). Exactly one request is
-        made, without session cookies, and only when the already loaded page had no dimensions.
+        dimensions (``ad_attributes``, ``ad_type``, ``l3_category_id``). Exactly one page load is
+        performed, in a throwaway incognito context, after the regular interaction delay, and
+        only when the already loaded page had no dimensions.
 
         :return: the dimension dictionary, or ``None`` when the request or the extraction failed
         """
-        url = f"https://www.kleinanzeigen.de/s-anzeige/{ad_id}"
+        url = f"{_AD_PAGE_URL_PREFIX}{ad_id}"
 
-        def _fetch() -> str:
-            request = urllib_request.Request(url, headers = {"Accept-Language": "de-DE,de;q=0.9"})
-            with urllib_request.urlopen(request, timeout = _ANONYMOUS_AD_REQUEST_TIMEOUT_SECONDS) as response:  # noqa: S310
-                return cast(str, response.read().decode("utf-8", errors = "replace"))
-
-        try:
-            page_html = await asyncio.to_thread(_fetch)
-        except (urllib_error.URLError, urllib_error.HTTPError, ValueError, OSError) as ex:
-            LOG.warning("Ad %s: anonymous fallback request failed: %s", ad_id, ex)
+        await self.web_sleep()
+        page_html = await self._fetch_page_source_anonymously(url)
+        if page_html is None:
+            LOG.warning("Ad %s: anonymous fallback request failed.", ad_id)
             return None
 
         dimensions = self._parse_ad_dimensions_html(page_html)
         if dimensions is None:
             LOG.warning("Ad %s: anonymous fallback response contains no usable ad dimensions.", ad_id)
         return dimensions
+
+    async def _fetch_page_source_anonymously(self, url:str) -> str | None:
+        """Load ``url`` in a throwaway incognito context and return its HTML, or None on failure.
+
+        This deliberately uses the running browser instead of an HTTP client: an ``urllib``
+        request carries a ``Python-urllib`` user agent and a non-browser TLS fingerprint, which
+        would mark the run as automated from the same IP as the logged-in session. The extra
+        browser context has its own cookie jar, so the ad page is served the logged-out (classic)
+        layout while the session itself stays untouched.
+        """
+        page_timeout = self.effective_timeout("page_load")
+        tab = None
+        context_id = None
+        try:
+            async with asyncio.timeout(page_timeout):
+                # a fresh context owns no window yet, so the target has to be created with one;
+                # create_context returns before navigation finishes, hence the explicit get()
+                tab = await self.browser.create_context("about:blank", new_window = True)
+                # nodriver types `tab.target` loosely; at runtime it carries the TargetInfo
+                context_id = getattr(tab.target, "browser_context_id", None)
+                await tab.get(url)
+                while True:
+                    location = str(await tab.evaluate("document.location.href"))
+                    ready_state = str(await tab.evaluate("document.readyState"))
+                    if location.startswith(_AD_PAGE_URL_PREFIX) and ready_state == "complete":
+                        break
+                    await asyncio.sleep(_ANONYMOUS_LOAD_POLL_INTERVAL_SECONDS)
+                return str(await tab.get_content())
+        except Exception as ex:  # noqa: BLE001 the fallback must never abort the download
+            LOG.debug("Anonymous fallback request to %s failed: %s", url, ex)
+            return None
+        finally:
+            await self._dispose_browser_context(tab, context_id)
+
+    async def _dispose_browser_context(self, tab:Any, context_id:Any) -> None:
+        """Close a throwaway incognito context, ignoring teardown failures."""
+        try:
+            if context_id is not None:
+                # disposing the context also closes every target inside it
+                await self.browser.send(cdp_target.dispose_browser_context(context_id))
+            elif tab is not None:
+                await tab.close()
+        except Exception as ex:  # noqa: BLE001 teardown must not mask the extraction result
+            LOG.debug("Failed to dispose the anonymous browser context: %s", ex)
 
     @staticmethod
     def _parse_ad_dimensions_html(page_html:str) -> dict[str, Any] | None:
@@ -1083,16 +1128,39 @@ class AdExtractor(WebScrapingMixin):
         (``universalAnalyticsOpts.dimensions``); the surrounding object uses JavaScript literal
         syntax, the dimensions themselves are plain JSON.
 
+        When that object cannot be read as a whole - a dimension value containing a curly brace
+        truncates the match - the ``ad_attributes`` string is still recovered on its own, so the
+        category attributes survive even though ad type and third-level category do not.
+
         :return: the dimension dictionary, or ``None`` when the page has none
         """
         match = _AD_DIMENSIONS_RE.search(page_html)
-        if not match:
+        if match:
+            try:
+                dimensions = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                dimensions = None
+            if isinstance(dimensions, dict):
+                return dimensions
+
+        attributes_match = _AD_ATTRIBUTES_RE.search(page_html)
+        if not attributes_match:
             return None
-        try:
-            dimensions = json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return None
-        return dimensions if isinstance(dimensions, dict) else None
+        # read straight out of the markup here, so entities may still be encoded
+        return {"ad_attributes": html.unescape(attributes_match.group(1))}
+
+    @staticmethod
+    def _parse_ad_attributes(ad_attributes:str) -> dict[str, str]:
+        """Parse the ``ad_attributes`` tracking string into API key/value pairs.
+
+        ``versand_s`` is dropped because shipping is modelled separately.
+
+        :param ad_attributes: e.g. ``"art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"``
+        :return: a dictionary (possibly empty) mapping attribute names to their values
+        """
+        # split once only: a value may itself contain a colon
+        parsed = dict(item.split(":", 1) for item in ad_attributes.split("|") if ":" in item)
+        return {key: value for key, value in parsed.items() if not key.endswith(".versand_s") and key != "versand_s"}
 
     async def _extract_special_attributes_from_ad_page(self, dimensions:dict[str, Any] | None) -> dict[str, str]:
         """
@@ -1108,9 +1176,7 @@ class AdExtractor(WebScrapingMixin):
         special_attributes_str = dimensions.get("ad_attributes") if isinstance(dimensions, dict) else None
         if not special_attributes_str:
             return await self._extract_special_attributes_from_dom()
-        special_attributes = dict(item.split(":") for item in special_attributes_str.split("|") if ":" in item)
-        special_attributes = {k: v for k, v in special_attributes.items() if not k.endswith(".versand_s") and k != "versand_s"}
-        return special_attributes
+        return self._parse_ad_attributes(special_attributes_str)
 
     async def _extract_special_attributes_from_dom(self) -> dict[str, str]:
         """Extract special attributes from the ad details section as a fallback.

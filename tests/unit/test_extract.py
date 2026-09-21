@@ -3772,3 +3772,112 @@ class TestAdExtractorAnonymousFallback:
         assert ad_cfg.type == "OFFER"
         assert ad_cfg.category == "17/23/gesellschaftsspiele"
         assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
+
+    @pytest.mark.parametrize(
+        ("ad_attributes", "expected"),
+        [
+            ("versand_s:t|condition_s:alright", {"condition_s": "alright"}),
+            ("wohnzimmer.versand_s:f|art_s:tische", {"art_s": "tische"}),
+            ("", {}),
+            ("malformed", {}),
+            ("note_s:size:large|art_s:tische", {"note_s": "size:large", "art_s": "tische"}),
+        ],
+    )
+    def test_parse_ad_attributes(self, ad_attributes:str, expected:dict[str, str]) -> None:
+        """Shipping keys are dropped and values may themselves contain a colon."""
+        assert extract_module.AdExtractor._parse_ad_attributes(ad_attributes) == expected
+
+    def test_parse_ad_dimensions_recovers_attributes_from_truncated_object(self) -> None:
+        """A dimension value containing a curly brace breaks the object match; attributes still survive."""
+        page_html = (
+            "<script>window.BelenConf = { universalAnalyticsOpts: { dimensions: "
+            '{"click_campaign_parameters":"{utm}","ad_attributes":"art_s:tische|condition_s:alright",'
+            '"ad_type":"OFFERED"} } }</script>'
+        )
+
+        parsed = extract_module.AdExtractor._parse_ad_dimensions_html(page_html)
+
+        assert parsed == {"ad_attributes": "art_s:tische|condition_s:alright"}
+
+    def test_parse_ad_dimensions_unescapes_recovered_attributes(self) -> None:
+        """Attributes recovered straight from the markup may still carry HTML entities."""
+        parsed = extract_module.AdExtractor._parse_ad_dimensions_html('<astro-island props="ad_attributes":"art_s:b&amp;o"></astro-island>')
+
+        assert parsed == {"ad_attributes": "art_s:b&o"}
+
+    @pytest.mark.asyncio
+    async def test_fetch_page_source_anonymously_uses_isolated_context(self, test_extractor:extract_module.AdExtractor) -> None:
+        """The page is loaded in a throwaway context, which is disposed afterwards."""
+        tab = AsyncMock()
+        tab.target = MagicMock(browser_context_id = "ctx-1")
+        tab.evaluate = AsyncMock(side_effect = ["https://www.kleinanzeigen.de/s-anzeige/12345", "complete"])
+        tab.get_content = AsyncMock(return_value = "<html>anon</html>")
+        browser = MagicMock()
+        browser.create_context = AsyncMock(return_value = tab)
+        browser.send = AsyncMock()
+        test_extractor.browser = browser
+
+        result = await test_extractor._fetch_page_source_anonymously("https://www.kleinanzeigen.de/s-anzeige/12345")
+
+        assert result == "<html>anon</html>"
+        # a fresh context has no window of its own, so one must be requested
+        assert browser.create_context.await_args.kwargs["new_window"] is True
+        tab.get.assert_awaited_once_with("https://www.kleinanzeigen.de/s-anzeige/12345")
+        browser.send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_fetch_page_source_anonymously_disposes_context_on_failure(self, test_extractor:extract_module.AdExtractor) -> None:
+        """A failure while loading must still tear the extra context down."""
+        tab = AsyncMock()
+        tab.target = MagicMock(browser_context_id = "ctx-1")
+        tab.get = AsyncMock(side_effect = RuntimeError("navigation blew up"))
+        browser = MagicMock()
+        browser.create_context = AsyncMock(return_value = tab)
+        browser.send = AsyncMock()
+        test_extractor.browser = browser
+
+        assert await test_extractor._fetch_page_source_anonymously("https://www.kleinanzeigen.de/s-anzeige/12345") is None
+        browser.send.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_fetch_page_source_anonymously_survives_dispose_failure(self, test_extractor:extract_module.AdExtractor) -> None:
+        """A context that refuses to go away must not mask the extracted page source."""
+        tab = AsyncMock()
+        tab.target = MagicMock(browser_context_id = "ctx-1")
+        tab.evaluate = AsyncMock(side_effect = ["https://www.kleinanzeigen.de/s-anzeige/12345", "complete"])
+        tab.get_content = AsyncMock(return_value = "<html>anon</html>")
+        browser = MagicMock()
+        browser.create_context = AsyncMock(return_value = tab)
+        browser.send = AsyncMock(side_effect = RuntimeError("dispose failed"))
+        test_extractor.browser = browser
+
+        assert await test_extractor._fetch_page_source_anonymously("https://www.kleinanzeigen.de/s-anzeige/12345") == "<html>anon</html>"
+
+    @pytest.mark.asyncio
+    async def test_fetch_anonymous_ad_dimensions_paces_request_and_builds_ad_url(
+        self, test_extractor:extract_module.AdExtractor
+    ) -> None:
+        """The single extra page load happens after the interaction delay, on the ad's own URL."""
+        dimensions = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json")
+        page_html = "<script>window.BelenConf = { universalAnalyticsOpts: { dimensions: " + json.dumps(dimensions) + " } }</script>"
+
+        with (
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock) as web_sleep,
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_anonymously", new_callable = AsyncMock, return_value = page_html) as fetch,
+        ):
+            result = await test_extractor._fetch_anonymous_ad_dimensions(12345)
+
+        assert result is not None
+        assert result["ad_attributes"] == dimensions["ad_attributes"]
+        web_sleep.assert_awaited_once()
+        assert fetch.await_count == 1, "at most one extra page load per ad"
+        fetch.assert_awaited_once_with("https://www.kleinanzeigen.de/s-anzeige/12345")
+
+    @pytest.mark.asyncio
+    async def test_fetch_anonymous_ad_dimensions_returns_none_when_load_fails(self, test_extractor:extract_module.AdExtractor) -> None:
+        """A failed page load is reported as None rather than raising."""
+        with (
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_anonymously", new_callable = AsyncMock, return_value = None),
+        ):
+            assert await test_extractor._fetch_anonymous_ad_dimensions(12345) is None
