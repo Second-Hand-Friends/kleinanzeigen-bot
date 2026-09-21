@@ -197,7 +197,17 @@ kleinanzeigen_bot/publishing_workflow.py:
     "Skipping title-based publishes because full published-ad list could not be fetched before publish: %s": "Titelbasierte Veröffentlichungen werden übersprungen, weil die vollständige Liste veröffentlichter Anzeigen vor der Veröffentlichung nicht abgerufen werden konnte: %s"
     "Complete published-ad snapshot unavailable; no-ID publish recovery is disabled: %s": "Vollständiger Stand der veröffentlichten Anzeigen nicht verfügbar; die Wiederherstellung nach Veröffentlichung ohne Anzeigen-ID ist deaktiviert: %s"
 
+  _report_batch_result:
+    "Failed to publish %s": "Veröffentlichen von %s fehlgeschlagen"
+    "DONE: (Re-)published %s (%s failed)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen)"
+    "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
+    "ad": "Anzeige"
+    "Failed to update %s": "Aktualisieren von %s fehlgeschlagen"
+    "DONE: updated %s (%s failed)": "FERTIG: %s aktualisiert (%s fehlgeschlagen)"
+    "DONE: updated %s": "FERTIG: %s aktualisiert"
+
   publish_ads:
+    "Form rejected for '%s': %s. Correct the ad configuration before retrying.": "Formular für '%s' abgelehnt: %s. Vor einem erneuten Versuch die Anzeigenkonfiguration korrigieren."
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     ? "Skipping '%s' because strict published-ad fetch failed before publish. Retry by re-running the publish after transient API issues have resolved."
@@ -212,11 +222,9 @@ kleinanzeigen_bot/publishing_workflow.py:
     : "Persistenz für '%s' nach dem Absenden der Anzeige fehlgeschlagen. Anzeigen-ID: %s. Kein erneuter Versuch ausgeführt. Falls die Anzeige online ist, lokalen Stand manuell synchronisieren."
     "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche fehlgeschlagen für '%s': %s. Überspringe Anzeige."
     "Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).": "Kategorieauflösung fehlgeschlagen für '%s': %s. Anzeige wird übersprungen (Konfigurationsfehler, kein erneuter Versuch)."
-    "DONE: (Re-)published %s (%s failed after retries)": "FERTIG: %s (erneut) veröffentlicht (%s fehlgeschlagen nach Wiederholungen)"
-    "DONE: (Re-)published %s": "FERTIG: %s (erneut) veröffentlicht"
-    "ad": "Anzeige"
 
   update_ads:
+    "Form rejected for '%s': %s. Correct the ad configuration before retrying.": "Formular für '%s' abgelehnt: %s. Vor einem erneuten Versuch die Anzeigenkonfiguration korrigieren."
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht in veröffentlichten Anzeigen gefunden"
@@ -228,9 +236,6 @@ kleinanzeigen_bot/publishing_workflow.py:
     "All %s attempts failed for '%s': %s. Skipping ad.": "Alle %s Versuche für '%s' sind fehlgeschlagen: %s. Anzeige wird übersprungen."
     "Attempt %s/%s failed for '%s': %s. Retrying...": "Versuch %s/%s für '%s' ist fehlgeschlagen: %s. Erneuter Versuch..."
     " -> Could not confirm update for '%s', but changes may be online": " -> Aktualisierung für '%s' konnte nicht bestätigt werden, aber Änderungen könnten online sein"
-    "DONE: updated %s (%s failed after retries)": "FERTIG: %s aktualisiert (%s nach Wiederholungen fehlgeschlagen)"
-    "DONE: updated %s": "FERTIG: %s aktualisiert"
-    "ad": "Anzeige"
 
 #################################################
 kleinanzeigen_bot/published_ads.py:
@@ -397,11 +402,14 @@ kleinanzeigen_bot/publishing_submission.py:
   _click_submit_button:
     "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
 
-  submit_and_confirm_ad:
+  _handle_post_submit_prompts:
     "############################################": "############################################"
     "Dismissing upsell dialog...": "Upsell-Dialog schließen..."
     "# Payment form detected! Please proceed with payment.": "# Bestellformular gefunden! Bitte mit der Bezahlung fortfahren."
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
+
+  submit_and_confirm_ad:
+    "Ad form validation failed: %s": "Validierung des Anzeigenformulars fehlgeschlagen: %s"
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
     "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list": "Bestätigungsseite enthielt keine Anzeigen-ID; Anzeigen-ID %s aus der Liste veröffentlichter Anzeigen wiederhergestellt"
     "Update confirmation page exposed no ad ID; using configured ad ID %s": "Update-Bestätigungsseite enthielt keine Anzeigen-ID; konfigurierte Anzeigen-ID %s wird verwendet"

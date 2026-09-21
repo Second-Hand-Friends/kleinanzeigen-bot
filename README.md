@@ -263,6 +263,12 @@ Options:
 ```
 <!-- readme-usage:generated:end -->
 
+`publish` and `update` process the remaining ads when an individual ad fails, then
+exit with status `1` if any ads failed. Visible form-validation errors include the
+field labels and messages; correct the affected ad configuration before retrying.
+An uncertain submission is never automatically retried because it may already be
+online. Successful batches and batches containing only skipped ads exit with status `0`.
+
 > **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
 Shipping inference during `download`: the bot reads the public ad shipping state. Pickup becomes `PICKUP`; `Versand möglich` without a price becomes `SHIPPING` without costs/options. Visible "shipping from" prices are kept as deprecated `shipping_costs` metadata and, when they match a current gateway option, infer one [`shipping_options`](docs/AD_CONFIGURATION.md#shipping-options-reference) entry by default. Set `download.include_all_matching_shipping_options: true` to include all non-excluded options with the same package size. `sell_directly` is resolved only for current-profile ads from cached manage-ads data.

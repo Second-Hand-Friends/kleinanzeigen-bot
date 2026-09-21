@@ -26,7 +26,7 @@ from kleinanzeigen_bot.model.config_model import (
 )
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError, open_ad_for_edit
-from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import AdBatchError, AdFormValidationError, CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 from tests.conftest import build_published_ads, build_update_ad
 
@@ -40,6 +40,58 @@ def mock_page() -> MagicMock:
     mock.click = AsyncMock()
     mock.type = AsyncMock()
     return mock
+
+
+class TestBatchValidationFailures:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("operation", ["publish", "update"])
+    async def test_all_reserved_ads_complete_without_failure(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], operation:str,
+    ) -> None:
+        """Skipping a reserved ad does not turn a successful run into a failure."""
+        reserved = build_update_ad(base_ad_config, 101, "Reserved Test Ad")
+        with (
+            patch(
+                "kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                return_value = build_published_ads((101, "paused")),
+            ),
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish,
+        ):
+            await getattr(test_bot, f"{operation}_ads")([reserved])
+
+        publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("operation", ["publish", "update"])
+    async def test_continues_after_rejection_and_reports_failed_batch(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], operation:str, caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Reject invalid ads once, process the next ad, then fail the overall run."""
+        rejected = build_update_ad(base_ad_config, 101, "Invalid Ad")
+        good = build_update_ad(base_ad_config, 102, "Valid Test Ad")
+        failure = AdFormValidationError("Art: Bitte gib einen Wert ein.")
+        test_bot.keep_old_ads = True
+        with (
+            patch(
+                "kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                return_value = build_published_ads((101, "active"), (102, "active")),
+            ),
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = [failure, 102]) as publish,
+            patch.object(test_bot, "_capture_publish_error_diagnostics_if_enabled", new_callable = AsyncMock) as diagnostics,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            pytest.raises(AdBatchError, match = f"Failed to {operation} 1 ad"),
+        ):
+            await getattr(test_bot, f"{operation}_ads")([rejected, good])
+
+        assert [item.args[2].id for item in publish.await_args_list] == [101, 102]
+        sleep.assert_not_awaited()
+        diagnostics.assert_awaited_once()
+        assert diagnostics.await_args is not None
+        assert diagnostics.await_args.args[-1] is failure
+        assert "Art: Bitte gib einen Wert ein." in caplog.text
+        assert "Correct the ad configuration before retrying." in caplog.text
+        assert "1 ad (1 failed)" in caplog.text
 
 
 class TestKleinanzeigenBotUpdateAdsResilience:
@@ -84,6 +136,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            pytest.raises(AdBatchError, match = "Failed to update 1 ad"),
         ):
             await test_bot.update_ads([ad_one, ad_two])
 
@@ -121,6 +174,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            pytest.raises(AdBatchError, match = "Failed to update 1 ad"),
         ):
             await test_bot.update_ads([ad_one, ad_two])
 
@@ -154,6 +208,7 @@ class TestKleinanzeigenBotUpdateAdsResilience:
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = publish_side_effect) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            pytest.raises(AdBatchError, match = "Failed to update 1 ad"),
         ):
             await test_bot.update_ads([ad_one, ad_two])
 
@@ -316,7 +371,8 @@ class TestKleinanzeigenBotPublishAdsBasics:
             ) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
         ):
-            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+            with pytest.raises(AdBatchError, match = "Failed to publish 1 ad"):
+                await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             assert publish_mock.await_count == 1
             sleep_mock.assert_not_awaited()
@@ -349,7 +405,8 @@ class TestKleinanzeigenBotPublishAdsBasics:
             ) as publish_mock,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
         ):
-            await test_bot.publish_ads([("ad.yaml", ad_cfg, ad_cfg_orig)])
+            with pytest.raises(AdBatchError, match = "Failed to publish 1 ad"):
+                await test_bot.publish_ads([("ad.yaml", ad_cfg, ad_cfg_orig)])
 
             assert publish_mock.await_count == 1
             sleep_mock.assert_not_awaited()
@@ -397,7 +454,8 @@ class TestKleinanzeigenBotPublishAdsBasics:
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
             caplog.at_level("INFO"),
         ):
-            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+            with pytest.raises(AdBatchError, match = "Failed to publish 1 ad"):
+                await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             assert web_await_mock.await_count == 0
             assert sleep_mock.await_count == 0
@@ -405,7 +463,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
             assert delete_ad_mock.await_count == 0
             capture_mock.assert_awaited_once()
 
-            assert any("DONE: (Re-)published 0 ads (1 failed after retries)" in record.getMessage() for record in caplog.records)
+            assert any("DONE: (Re-)published 0 ads (1 failed)" in record.getMessage() for record in caplog.records)
             assert any("Persistence failed for 'Test Title' after ad submission" in record.getMessage() for record in caplog.records)
             assert any("Ad ID: 12345" in record.getMessage() for record in caplog.records)
 
@@ -482,7 +540,8 @@ class TestKleinanzeigenBotPublishAdsBasics:
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_mock,
             caplog.at_level(logging.INFO),
         ):
-            await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
+            with pytest.raises(AdBatchError, match = "Failed to publish 1 ad"):
+                await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
             assert fetch_mock.await_count == 2
             publish_mock.assert_not_awaited()
@@ -491,7 +550,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
             delete_mock.assert_not_awaited()
 
             summary = [record for record in caplog.records if "DONE:" in record.getMessage()]
-            assert any("DONE: (Re-)published 0 ads (1 failed after retries)" in record.getMessage() for record in summary)
+            assert any("DONE: (Re-)published 0 ads (1 failed)" in record.getMessage() for record in summary)
 
     @pytest.mark.asyncio
     async def test_publish_ads_keep_old_falls_back_when_strict_recovery_snapshot_fails(
@@ -571,7 +630,8 @@ class TestKleinanzeigenBotPublishAdsBasics:
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock,
         ):
-            await test_bot.update_ads([ad_one, ad_two])
+            with pytest.raises(AdBatchError, match = "Failed to update 1 ad"):
+                await test_bot.update_ads([ad_one, ad_two])
 
             assert publish_mock.await_count == 2
             sleep_mock.assert_not_awaited()
@@ -774,6 +834,7 @@ class TestKleinanzeigenBotDiagnostics:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            pytest.raises(AdBatchError, match = "Failed to publish 1 ad"),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
@@ -816,6 +877,7 @@ class TestKleinanzeigenBotDiagnostics:
         with (
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ads_response),
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            pytest.raises(AdBatchError, match = "Failed to publish 1 ad"),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 
@@ -853,6 +915,7 @@ class TestKleinanzeigenBotDiagnostics:
                 return_value = {"content": json.dumps({"ads": [], "paging": {"pageNum": 1, "last": 1}})},
             ),
             patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, side_effect = TimeoutError("boom")),
+            pytest.raises(AdBatchError, match = "Failed to publish 1 ad"),
         ):
             await test_bot.publish_ads([(ad_file, ad_cfg, ad_cfg_orig)])
 

@@ -23,6 +23,14 @@ class PublishSubmissionUncertainError(KleinanzeigenBotError):
         super().__init__(reason)
 
 
+class AdFormValidationError(KleinanzeigenBotError):
+    """The ad form rejected submission and displayed field validation errors."""
+
+
+class AdBatchError(KleinanzeigenBotError):
+    """One or more ads failed after the rest of the publish/update batch completed."""
+
+
 class CategoryResolutionError(KleinanzeigenBotError):
     """Raised when the ad's configured category cannot be resolved by publish/update flows.
 
