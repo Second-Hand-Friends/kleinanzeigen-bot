@@ -99,7 +99,7 @@ The bot checks login status using a layered, DOM-first check (page elements only
 
    - Looks for `.mr-medium` element containing username
    - Falls back to `#user-email` ID
-   - Reads the element's visible (selection-based) text first; if that is empty — e.g. on the redesigned start page, where the marker sits inside a `display: none` header — it falls back to the element's `textContent` and `title` attribute
+   - Reads the element's visible (selection-based) text first; if that is empty — e.g. on the redesigned start page, whose marker header is `display: none` below 768px viewport width — it falls back to the element's `textContent`
    - Uses the `login_detection` timeout (default: 10.0 seconds with effective timeout with retry/backoff)
    - Minimizes bot detection by avoiding JSON API requests that normal users wouldn't trigger
 

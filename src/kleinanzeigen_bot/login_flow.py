@@ -862,10 +862,12 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
     tried_login_selectors = _format_login_detection_selectors(_LOGIN_DETECTION_SELECTORS)
 
     # The redesigned (Astro) start page renders the logged-in marker
-    # (<p class="mr-medium" data-testid="logged-in-user" title="<email>">angemeldet als: <email></p>)
-    # inside a header that is `display: none` at load time. Selection-based visible-text
-    # extraction returns "" for unrendered subtrees, which made valid sessions look logged out
-    # and triggered needless Auth0 logins. textContent/title still carry the account e-mail.
+    # (<p class="mr-medium" data-testid="logged-in-user">angemeldet als: <email></p>) inside
+    # <header class="hidden ... md:block">, i.e. the header is `display: none` below 768px viewport
+    # width. That happens whenever the window stays narrower than that, e.g. when no configured
+    # viewport_sizes entry fits a small Xvnc/Xvfb display and the resize is skipped. Selection-based visible-text
+    # extraction returns "" for unrendered subtrees, which made valid sessions look logged out and
+    # triggered needless Auth0 logins. textContent still carries the account e-mail.
     try:
         user_info, matched_selector = await web.web_text_first_available(
             _LOGIN_DETECTION_SELECTORS,

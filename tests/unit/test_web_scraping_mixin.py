@@ -876,6 +876,10 @@ class TestTimeoutAndRetryHelpers:
 
         assert text == "angemeldet als: user@example.com"
         mock_element.apply.assert_awaited_once()
+        assert mock_element.apply.await_args is not None
+        script = mock_element.apply.await_args.args[0]
+        assert "textContent" in script
+        assert "title" not in script
 
 
 class TestSelectorTimeoutMessages:

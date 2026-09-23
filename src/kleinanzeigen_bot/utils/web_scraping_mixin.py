@@ -528,22 +528,11 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def extract_text_content(self, element:Element) -> str:
         """Return the DOM text of an element regardless of its rendering state.
 
-        Unlike :meth:`extract_visible_text` this reads ``textContent`` (plus the ``title``
-        attribute when it adds information), so text inside ``display: none`` subtrees is
-        returned as well. Selection-based extraction yields an empty string there.
+        Unlike :meth:`extract_visible_text` this reads ``textContent``, so text inside
+        ``display: none`` subtrees is returned as well. Selection-based extraction yields an
+        empty string there.
         """
-        return str(
-            await element.apply("""
-            function (elem) {
-                let text = (elem.textContent || "").trim()
-                let title = (elem.getAttribute("title") || "").trim()
-                if (title && !text.includes(title)) {
-                    text = (text + " " + title).trim()
-                }
-                return text
-            }
-        """)
-        )
+        return str(await element.apply('function (elem) { return (elem.textContent || "").trim() }'))
 
     async def extract_visible_text(self, element:Element) -> str:
         """Return visible text for a DOM element using user-selection extraction."""
