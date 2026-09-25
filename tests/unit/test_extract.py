@@ -6,10 +6,12 @@ import asyncio
 import errno
 import shutil
 import stat
+from http.client import IncompleteRead
 from pathlib import Path
 from typing import Any, Final, TypedDict, cast
 from unittest.mock import AsyncMock, MagicMock, call, patch
 from urllib.error import URLError
+from urllib.request import Request
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -1603,7 +1605,7 @@ class TestAdExtractorCategory:
     # pylint: disable=protected-access
     async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
-        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": ""}}}
+        belen_conf:dict[str, Any] = {"ad_attributes": ""}
         with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
             result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
             assert result == {}
@@ -1614,9 +1616,7 @@ class TestAdExtractorCategory:
         """Test extraction of special attributes when not empty."""
 
         special_atts = {
-            "universalAnalyticsOpts": {
-                "dimensions": {"ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"}
-            }
+            "ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"
         }
         result = await extractor._extract_special_attributes_from_ad_page(special_atts)
         assert len(result) == 5
@@ -1636,7 +1636,7 @@ class TestAdExtractorCategory:
     # pylint: disable=protected-access
     async def test_extract_special_attributes_dom_fallback_when_missing(self, extractor:extract_module.AdExtractor) -> None:
         """When ad_attributes is missing, special attributes should be extracted via DOM fallback."""
-        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {}}}
+        belen_conf:dict[str, Any] = {}
         with patch.object(
             extractor,
             "_extract_special_attributes_from_dom",
@@ -3666,3 +3666,254 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert len(rendered) <= 15
         assert "Very Long Title Here" not in rendered
         assert "12345678901234567890" not in rendered
+
+
+class TestAdExtractorAnonymousFallback:
+    """Tests for the anonymous dimension fallback used when the ad page has no window.BelenConf."""
+
+    # pylint: disable=protected-access
+
+    def test_parse_ad_dimensions_from_anonymous_page(self) -> None:
+        """The dimensions embedded in the anonymous ad page are read from the surrounding JS literal."""
+        dimensions = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json")
+        page_html = (
+            "<html><script>window.BelenConf = { jsBaseUrl: 'https://static.kleinanzeigen.de/static/js', isBrowse: 'true', "
+            'universalAnalyticsOpts: { account: "UA-24356365-9", dimensions: '
+            + json.dumps(dimensions)
+            + ", extraDimensions: {dimension73: '1'}, sendPageView: true, }, "
+            "tnsPhoneVerificationBundleUrl: 'https://www.kleinanzeigen.de/bffstatic' }</script></html>"
+        )
+
+        parsed = extract_module.AdExtractor._parse_ad_dimensions_html(page_html)
+
+        assert parsed is not None
+        assert parsed["ad_attributes"] == dimensions["ad_attributes"]
+        assert parsed["l3_category_id"] == dimensions["l3_category_id"]
+        assert parsed["ad_type"] == dimensions["ad_type"]
+
+    def test_parse_ad_dimensions_without_usable_dimensions(self) -> None:
+        """Pages without dimensions or with malformed dimensions yield None instead of raising."""
+        assert extract_module.AdExtractor._parse_ad_dimensions_html("<html><body>Nothing to see here</body></html>") is None
+        assert extract_module.AdExtractor._parse_ad_dimensions_html('{"ad_attributes":}') is None
+
+    def test_dimensions_from_belen_conf(self) -> None:
+        """BelenConf yields its dimensions; anything unexpected yields an empty dict."""
+        assert extract_module.AdExtractor._dimensions_from_belen_conf(
+            {"universalAnalyticsOpts": {"dimensions": {"ad_type": "OFFER"}}}
+        ) == {"ad_type": "OFFER"}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf(None) == {}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": "unexpected"}) == {}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": {"dimensions": "unexpected"}}) == {}
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_uses_anonymous_dimensions_when_belen_conf_is_missing(
+        self, test_extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """Without window.BelenConf the dimensions are taken from one anonymous request."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        fallback_mock = AsyncMock(return_value = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json"))
+
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Test Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(return_value = None),
+            _fetch_anonymous_ad_dimensions = fallback_mock,
+            _extract_category_from_ad_page = AsyncMock(return_value = "17/23"),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (15.0, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ):
+            ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        fallback_mock.assert_awaited_once_with(12345)
+        assert ad_cfg.type == "OFFER"
+        assert ad_cfg.category == "17/23/gesellschaftsspiele"
+        assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
+
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_skips_anonymous_request_when_belen_conf_is_present(
+        self, test_extractor:extract_module.AdExtractor, tmp_path:Path
+    ) -> None:
+        """The classic ad page provides the dimensions itself, so no extra request is made."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        fallback_mock = AsyncMock(return_value = None)
+
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Test Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(
+                return_value = {
+                    "universalAnalyticsOpts": {
+                        "dimensions": {"ad_type": "OFFER", "l3_category_id": "gesellschaftsspiele", "ad_attributes": "art_s:gesellschaftsspiele"}
+                    }
+                }
+            ),
+            _fetch_anonymous_ad_dimensions = fallback_mock,
+            _extract_category_from_ad_page = AsyncMock(return_value = "17/23"),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (15.0, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ):
+            ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        fallback_mock.assert_not_awaited()
+        assert ad_cfg.type == "OFFER"
+        assert ad_cfg.category == "17/23/gesellschaftsspiele"
+        assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
+
+    @pytest.mark.parametrize(
+        ("ad_attributes", "expected"),
+        [
+            ("versand_s:t|condition_s:alright", {"condition_s": "alright"}),
+            ("wohnzimmer.versand_s:f|art_s:tische", {"art_s": "tische"}),
+            ("", {}),
+            ("malformed", {}),
+            ("note_s:size:large|art_s:tische", {"note_s": "size:large", "art_s": "tische"}),
+        ],
+    )
+    def test_parse_ad_attributes(self, ad_attributes:str, expected:dict[str, str]) -> None:
+        """Shipping keys are dropped and values may themselves contain a colon."""
+        assert extract_module.AdExtractor._parse_ad_attributes(ad_attributes) == expected
+
+    def test_parse_ad_dimensions_recovers_attributes_from_truncated_object(self) -> None:
+        """A dimension value containing a curly brace breaks the object match; attributes still survive."""
+        page_html = (
+            "<script>window.BelenConf = { universalAnalyticsOpts: { dimensions: "
+            '{"click_campaign_parameters":"{utm}","ad_attributes":"art_s:tische|condition_s:alright",'
+            '"ad_type":"OFFERED"} } }</script>'
+        )
+
+        parsed = extract_module.AdExtractor._parse_ad_dimensions_html(page_html)
+
+        assert parsed == {"ad_attributes": "art_s:tische|condition_s:alright"}
+
+    def test_parse_ad_dimensions_unescapes_recovered_attributes(self) -> None:
+        """Attributes recovered straight from the markup may still carry HTML entities."""
+        parsed = extract_module.AdExtractor._parse_ad_dimensions_html('<astro-island props="ad_attributes":"art_s:b&amp;o"></astro-island>')
+
+        assert parsed == {"ad_attributes": "art_s:b&o"}
+
+    @pytest.mark.parametrize(
+        ("url", "trusted"),
+        [
+            ("https://www.kleinanzeigen.de/s-anzeige/123", True),
+            ("https://kleinanzeigen.de/s-anzeige/123", True),
+            ("http://www.kleinanzeigen.de/s-anzeige/123", False),  # plaintext
+            ("https://kleinanzeigen.de.evil.example/x", False),  # suffix lookalike
+            ("https://evil.example/x", False),
+            ("https://127.0.0.1/x", False),
+            ("https://169.254.169.254/latest/meta-data/", False),
+            ("file:///etc/passwd", False),
+            ("", False),
+        ],
+    )
+    def test_is_trusted_ad_page_url(self, test_extractor:extract_module.AdExtractor, url:str, trusted:bool) -> None:
+        """Only https on a Kleinanzeigen host may be requested."""
+        assert test_extractor._is_trusted_ad_page_url(url) is trusted
+
+    @pytest.mark.parametrize(
+        ("newurl", "followed"),
+        [
+            ("https://www.kleinanzeigen.de/s-anzeige/123", True),
+            ("https://evil.example/x", False),
+            ("http://www.kleinanzeigen.de/x", False),
+            ("https://169.254.169.254/latest/meta-data/", False),
+        ],
+    )
+    def test_redirect_handler_only_follows_trusted_targets(
+        self, test_extractor:extract_module.AdExtractor, newurl:str, followed:bool
+    ) -> None:
+        """A redirect cannot steer the fallback request off the trusted host."""
+        handler = extract_module._TrustedHostRedirectHandler(test_extractor._is_trusted_ad_page_url)
+        request = Request("https://www.kleinanzeigen.de/s-anzeige/123")  # noqa: S310 trusted literal
+
+        result = handler.redirect_request(request, MagicMock(), 301, "Moved", {}, newurl)
+
+        assert (result is not None) is followed
+
+    @pytest.mark.parametrize(
+        ("charset", "expected"),
+        [
+            ("utf-8", "Grün"),
+            ("iso-8859-1", "GrÃ¼n"),  # body is utf-8 bytes; a declared latin-1 charset decodes them differently
+            (None, "Grün"),  # no charset declared -> utf-8
+        ],
+    )
+    def test_fetch_page_source_sync_decodes_body(
+        self, test_extractor:extract_module.AdExtractor, charset:str | None, expected:str
+    ) -> None:
+        """The response is decoded with the declared charset, defaulting to utf-8."""
+        response = MagicMock()
+        response.headers.get_content_charset.return_value = charset
+        response.read.return_value = "Grün".encode()
+        response.__enter__.return_value = response
+        response.__exit__.return_value = False
+
+        with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
+            build_opener.return_value.open.return_value = response
+            result = test_extractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 7.5)
+
+        assert result == expected
+        assert build_opener.return_value.open.call_args.kwargs["timeout"] == 7.5
+        assert isinstance(build_opener.call_args.args[0], extract_module._TrustedHostRedirectHandler)
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            URLError("boom"),
+            OSError("timed out"),
+            ValueError("bad url"),
+            # HTTPException does not inherit from OSError; it must not escape the fallback
+            IncompleteRead(b"partial"),
+        ],
+    )
+    def test_fetch_page_source_sync_returns_none_on_error(self, test_extractor:extract_module.AdExtractor, error:Exception) -> None:
+        """Network, socket and URL errors are swallowed so the download can continue."""
+        with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
+            build_opener.return_value.open.side_effect = error
+            assert test_extractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 5.0) is None
+
+    @pytest.mark.asyncio
+    async def test_fetch_anonymous_ad_dimensions_paces_request_and_uses_configured_timeout(
+        self, test_extractor:extract_module.AdExtractor
+    ) -> None:
+        """The single extra request is paced and uses the configured page_load timeout."""
+        dimensions = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json")
+        page_html = "<script>window.BelenConf = { universalAnalyticsOpts: { dimensions: " + json.dumps(dimensions) + " } }</script>"
+
+        with (
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock) as web_sleep,
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = page_html) as fetch,
+        ):
+            result = await test_extractor._fetch_anonymous_ad_dimensions(12345)
+
+        assert result is not None
+        assert result["ad_attributes"] == dimensions["ad_attributes"]
+        web_sleep.assert_awaited_once()
+        assert fetch.call_count == 1, "at most one extra request per ad"
+        fetch.assert_called_once_with("https://www.kleinanzeigen.de/s-anzeige/12345", test_extractor.timeout("page_load"))
+
+    @pytest.mark.asyncio
+    async def test_fetch_anonymous_ad_dimensions_returns_none_when_request_fails(
+        self, test_extractor:extract_module.AdExtractor
+    ) -> None:
+        """A failed request is reported as None rather than raising."""
+        with (
+            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = None),
+        ):
+            assert await test_extractor._fetch_anonymous_ad_dimensions(12345) is None
