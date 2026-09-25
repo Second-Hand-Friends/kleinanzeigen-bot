@@ -319,15 +319,17 @@ browser:
 
 **Minimum window width:**
 
-kleinanzeigen.de switches to its mobile layout below a viewport width of **768 pixels**. In that layout the page header is `display: none`, and with it the logged-in marker and the navigation entries the bot uses. A width of **1024 pixels or more** is recommended, because the desktop header is a fixed 970 pixels wide and overflows narrower windows.
+kleinanzeigen.de switches to its mobile layout below a viewport width of **768 pixels**. In that layout the desktop page header is not rendered, and with it the navigation entries the bot clicks to reach the ad list. A width of **1024 pixels or more** is recommended, because the desktop header is a fixed 970 pixels wide and overflows narrower windows.
 
-The bot measures the effective viewport width after the first page load and logs a warning - not an error - when it is below the threshold. Ad pages and the login page itself render identically at any width, so runs that only download or extract ads are not affected.
+The bot measures the effective viewport width after the first page load and logs a warning - not an error - when it is below the breakpoint. Ad pages and the login page itself render identically at any width, so runs that only download or extract ads are not affected.
 
 Relevant settings:
 
-- `browser.arguments`: `--window-size=1024,1080` sets an explicit size. Note that this disables the `viewport_sizes` randomization.
-- `humanization.viewport_sizes`: every entry should be at least 768 pixels wide. If no entry fits the available screen, the resize is skipped and the window keeps its initial size - on small displays (Xvfb, VNC, small VMs) that can be below the threshold.
+- `browser.arguments`: `--window-size=1024,1080` sets an explicit size. This value is used as-is, but it also disables the `viewport_sizes` randomization.
+- `humanization.viewport_sizes`: the chosen entry is randomly reduced by up to 24 pixels, so an entry of exactly `768x...` still ends up below the breakpoint about half the time. Use entries of **1024 pixels or more**. If no entry fits the available screen, the resize is skipped and the window keeps its initial size - on small displays (Xvfb, VNC, small VMs) that can be below the breakpoint.
 - On headless, Xvfb or VNC setups the display geometry is the actual limit, e.g. `Xvnc -geometry 1024x1080`.
+
+The width that actually counts is `window.innerWidth` in the running browser - that is the value CSS media queries evaluate against, and the value the warning reports.
 
 See [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md#issue-viewport-too-narrow-mobile-layout) for the symptoms.
 

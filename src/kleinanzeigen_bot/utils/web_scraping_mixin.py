@@ -856,11 +856,19 @@ class WebScrapingMixin:  # noqa: PLR0904
             width,
             MIN_VIEWPORT_WIDTH,
         )
-        LOG.warning("In the mobile layout the page header is hidden, so the login may not be recognized and selectors can run into timeouts.")
+        LOG.warning(
+            "In the mobile layout the page header is not rendered; elements inside it are still found but cannot be clicked,"
+            " which can make the login navigation time out."
+        )
         LOG.warning("Possible remedies:")
         LOG.warning("1. Browser window of at least %d pixels width (recommended: %d or more)", MIN_VIEWPORT_WIDTH, RECOMMENDED_VIEWPORT_WIDTH)
         LOG.warning("2. Explicit size via browser.arguments, e.g. --window-size=%d,1080", RECOMMENDED_VIEWPORT_WIDTH)
-        LOG.warning("3. Entries in humanization.viewport_sizes with at least %d pixels width", MIN_VIEWPORT_WIDTH)
+        LOG.warning(
+            "3. Entries in humanization.viewport_sizes of at least %d pixels width - they are randomly reduced by up to %d pixels, so %d is not enough",
+            RECOMMENDED_VIEWPORT_WIDTH,
+            _VIEWPORT_JITTER_W,
+            MIN_VIEWPORT_WIDTH,
+        )
         LOG.warning("4. Larger display geometry for headless/Xvfb/VNC setups, e.g. Xvnc -geometry %dx1080", RECOMMENDED_VIEWPORT_WIDTH)
 
     def _build_new_browser_launch_args(self) -> tuple[list[str], str | None]:

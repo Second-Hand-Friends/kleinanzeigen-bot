@@ -153,14 +153,15 @@ diagnostics:
 
 **Symptoms:**
 
-- `Logging in...` although the session is valid, followed by `No HTML element found with ID 'username'`
-- Login detection returns `SELECTOR_TIMEOUT` even though the account is logged in in the browser
-- Selectors that live in the page header run into timeouts
 - The log contains `Browser viewport is only <n> pixels wide`
+- `Timeout navigating to SSO login page after <n>s` — the bot clicks the `Meins` navigation entry, but its submenu never opens
+- Clicks on elements that live in the page header have no effect, without raising an error
 
-**Cause:** kleinanzeigen.de serves its mobile layout below a viewport width of **768 pixels**. The desktop `<header>` is then `display: none`, which hides the logged-in marker (`data-testid="logged-in-user"`) and the navigation entries used to reach the ad list. The elements remain in the DOM, so lookups still resolve them, but their rendered text is empty — which is why this surfaces as a timeout rather than a missing element.
+**Cause:** kleinanzeigen.de serves its mobile layout below a viewport width of **768 pixels**. The desktop `<header>` is then `display: none`, and the navigation entries used to reach the ad list are no longer rendered. The elements remain in the DOM, so lookups still resolve them and the click itself does not fail — it simply has no effect, and the follow-up click on the submenu then times out.
 
-Windows commonly stay too narrow because the randomized resize is skipped when no configured `humanization.viewport_sizes` entry fits the available screen. The window then keeps its initial size, which on small displays (Xvfb, VNC, small VMs, CI) can be well below the threshold.
+Login detection itself is **not** affected: `has_logged_in_marker` falls back to `textContent` (see [Issue: Bot fails to detect existing login session](#issue-bot-fails-to-detect-existing-login-session)), and the logged-out check matches a login link that sits outside the desktop header. A `SELECTOR_TIMEOUT` during login detection therefore has a different cause and should be investigated separately.
+
+Windows commonly stay too narrow because the randomized resize is skipped when no configured `humanization.viewport_sizes` entry fits the available screen. The window then keeps its initial size, which on small displays (Xvfb, VNC, small VMs, CI) can be well below the breakpoint.
 
 **Diagnosis:**
 
@@ -175,10 +176,10 @@ The width the browser actually reports can be checked in the browser console wit
 ```yaml
 browser:
   arguments:
-    - --window-size=1024,1080  # explicit size; disables the viewport_sizes randomization
+    - --window-size=1024,1080  # used as-is; disables the viewport_sizes randomization
 
 humanization:
-  viewport_sizes:  # every entry should be at least 768 pixels wide
+  viewport_sizes:  # entries are randomly reduced by up to 24px, so use 1024 or more - 768 is not enough
     - 1920x1080
     - 1366x768
 ```

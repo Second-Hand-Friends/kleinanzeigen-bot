@@ -26,6 +26,7 @@ from nodriver.core.tab import Tab as Page
 
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import browser_diagnostics, files, loggers
+from kleinanzeigen_bot.utils import web_scraping_mixin as wsm
 from kleinanzeigen_bot.utils.browser_diagnostics import _format_url_host, _is_admin, _is_linux_container_without_sys_ptrace  # noqa: PLC2701
 from kleinanzeigen_bot.utils.web_scraping_mixin import MIN_VIEWPORT_WIDTH, By, Is, WebScrapingMixin, _allocate_selector_group_budgets  # noqa: PLC2701
 
@@ -3654,6 +3655,25 @@ class TestViewportWidthWarning:
         assert "--window-size" in caplog.text
         assert "humanization.viewport_sizes" in caplog.text
         assert "Xvnc -geometry" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_viewport_sizes_remedy_accounts_for_jitter(self, caplog:pytest.LogCaptureFixture) -> None:
+        """`viewport_sizes` entries are jittered down by up to _VIEWPORT_JITTER_W, so recommending
+        MIN_VIEWPORT_WIDTH there would still land below the breakpoint about half the time."""
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = 390),
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        viewport_sizes_line = next(line for line in caplog.text.splitlines() if "humanization.viewport_sizes" in line)
+        assert f"{wsm.RECOMMENDED_VIEWPORT_WIDTH} pixels width" in viewport_sizes_line
+        assert f"{MIN_VIEWPORT_WIDTH} pixels width" not in viewport_sizes_line
+
+    def test_recommended_width_clears_breakpoint_after_jitter(self) -> None:
+        """The recommended width must stay above the breakpoint even at maximum downward jitter."""
+        assert wsm.RECOMMENDED_VIEWPORT_WIDTH - wsm._VIEWPORT_JITTER_W >= MIN_VIEWPORT_WIDTH  # noqa: SLF001
 
     @pytest.mark.asyncio
     async def test_warns_only_once_per_session(self, caplog:pytest.LogCaptureFixture) -> None:
