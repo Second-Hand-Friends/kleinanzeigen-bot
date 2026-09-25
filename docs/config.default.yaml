@@ -198,7 +198,7 @@ deleting:
 # Browser configuration
 browser:
 
-  # additional Chromium command line switches (optional). Leave as [] for default behavior. See https://peter.sh/experiments/chromium-command-line-switches/ Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path
+  # additional Chromium command line switches (optional). Leave as [] for default behavior. See https://peter.sh/experiments/chromium-command-line-switches/ Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path. Note: a --window-size below 768 pixels width makes kleinanzeigen.de serve its mobile layout, in which the page header is not rendered and header-dependent navigation can time out
   # Example usage:
   #   arguments:
   #     - "--headless"
@@ -364,7 +364,7 @@ humanization:
   # pick a random window size from viewport_sizes after page open using available screen metrics (ignored if --window-size is set manually)
   randomize_viewport: true
 
-  # whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled
+  # whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled. Entries narrower than 768 pixels trigger the mobile layout of kleinanzeigen.de; the randomization never reduces a wider entry below that. When no entry fits the available screen the resize is skipped and the window keeps its initial size, which on small displays can be below the breakpoint
   # Example usage:
   #   viewport_sizes:
   #     - "1920x1080"

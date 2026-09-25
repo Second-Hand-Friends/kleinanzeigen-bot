@@ -940,6 +940,19 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Selected viewport size became invalid during parsing: %s": "Ausgewählte Fenstergröße wurde beim Auswerten ungültig: %s"
     "Screen-aware viewport: %s jittered to %s (avail %dx%d)": "Bildschirmgerechte Fenstergröße: %s mit Zufallsabweichung auf %s (verfügbar: %dx%d)"
 
+  _effective_viewport_width:
+    "Could not determine effective viewport width: %s": "Effektive Breite des Anzeigebereichs konnte nicht ermittelt werden: %s"
+
+  _warn_if_viewport_too_narrow:
+    "Browser viewport is only %d pixels wide; kleinanzeigen.de serves its mobile layout below %d pixels.": "Der Anzeigebereich des Browsers ist nur %d Pixel breit; kleinanzeigen.de liefert unterhalb von %d Pixeln das Mobil-Layout aus."
+    ? "In the mobile layout the page header is not rendered; elements inside it are still found but cannot be clicked, which can make the login navigation time out."
+    : "Im Mobil-Layout wird die Kopfzeile der Seite nicht dargestellt; Elemente darin werden zwar gefunden, lassen sich aber nicht anklicken, wodurch die Anmelde-Navigation in eine Zeitüberschreitung laufen kann."
+    "Possible remedies:": "Mögliche Abhilfen:"
+    "1. Browser window of at least %d pixels width (recommended: %d or more)": "1. Browserfenster mit mindestens %d Pixeln Breite (empfohlen: %d oder mehr)"
+    "2. Explicit size via browser.arguments, e.g. --window-size=%d,1080": "2. Feste Größe über browser.arguments, z.B. --window-size=%d,1080"
+    "3. Entries in humanization.viewport_sizes of at least %d pixels width": "3. Einträge in humanization.viewport_sizes mit mindestens %d Pixeln Breite"
+    "4. Larger display geometry for headless/Xvfb/VNC setups, e.g. Xvnc -geometry %dx1080": "4. Größere Bildschirmgeometrie bei Headless-/Xvfb-/VNC-Setups, z.B. Xvnc -geometry %dx1080"
+
   _apply_viewport_size:
     "Applied randomized browser window size: %dx%d": "Zufällige Browser-Fenstergröße angewendet: %dx%d"
     "Viewport resize failed via CDP: %s": "Größenänderung des Browserfensters über CDP fehlgeschlagen: %s"

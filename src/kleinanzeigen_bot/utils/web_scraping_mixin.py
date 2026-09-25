@@ -53,6 +53,15 @@ _BROWSER_PROCESS_KILL_TIMEOUT_SECONDS:Final[float] = 2.0
 _VIEWPORT_JITTER_W:Final[int] = 24
 _VIEWPORT_JITTER_H:Final[int] = 16
 
+# Below this width kleinanzeigen.de hides the desktop <header> (Tailwind `md:block`),
+# which holds the logged-in marker and the nav entries used by login_flow.py.
+# Measured against the live site; it is the only breakpoint affecting bot selectors.
+MIN_VIEWPORT_WIDTH:Final[int] = 768
+
+# The desktop header is a fixed 970px wide, so below this it overflows the viewport.
+# Only used to suggest a comfortable window size, not to warn.
+RECOMMENDED_VIEWPORT_WIDTH:Final[int] = 1024
+
 
 def _resolve_user_data_dir_paths(arg_value:str, config_value:str) -> tuple[Any, Any]:
     """Resolve the argument and config user_data_dir paths for comparison."""
@@ -292,12 +301,16 @@ def _jitter_viewport(base_w:int, base_h:int, avail_w:int, avail_h:int) -> tuple[
     """Apply bounded jitter around a base viewport size.
 
     The random offset is clamped so the final window never exceeds the
-    available screen dimensions or drops below 1×1 CSS pixel.
+    available screen dimensions or drops below 1×1 CSS pixel. A base width that
+    clears ``MIN_VIEWPORT_WIDTH`` is never jittered below it, so a configured
+    size does not randomly land in the mobile layout.
 
     Returns ``(jittered_w, jittered_h)``.
     """
     min_w = max(1, base_w - _VIEWPORT_JITTER_W)
     max_w = min(avail_w, base_w + _VIEWPORT_JITTER_W)
+    if base_w >= MIN_VIEWPORT_WIDTH:
+        min_w = min(max(min_w, MIN_VIEWPORT_WIDTH), max_w)
     min_h = max(1, base_h - _VIEWPORT_JITTER_H)
     max_h = min(avail_h, base_h + _VIEWPORT_JITTER_H)
     return _rng.randint(min_w, max_w), _rng.randint(min_h, max_h)
@@ -310,6 +323,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         self.page:Page = None  # pyright: ignore[reportAttributeAccessIssue]
         self._browser_session_is_remote:bool = False
         self._viewport_resize_attempted:bool = False
+        self._viewport_width_warning_emitted:bool = False
         self._default_timeout_config:TimeoutConfig | None = None
         self._default_humanization_config:HumanizationConfig | None = None
         self.config:BotConfig = cast(BotConfig, None)
@@ -554,6 +568,7 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def create_browser_session(self) -> None:
         LOG.info("Creating Browser session...")
         self._viewport_resize_attempted = False
+        self._viewport_width_warning_emitted = False
         self._browser_session_is_remote = False
 
         if self.browser_config.binary_location:
@@ -809,6 +824,51 @@ class WebScrapingMixin:  # noqa: PLR0904
             return
 
         await self._apply_viewport_size(selected_viewport_size)
+
+    async def _effective_viewport_width(self) -> int | None:
+        """Return the width CSS media queries evaluate against, or ``None`` if undeterminable."""
+        if not self.page:
+            return None
+        try:
+            width = await self.web_execute("window.innerWidth")
+        except Exception as exc:  # noqa: BLE001
+            LOG.debug("Could not determine effective viewport width: %s", exc)
+            return None
+        if isinstance(width, bool) or not isinstance(width, (int, float)) or not math.isfinite(width):
+            return None
+        return int(width) if width > 0 else None
+
+    async def _warn_if_viewport_too_narrow(self) -> None:
+        """Warn once per session when the viewport is too narrow for the desktop layout.
+
+        Deliberately a warning, not an abort: only header-dependent login detection breaks
+        below the threshold, ad pages and the Auth0 login page are width-invariant.
+        """
+        if self._viewport_width_warning_emitted or not self.page:
+            return
+
+        if not self._is_kleinanzeigen_page(getattr(self.page, "url", None)):
+            return
+
+        width = await self._effective_viewport_width()
+        if width is None or width >= MIN_VIEWPORT_WIDTH:
+            return
+
+        self._viewport_width_warning_emitted = True
+        LOG.warning(
+            "Browser viewport is only %d pixels wide; kleinanzeigen.de serves its mobile layout below %d pixels.",
+            width,
+            MIN_VIEWPORT_WIDTH,
+        )
+        LOG.warning(
+            "In the mobile layout the page header is not rendered; elements inside it are still found but cannot be clicked,"
+            " which can make the login navigation time out."
+        )
+        LOG.warning("Possible remedies:")
+        LOG.warning("1. Browser window of at least %d pixels width (recommended: %d or more)", MIN_VIEWPORT_WIDTH, RECOMMENDED_VIEWPORT_WIDTH)
+        LOG.warning("2. Explicit size via browser.arguments, e.g. --window-size=%d,1080", RECOMMENDED_VIEWPORT_WIDTH)
+        LOG.warning("3. Entries in humanization.viewport_sizes of at least %d pixels width", MIN_VIEWPORT_WIDTH)
+        LOG.warning("4. Larger display geometry for headless/Xvfb/VNC setups, e.g. Xvnc -geometry %dx1080", RECOMMENDED_VIEWPORT_WIDTH)
 
     def _build_new_browser_launch_args(self) -> tuple[list[str], str | None]:
         """Build browser launch arguments and extract user_data_dir from custom args.
@@ -1619,6 +1679,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         )
 
         await self._resize_viewport_after_open()
+        await self._warn_if_viewport_too_narrow()
 
     async def web_text(self, selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> str:
         element = await self.web_find(selector_type, selector_value, parent = parent, timeout = timeout)

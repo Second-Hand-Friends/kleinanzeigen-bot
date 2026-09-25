@@ -149,6 +149,50 @@ diagnostics:
 
 > **Migration note:** The legacy key `diagnostics.login_detection_capture` is no longer used. Switch to `diagnostics.capture_on.login_detection` as shown above. If you keep using the old key, login-detection diagnostics will not be triggered.
 
+### Issue: Viewport too narrow (mobile layout)
+
+**Symptoms:**
+
+- The log contains `Browser viewport is only <n> pixels wide`
+- `Timeout navigating to SSO login page after <n>s` — the bot clicks the `Meins` navigation entry, but its submenu never opens
+- Clicks on elements that live in the page header have no effect, without raising an error
+
+**Cause:** kleinanzeigen.de serves its mobile layout below a viewport width of **768 pixels**. The desktop `<header>` is then `display: none`, and the navigation entries used to reach the ad list are no longer rendered. The elements remain in the DOM, so lookups still resolve them and the click itself does not fail — it simply has no effect, and the follow-up click on the submenu then times out.
+
+Login detection itself is **not** affected: `has_logged_in_marker` falls back to `textContent` (see [Issue: Bot fails to detect existing login session](#issue-bot-fails-to-detect-existing-login-session)), and the logged-out check matches a login link that sits outside the desktop header. A `SELECTOR_TIMEOUT` during login detection therefore has a different cause and should be investigated separately.
+
+Windows commonly stay too narrow because the randomized resize is skipped when no configured `humanization.viewport_sizes` entry fits the available screen. The window then keeps its initial size, which on small displays (Xvfb, VNC, small VMs, CI) can be well below the breakpoint.
+
+**Diagnosis:**
+
+```bash
+grep "Browser viewport is only" kleinanzeigen_bot.log
+```
+
+The width the browser actually reports can be checked in the browser console with `window.innerWidth` — that is the value CSS media queries evaluate against.
+
+**Fix:** make sure the window is at least 768 pixels wide; 1024 or more is recommended, since the desktop header is a fixed 970 pixels wide and overflows narrower windows.
+
+```yaml
+browser:
+  arguments:
+    - --window-size=1024,1080  # used as-is; disables the viewport_sizes randomization
+
+humanization:
+  viewport_sizes:  # every entry should be at least 768px wide; the randomization never goes below that
+    - 1920x1080
+    - 1366x768
+```
+
+On headless, Xvfb or VNC setups the display geometry is the actual limit:
+
+```bash
+Xvnc -geometry 1024x1080
+Xvfb :99 -screen 0 1024x1080x24
+```
+
+The bot only warns here and continues: ad pages and the login page render identically at any width, so runs that just download or extract ads keep working.
+
 ### Issue: The bot logs in again on every run
 
 **Symptoms:**

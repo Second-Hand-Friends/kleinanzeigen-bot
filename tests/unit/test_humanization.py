@@ -12,6 +12,8 @@ import pytest
 
 from kleinanzeigen_bot.model.config_model import Config, HumanizationConfig
 from kleinanzeigen_bot.utils.web_scraping_mixin import (
+    _VIEWPORT_JITTER_W,  # noqa: PLC2701 # type: ignore[attr-defined]
+    MIN_VIEWPORT_WIDTH,
     By,
     Element,
     WebScrapingMixin,
@@ -341,6 +343,31 @@ def test_jitter_viewport_floor_at_one() -> None:
     # base_w - 24 = -14, clamped to 1
     assert mock_rand.call_args_list[0].args == (1, 10 + 24)
     assert mock_rand.call_args_list[1].args == (1, 10 + 16)
+
+
+def test_jitter_viewport_never_falls_below_mobile_breakpoint() -> None:
+    """A base width that clears the breakpoint must not be jittered into the mobile layout."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [MIN_VIEWPORT_WIDTH, 900]) as mock_rand:
+        _jitter_viewport(MIN_VIEWPORT_WIDTH, 900, 1920, 1080)
+    # without the floor this would start at MIN_VIEWPORT_WIDTH - _VIEWPORT_JITTER_W
+    assert mock_rand.call_args_list[0].args == (MIN_VIEWPORT_WIDTH, MIN_VIEWPORT_WIDTH + _VIEWPORT_JITTER_W)
+
+
+def test_jitter_viewport_floor_is_not_applied_below_the_breakpoint() -> None:
+    """A base that is already too narrow keeps its full jitter range - the floor cannot fix it."""
+    base_w = MIN_VIEWPORT_WIDTH - 100
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [base_w, 900]) as mock_rand:
+        _jitter_viewport(base_w, 900, 1920, 1080)
+    assert mock_rand.call_args_list[0].args == (base_w - _VIEWPORT_JITTER_W, base_w + _VIEWPORT_JITTER_W)
+
+
+def test_jitter_viewport_floor_stays_within_available_screen() -> None:
+    """The floor must never produce an empty range when the screen barely fits the base."""
+    with patch("kleinanzeigen_bot.utils.web_scraping_mixin._rng.randint", side_effect = [MIN_VIEWPORT_WIDTH, 900]) as mock_rand:
+        _jitter_viewport(MIN_VIEWPORT_WIDTH, 900, MIN_VIEWPORT_WIDTH, 1080)
+    low, high = mock_rand.call_args_list[0].args
+    assert low <= high
+    assert (low, high) == (MIN_VIEWPORT_WIDTH, MIN_VIEWPORT_WIDTH)
 
 
 # ---------------------------------------------------------------------------
