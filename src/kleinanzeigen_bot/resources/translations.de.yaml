@@ -950,8 +950,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Possible remedies:": "Mögliche Abhilfen:"
     "1. Browser window of at least %d pixels width (recommended: %d or more)": "1. Browserfenster mit mindestens %d Pixeln Breite (empfohlen: %d oder mehr)"
     "2. Explicit size via browser.arguments, e.g. --window-size=%d,1080": "2. Feste Größe über browser.arguments, z.B. --window-size=%d,1080"
-    ? "3. Entries in humanization.viewport_sizes of at least %d pixels width - they are randomly reduced by up to %d pixels, so %d is not enough"
-    : "3. Einträge in humanization.viewport_sizes mit mindestens %d Pixeln Breite - sie werden zufällig um bis zu %d Pixel verkleinert, %d reicht daher nicht aus"
+    "3. Entries in humanization.viewport_sizes of at least %d pixels width": "3. Einträge in humanization.viewport_sizes mit mindestens %d Pixeln Breite"
     "4. Larger display geometry for headless/Xvfb/VNC setups, e.g. Xvnc -geometry %dx1080": "4. Größere Bildschirmgeometrie bei Headless-/Xvfb-/VNC-Setups, z.B. Xvnc -geometry %dx1080"
 
   _apply_viewport_size:

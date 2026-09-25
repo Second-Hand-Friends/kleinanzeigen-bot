@@ -326,7 +326,7 @@ The bot measures the effective viewport width after the first page load and logs
 Relevant settings:
 
 - `browser.arguments`: `--window-size=1024,1080` sets an explicit size. This value is used as-is, but it also disables the `viewport_sizes` randomization.
-- `humanization.viewport_sizes`: the chosen entry is randomly reduced by up to 24 pixels, so an entry of exactly `768x...` still ends up below the breakpoint about half the time. Use entries of **1024 pixels or more**. If no entry fits the available screen, the resize is skipped and the window keeps its initial size - on small displays (Xvfb, VNC, small VMs) that can be below the breakpoint.
+- `humanization.viewport_sizes`: every entry should be at least 768 pixels wide. The chosen entry is randomized by up to 24 pixels in each direction, but never below 768 when the entry itself clears it. If no entry fits the available screen, the resize is skipped and the window keeps its initial size - on small displays (Xvfb, VNC, small VMs) that can be below the breakpoint.
 - On headless, Xvfb or VNC setups the display geometry is the actual limit, e.g. `Xvnc -geometry 1024x1080`.
 
 The width that actually counts is `window.innerWidth` in the running browser - that is the value CSS media queries evaluate against, and the value the warning reports.

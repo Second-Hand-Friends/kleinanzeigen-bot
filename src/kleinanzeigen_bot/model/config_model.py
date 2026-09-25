@@ -403,10 +403,9 @@ class HumanizationConfig(ContextualModel):
         ],
         description = (
             "whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled. "
-            "kleinanzeigen.de switches to its mobile layout below 768 pixels viewport width. The chosen entry is "
-            "randomly reduced by up to 24 pixels, so entries of exactly 768 still end up below the breakpoint - "
-            "use 1024 or more. When no entry fits the available screen the resize is skipped and the window keeps "
-            "its initial size, which on small displays can be below the breakpoint"
+            "Entries narrower than 768 pixels trigger the mobile layout of kleinanzeigen.de; the randomization "
+            "never reduces a wider entry below that. When no entry fits the available screen the resize is "
+            "skipped and the window keeps its initial size, which on small displays can be below the breakpoint"
         ),
         examples = ['"1920x1080"', '"1366x768"'],
     )

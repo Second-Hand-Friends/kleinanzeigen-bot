@@ -179,7 +179,7 @@ browser:
     - --window-size=1024,1080  # used as-is; disables the viewport_sizes randomization
 
 humanization:
-  viewport_sizes:  # entries are randomly reduced by up to 24px, so use 1024 or more - 768 is not enough
+  viewport_sizes:  # every entry should be at least 768px wide; the randomization never goes below that
     - 1920x1080
     - 1366x768
 ```
