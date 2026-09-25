@@ -149,6 +149,49 @@ diagnostics:
 
 > **Migration note:** The legacy key `diagnostics.login_detection_capture` is no longer used. Switch to `diagnostics.capture_on.login_detection` as shown above. If you keep using the old key, login-detection diagnostics will not be triggered.
 
+### Issue: Viewport too narrow (mobile layout)
+
+**Symptoms:**
+
+- `Logging in...` although the session is valid, followed by `No HTML element found with ID 'username'`
+- Login detection returns `SELECTOR_TIMEOUT` even though the account is logged in in the browser
+- Selectors that live in the page header run into timeouts
+- The log contains `Browser viewport is only <n> pixels wide`
+
+**Cause:** kleinanzeigen.de serves its mobile layout below a viewport width of **768 pixels**. The desktop `<header>` is then `display: none`, which hides the logged-in marker (`data-testid="logged-in-user"`) and the navigation entries used to reach the ad list. The elements remain in the DOM, so lookups still resolve them, but their rendered text is empty — which is why this surfaces as a timeout rather than a missing element.
+
+Windows commonly stay too narrow because the randomized resize is skipped when no configured `humanization.viewport_sizes` entry fits the available screen. The window then keeps its initial size, which on small displays (Xvfb, VNC, small VMs, CI) can be well below the threshold.
+
+**Diagnosis:**
+
+```bash
+grep "Browser viewport is only" kleinanzeigen_bot.log
+```
+
+The width the browser actually reports can be checked in the browser console with `window.innerWidth` — that is the value CSS media queries evaluate against.
+
+**Fix:** make sure the window is at least 768 pixels wide; 1024 or more is recommended, since the desktop header is a fixed 970 pixels wide and overflows narrower windows.
+
+```yaml
+browser:
+  arguments:
+    - --window-size=1024,1080  # explicit size; disables the viewport_sizes randomization
+
+humanization:
+  viewport_sizes:  # every entry should be at least 768 pixels wide
+    - 1920x1080
+    - 1366x768
+```
+
+On headless, Xvfb or VNC setups the display geometry is the actual limit:
+
+```bash
+Xvnc -geometry 1024x1080
+Xvfb :99 -screen 0 1024x1080x24
+```
+
+The bot only warns here and continues: ad pages and the login page render identically at any width, so runs that just download or extract ads keep working.
+
 ### Issue: The bot logs in again on every run
 
 **Symptoms:**

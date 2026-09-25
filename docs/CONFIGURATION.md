@@ -317,6 +317,20 @@ browser:
 
 `suppress_unsupported_flag_warning` keeps Chromium's `--test-type` flag enabled by default to hide unsupported-command-line warnings. Set it to `false` in Docker or LXC environments without `CAP_SYS_PTRACE` if Chrome or Brave exits before the DevTools endpoint becomes available.
 
+**Minimum window width:**
+
+kleinanzeigen.de switches to its mobile layout below a viewport width of **768 pixels**. In that layout the page header is `display: none`, and with it the logged-in marker and the navigation entries the bot uses. A width of **1024 pixels or more** is recommended, because the desktop header is a fixed 970 pixels wide and overflows narrower windows.
+
+The bot measures the effective viewport width after the first page load and logs a warning - not an error - when it is below the threshold. Ad pages and the login page itself render identically at any width, so runs that only download or extract ads are not affected.
+
+Relevant settings:
+
+- `browser.arguments`: `--window-size=1024,1080` sets an explicit size. Note that this disables the `viewport_sizes` randomization.
+- `humanization.viewport_sizes`: every entry should be at least 768 pixels wide. If no entry fits the available screen, the resize is skipped and the window keeps its initial size - on small displays (Xvfb, VNC, small VMs) that can be below the threshold.
+- On headless, Xvfb or VNC setups the display geometry is the actual limit, e.g. `Xvnc -geometry 1024x1080`.
+
+See [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md#issue-viewport-too-narrow-mobile-layout) for the symptoms.
+
 For detailed browser connection troubleshooting, including Chrome 136+ security requirements and remote debugging setup, see [Browser Troubleshooting](./BROWSER_TROUBLESHOOTING.md).
 
 ### update_check

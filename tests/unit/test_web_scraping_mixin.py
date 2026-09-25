@@ -13,6 +13,7 @@ import time
 import zipfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, NoReturn, Protocol, cast
 from unittest.mock import ANY, AsyncMock, MagicMock, Mock, mock_open, patch
 
@@ -26,7 +27,7 @@ from nodriver.core.tab import Tab as Page
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import browser_diagnostics, files, loggers
 from kleinanzeigen_bot.utils.browser_diagnostics import _format_url_host, _is_admin, _is_linux_container_without_sys_ptrace  # noqa: PLC2701
-from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin, _allocate_selector_group_budgets  # noqa: PLC2701
+from kleinanzeigen_bot.utils.web_scraping_mixin import MIN_VIEWPORT_WIDTH, By, Is, WebScrapingMixin, _allocate_selector_group_budgets  # noqa: PLC2701
 
 
 class ConfigProtocol(Protocol):
@@ -3602,3 +3603,123 @@ class TestWebSetInputValue:
 
         with pytest.raises(TimeoutError, match = "TOCTOU"):
             await web_scraper.web_set_input_value("ad-title", "Hello World")
+
+
+class TestViewportWidthWarning:
+    """Unit tests for the minimum-viewport-width detection."""
+
+    @staticmethod
+    def _scraper(url:str = "https://www.kleinanzeigen.de/") -> WebScrapingMixin:
+        scraper = WebScrapingMixin()
+        scraper.page = cast(Any, SimpleNamespace(url = url))
+        return scraper
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("width", [320, 390, 600, MIN_VIEWPORT_WIDTH - 1])
+    async def test_warns_below_threshold(self, width:int, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = width),
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        assert f"only {width} pixels wide" in caplog.text
+        assert scraper._viewport_width_warning_emitted is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("width", [MIN_VIEWPORT_WIDTH, MIN_VIEWPORT_WIDTH + 1, 1366, 1920])
+    async def test_stays_silent_at_or_above_threshold(self, width:int, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = width),
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        assert not caplog.text
+        assert scraper._viewport_width_warning_emitted is False
+
+    @pytest.mark.asyncio
+    async def test_warning_names_cause_and_remedies(self, caplog:pytest.LogCaptureFixture) -> None:
+        """The warning must point at the mobile layout and list every documented remedy."""
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = 520),
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        assert "mobile layout" in caplog.text
+        assert "--window-size" in caplog.text
+        assert "humanization.viewport_sizes" in caplog.text
+        assert "Xvnc -geometry" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_warns_only_once_per_session(self, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = 390) as execute,
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+            caplog.clear()
+            await scraper._warn_if_viewport_too_narrow()
+
+        assert execute.await_count == 1  # second call short-circuits before probing
+        assert not caplog.text
+
+    @pytest.mark.asyncio
+    async def test_ignores_non_kleinanzeigen_pages(self, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = self._scraper("https://login.example.com/")
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = 390) as execute,
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        execute.assert_not_awaited()
+        assert not caplog.text
+
+    @pytest.mark.asyncio
+    async def test_no_warning_without_page(self, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = WebScrapingMixin()
+        with caplog.at_level(logging.WARNING):
+            await scraper._warn_if_viewport_too_narrow()
+        assert not caplog.text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("value", [None, 0, -1, "768", True, float("nan"), {"width": 390}])
+    async def test_stays_silent_for_unusable_width(self, value:object, caplog:pytest.LogCaptureFixture) -> None:
+        """An undeterminable width must never produce a false alarm."""
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = value),
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        assert not caplog.text
+        assert scraper._viewport_width_warning_emitted is False
+
+    @pytest.mark.asyncio
+    async def test_probe_failure_is_not_fatal(self, caplog:pytest.LogCaptureFixture) -> None:
+        scraper = self._scraper()
+        with (
+            caplog.at_level(logging.WARNING),
+            patch.object(scraper, "web_execute", new_callable = AsyncMock, side_effect = ProtocolException("boom")),
+        ):
+            await scraper._warn_if_viewport_too_narrow()
+
+        assert not caplog.text
+
+    @pytest.mark.asyncio
+    async def test_effective_viewport_width_uses_inner_width(self) -> None:
+        """`window.innerWidth` is what CSS media queries evaluate against; clientWidth excludes the scrollbar."""
+        scraper = self._scraper()
+        with patch.object(scraper, "web_execute", new_callable = AsyncMock, return_value = 1280) as execute:
+            assert await scraper._effective_viewport_width() == 1280
+        execute.assert_awaited_once_with("window.innerWidth")
+
+    def test_new_session_starts_without_warning_flag(self) -> None:
+        assert WebScrapingMixin()._viewport_width_warning_emitted is False

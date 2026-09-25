@@ -219,7 +219,9 @@ class BrowserConfig(ContextualModel):
         description=(
             "additional Chromium command line switches (optional). Leave as [] for default behavior. "
             "See https://peter.sh/experiments/chromium-command-line-switches/ "
-            "Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path"
+            "Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path. "
+            "Note: a --window-size below 768 pixels width makes kleinanzeigen.de serve its mobile layout, "
+            "which hides the page header and can break login detection"
         ),
         examples = ['"--headless"', '"--disable-dev-shm-usage"', '"--user-data-dir=/path/to/profile"'],
     )
@@ -399,7 +401,12 @@ class HumanizationConfig(ContextualModel):
             "2560x1440", "1920x1200", "1920x1080", "1728x1117",
             "1680x1050", "1600x900", "1536x864", "1512x982", "1440x900", "1366x768",
         ],
-        description = "whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled",
+        description = (
+            "whitelist of WxH desktop window sizes to randomly choose from when randomize_viewport is enabled. "
+            "Entries narrower than 768 pixels trigger the mobile layout of kleinanzeigen.de; 1024 or more is recommended. "
+            "When no entry fits the available screen the resize is skipped and the window keeps its initial size, "
+            "which on small displays can be below the threshold"
+        ),
         examples = ['"1920x1080"', '"1366x768"'],
     )
 
