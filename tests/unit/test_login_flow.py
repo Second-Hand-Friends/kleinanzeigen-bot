@@ -64,6 +64,31 @@ class TestKleinanzeigenBotAuthentication:
             assert await test_bot.is_logged_in() is False
 
     @pytest.mark.asyncio
+    async def test_has_logged_in_marker_falls_back_to_text_content_for_hidden_marker(self, test_bot:KleinanzeigenBot) -> None:
+        """The marker on the redesigned start page sits in a display:none header: the selection-based
+        text is empty, but textContent still carries the username, so the session must be recognised."""
+        marker = MagicMock(spec = Element)
+        with (
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (marker, 0)),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "extract_text_content", new_callable = AsyncMock, return_value = "angemeldet als: dummy_user") as text_content,
+        ):
+            assert await has_logged_in_marker(test_bot, username = "dummy_user") is True
+
+        text_content.assert_awaited_once_with(marker)
+
+    @pytest.mark.asyncio
+    async def test_has_logged_in_marker_hidden_marker_without_username_is_not_logged_in(self, test_bot:KleinanzeigenBot) -> None:
+        """A hidden marker whose textContent names a different account must not count as logged in."""
+        marker = MagicMock(spec = Element)
+        with (
+            patch.object(test_bot, "web_find_first_available", new_callable = AsyncMock, return_value = (marker, 0)),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "extract_text_content", new_callable = AsyncMock, return_value = "angemeldet als: someone_else"),
+        ):
+            assert await has_logged_in_marker(test_bot, username = "dummy_user") is False
+
+    @pytest.mark.asyncio
     async def test_has_logged_out_cta_requires_visible_candidate(self, test_bot:KleinanzeigenBot) -> None:
         matched_element = MagicMock(spec = Element)
         with (

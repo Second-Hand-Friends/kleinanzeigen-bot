@@ -504,9 +504,14 @@ class WebScrapingMixin:  # noqa: PLR0904
         timeout:int | float | None = None,
         key:str = "default",
         description:str | None = None,
+        fallback_to_text_content:bool = False,
     ) -> tuple[str, int]:
         """
         Return visible text from the first selector that resolves from a selector group.
+
+        With ``fallback_to_text_content`` the DOM ``textContent`` (see :meth:`extract_text_content`)
+        is returned whenever the selection-based visible text is empty, e.g. because the matched
+        element sits in a subtree that is not rendered (``display: none``).
         """
         element, matched_index = await self.web_find_first_available(
             selectors,
@@ -516,7 +521,18 @@ class WebScrapingMixin:  # noqa: PLR0904
             description = description,
         )
         text = await self.extract_visible_text(element)
+        if not text and fallback_to_text_content:
+            text = await self.extract_text_content(element)
         return text, matched_index
+
+    async def extract_text_content(self, element:Element) -> str:
+        """Return the DOM text of an element regardless of its rendering state.
+
+        Unlike :meth:`extract_visible_text` this reads ``textContent``, so text inside
+        ``display: none`` subtrees is returned as well. Selection-based extraction yields an
+        empty string there.
+        """
+        return str(await element.apply('function (elem) { return (elem.textContent || "").trim() }'))
 
     async def extract_visible_text(self, element:Element) -> str:
         """Return visible text for a DOM element using user-selection extraction."""

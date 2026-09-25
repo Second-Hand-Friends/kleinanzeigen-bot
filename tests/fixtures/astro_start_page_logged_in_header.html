@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!--
+  Sanitized excerpt of the redesigned (Astro) kleinanzeigen.de start page, captured logged in on 2026-09-23.
+  Kept: the ancestor chain of the logged-in marker with its original classes and data-testid attributes.
+  Removed: the account e-mail (replaced by user@example.com), navigation, icons and all other header content.
+  The two CSS rules are the Tailwind utilities the header relies on: `hidden md:block` renders it only from
+  768px viewport width upwards, below that it is `display: none`.
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Kleinanzeigen start page header (fixture)</title>
+<style>
+  .hidden { display: none; }
+  @media (min-width: 768px) { .md\:block { display: block; } }
+</style>
+</head>
+<body>
+<header class="hidden w-[970px] bg-surface md:block custom:w-full" data-testid="header">
+  <div class="flex justify-center py-large">
+    <div class="flex w-full max-w-screen-custom flex-wrap items-center justify-between">
+      <span class="flex grow flex-row flex-nowrap items-center justify-end">
+        <astro-island>
+          <section class="flex shrink-0 grow flex-row items-center justify-between">
+            <p class="mr-medium max-w-[500px] shrink truncate text-bodyRegular" data-testid="logged-in-user" title="user@example.com">angemeldet als: user@example.com</p>
+          </section>
+        </astro-island>
+      </span>
+    </div>
+  </div>
+</header>
+</body>
+</html>
