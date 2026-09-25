@@ -221,7 +221,7 @@ class BrowserConfig(ContextualModel):
             "See https://peter.sh/experiments/chromium-command-line-switches/ "
             "Common: --headless (no GUI), --disable-dev-shm-usage (Docker fix), --user-data-dir=/path. "
             "Note: a --window-size below 768 pixels width makes kleinanzeigen.de serve its mobile layout, "
-            "which hides the page header and can break login detection"
+            "in which the page header is not rendered and header-dependent navigation can time out"
         ),
         examples = ['"--headless"', '"--disable-dev-shm-usage"', '"--user-data-dir=/path/to/profile"'],
     )
