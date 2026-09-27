@@ -23,22 +23,22 @@ from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.web_scraping_mixin import Browser, By, Element
 
-SCHEMA_PATH:Final[Path] = Path(__file__).resolve().parents[2] / "schemas" / "ad.schema.json"
+SCHEMA_PATH: Final[Path] = Path(__file__).resolve().parents[2] / "schemas" / "ad.schema.json"
 
 
-def _read_text_file(path:Path) -> str:
-    return path.read_text(encoding = "utf-8")
+def _read_text_file(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
-def _load_astro_props_fixture(name:str) -> dict[str, Any]:
+def _load_astro_props_fixture(name: str) -> dict[str, Any]:
     """Load a saved Astro island props fixture from ``tests/fixtures``."""
     fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / name
-    return cast(dict[str, Any], json.loads(fixture_path.read_text(encoding = "utf-8")))
+    return cast(dict[str, Any], json.loads(fixture_path.read_text(encoding="utf-8")))
 
 
-def _create_test_ad_partial(**overrides:Any) -> AdPartial:
+def _create_test_ad_partial(**overrides: Any) -> AdPartial:
     """Create a valid AdPartial payload for extract staging/rollback tests."""
-    payload:dict[str, Any] = {
+    payload: dict[str, Any] = {
         "title": "Test Advertisement Title",
         "description": "Test Description",
         "category": "Dienstleistungen",
@@ -56,29 +56,29 @@ def _create_test_ad_partial(**overrides:Any) -> AdPartial:
 
 
 class _DimensionsDict(TypedDict):
-    ad_attributes:str
+    ad_attributes: str
 
 
 class _UniversalAnalyticsOptsDict(TypedDict):
-    dimensions:_DimensionsDict
+    dimensions: _DimensionsDict
 
 
 class _BelenConfDict(TypedDict):
-    universalAnalyticsOpts:_UniversalAnalyticsOptsDict
+    universalAnalyticsOpts: _UniversalAnalyticsOptsDict
 
 
 class _SpecialAttributesDict(TypedDict, total=False):
-    art_s:str
-    condition_s:str
+    art_s: str
+    condition_s: str
 
 
 class _TestCaseDict(TypedDict):  # noqa: PYI049 Private TypedDict `...` is never used
-    belen_conf:_BelenConfDict
-    expected:_SpecialAttributesDict
+    belen_conf: _BelenConfDict
+    expected: _SpecialAttributesDict
 
 
 @pytest.fixture
-def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> extract_module.AdExtractor:
+def test_extractor(browser_mock: MagicMock, test_bot_config: Config) -> extract_module.AdExtractor:
     """Provides a fresh extract_module.AdExtractor instance for testing.
 
     Dependencies:
@@ -91,7 +91,7 @@ def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> extract_mo
 class TestAdExtractorBasics:
     """Basic synchronous tests for extract_module.AdExtractor."""
 
-    def test_constructor(self, browser_mock:MagicMock, test_bot_config:Config) -> None:
+    def test_constructor(self, browser_mock: MagicMock, test_bot_config: Config) -> None:
         """Test the constructor of extract_module.AdExtractor"""
         extractor = extract_module.AdExtractor(browser_mock, test_bot_config, Path("downloaded-ads"))
         assert extractor.browser == browser_mock
@@ -99,43 +99,43 @@ class TestAdExtractorBasics:
         assert extractor.download_dir == Path("downloaded-ads")
 
     @pytest.mark.asyncio
-    async def test_extract_island_props_preserves_decoded_entity_like_description(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_island_props_preserves_decoded_entity_like_description(self, test_extractor: extract_module.AdExtractor) -> None:
         """Parse the browser-returned attribute before attempting HTML unescaping."""
         description = "Verkaufe LEGO-Set mit &quot;The Great Wall of China&quot;."
         astro_props = json.dumps({"data": [0, {"description": [0, description]}]})
 
-        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = astro_props):
+        with patch.object(test_extractor, "web_execute", new_callable=AsyncMock, return_value=astro_props):
             island_props = await test_extractor._extract_island_props()
 
         assert island_props["description"] == [0, description]
 
     @pytest.mark.asyncio
-    async def test_extract_island_props_unescapes_and_unwraps_ad_data(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_island_props_unescapes_and_unwraps_ad_data(self, test_extractor: extract_module.AdExtractor) -> None:
         """Extract usable ad data from an HTML-escaped Astro props attribute."""
         astro_props = (
             "{&quot;data&quot;:[0,{&quot;formattedCreationDate&quot;:[0,&quot;22.08.2026&quot;],"
             "&quot;userDetails&quot;:[0,{&quot;contactName&quot;:[0,&quot;DanielP&quot;]}]}]}"
         )
 
-        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = astro_props):
+        with patch.object(test_extractor, "web_execute", new_callable=AsyncMock, return_value=astro_props):
             island_props = await test_extractor._extract_island_props()
 
         assert island_props["formattedCreationDate"] == [0, "22.08.2026"]
         assert island_props["userDetails"] == [0, {"contactName": [0, "DanielP"]}]
 
     @pytest.mark.asyncio
-    async def test_extract_island_props_ignores_malformed_data(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_island_props_ignores_malformed_data(self, test_extractor: extract_module.AdExtractor) -> None:
         """Ignore malformed island attributes so legacy extraction can continue."""
-        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = "{not json"):
+        with patch.object(test_extractor, "web_execute", new_callable=AsyncMock, return_value="{not json"):
             assert await test_extractor._extract_island_props() == {}
 
     @pytest.mark.asyncio
-    async def test_extract_island_props_returns_unwrapped_props_for_unexpected_data_shape(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_island_props_returns_unwrapped_props_for_unexpected_data_shape(self, test_extractor: extract_module.AdExtractor) -> None:
         """Retain parseable props when their data envelope has an unexpected shape."""
-        with patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = '{"data":"unexpected"}'):
+        with patch.object(test_extractor, "web_execute", new_callable=AsyncMock, return_value='{"data":"unexpected"}'):
             assert await test_extractor._extract_island_props() == {"data": "unexpected"}
 
-    def test_unwrap_island_value_keeps_non_enveloped_values(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_unwrap_island_value_keeps_non_enveloped_values(self, test_extractor: extract_module.AdExtractor) -> None:
         """Keep ordinary values intact when they do not use Astro's tuple envelope."""
         assert test_extractor._unwrap_island_value("plain value") == "plain value"
 
@@ -148,12 +148,12 @@ class TestAdExtractorBasics:
             ("https://www.kleinanzeigen.de/invalid-url", -1),
         ],
     )
-    def test_extract_ad_id_from_ad_url(self, test_extractor:extract_module.AdExtractor, url:str, expected_id:int) -> None:
+    def test_extract_ad_id_from_ad_url(self, test_extractor: extract_module.AdExtractor, url: str, expected_id: int) -> None:
         """Test extraction of ad ID from different URL formats."""
         assert test_extractor.extract_ad_id_from_ad_url(url) == expected_id
 
     @pytest.mark.asyncio
-    async def test_path_exists_helper(self, tmp_path:Path) -> None:
+    async def test_path_exists_helper(self, tmp_path: Path) -> None:
         """Test files.exists helper function."""
 
         from kleinanzeigen_bot.utils import files  # noqa: PLC0415
@@ -170,7 +170,7 @@ class TestAdExtractorBasics:
         assert await files.exists(str(non_existing)) is False
 
     @pytest.mark.asyncio
-    async def test_path_is_dir_helper(self, tmp_path:Path) -> None:
+    async def test_path_is_dir_helper(self, tmp_path: Path) -> None:
         """Test files.is_dir helper function."""
 
         from kleinanzeigen_bot.utils import files  # noqa: PLC0415
@@ -192,7 +192,7 @@ class TestAdExtractorBasics:
         assert await files.is_dir(non_existing) is False
         assert await files.is_dir(str(non_existing)) is False
 
-    def test_download_and_save_image_sync_success(self, tmp_path:Path) -> None:
+    def test_download_and_save_image_sync_success(self, tmp_path: Path) -> None:
         """Test _download_and_save_image_sync with successful download."""
         from unittest.mock import MagicMock, mock_open  # noqa: PLC0415
 
@@ -202,11 +202,11 @@ class TestAdExtractorBasics:
         # Mock urllib response
         mock_response = MagicMock()
         mock_response.info().get_content_type.return_value = "image/jpeg"
-        mock_response.__enter__ = MagicMock(return_value = mock_response)
-        mock_response.__exit__ = MagicMock(return_value = False)
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
 
         with (
-            patch("kleinanzeigen_bot.extract.urllib_request.urlopen", return_value = mock_response),
+            patch("kleinanzeigen_bot.extract.urllib_request.urlopen", return_value=mock_response),
             patch("kleinanzeigen_bot.extract.open", mock_open()),
             patch("kleinanzeigen_bot.extract.shutil.copyfileobj"),
         ):
@@ -216,9 +216,9 @@ class TestAdExtractorBasics:
             assert result.endswith((".jpe", ".jpeg", ".jpg"))
             assert "test_1" in result
 
-    def test_download_and_save_image_sync_failure(self, tmp_path:Path) -> None:
+    def test_download_and_save_image_sync_failure(self, tmp_path: Path) -> None:
         """Test _download_and_save_image_sync with download failure."""
-        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", side_effect = URLError("Network error")):
+        with patch("kleinanzeigen_bot.extract.urllib_request.urlopen", side_effect=URLError("Network error")):
             result = extract_module.AdExtractor._download_and_save_image_sync("http://example.com/image.jpg", str(tmp_path), "test_", 1)
 
             assert result is None
@@ -240,19 +240,19 @@ class TestAdExtractorPricing:
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_pricing_info(
-        self, test_extractor:extract_module.AdExtractor, price_text:str, expected_price:int | None, expected_type:str
+        self, test_extractor: extract_module.AdExtractor, price_text: str, expected_price: int | None, expected_type: str
     ) -> None:
         """Test price extraction with different formats"""
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = price_text):
+        with patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value=price_text):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page()
             assert price == expected_price
             assert price_type == expected_type
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_pricing_info_timeout(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_pricing_info_timeout(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test price extraction when element is not found"""
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError):
+        with patch.object(test_extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page()
             assert price is None
             assert price_type == "NOT_APPLICABLE"
@@ -273,22 +273,22 @@ class TestAdExtractorShipping:
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_shipping_info(
-        self, test_extractor:extract_module.AdExtractor, shipping_text:str, expected_type:str, expected_cost:float | None, island_header:str | None
+        self, test_extractor: extract_module.AdExtractor, shipping_text: str, expected_type: str, expected_cost: float | None, island_header: str | None
     ) -> None:
         """DOM shipping text takes precedence over potentially conflicting island props."""
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = shipping_text),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value=shipping_text),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock) as mock_web_request,
         ):
             if expected_cost:
-                shipping_response:dict[str, Any] = {
+                shipping_response: dict[str, Any] = {
                     "data": {"shippingOptionsResponse": {"options": [{"id": "DHL_001", "priceInEuroCent": int(expected_cost * 100), "packageSize": "SMALL"}]}}
                 }
                 mock_web_request.return_value = {"content": json.dumps(shipping_response)}
 
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(
-                island_props = {"shippingHeader": [0, island_header]} if island_header is not None else None
+                island_props={"shippingHeader": [0, island_header]} if island_header is not None else None
             )
 
             assert shipping_type == expected_type
@@ -300,30 +300,25 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    @pytest.mark.parametrize("dom_text", [None, ""], ids = ["absent", "empty"])
-    async def test_extract_shipping_info_from_island_props_fallback(self, test_extractor:extract_module.AdExtractor, dom_text:str | None) -> None:
+    @pytest.mark.parametrize("dom_text", [None, ""], ids=["absent", "empty"])
+    async def test_extract_shipping_info_from_island_props_fallback(self, test_extractor: extract_module.AdExtractor, dom_text: str | None) -> None:
         """Shipping falls back to island props when the legacy DOM element is absent or empty."""
-        island_props:dict[str, Any] = {"shippingHeader": [0, "+ Versand ab 2,99 €"]}
-        shipping_response:dict[str, Any] = {
-            "content": json.dumps(
-                {
-                    "data": {
-                        "shippingOptionsResponse": {
-                            "options": [{"id": "DHL_001", "priceInEuroCent": 299, "packageSize": "SMALL"}]
-                        }
-                    }
-                }
-            )
+        island_props: dict[str, Any] = {"shippingHeader": [0, "+ Versand ab 2,99 €"]}
+        shipping_response: dict[str, Any] = {
+            "content": json.dumps({"data": {"shippingOptionsResponse": {"options": [{"id": "DHL_001", "priceInEuroCent": 299, "packageSize": "SMALL"}]}}})
         }
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(
-                test_extractor, "web_text", new_callable = AsyncMock,
-                side_effect = TimeoutError if dom_text is None else None, return_value = dom_text,
+                test_extractor,
+                "web_text",
+                new_callable=AsyncMock,
+                side_effect=TimeoutError if dom_text is None else None,
+                return_value=dom_text,
             ),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props=island_props)
 
             assert shipping_type == "SHIPPING"
             assert costs == 2.99
@@ -339,16 +334,16 @@ class TestAdExtractorShipping:
         ],
     )
     async def test_extract_shipping_type_from_island_props_fallback_without_costs(
-        self, test_extractor:extract_module.AdExtractor, header_text:str, expected_type:str
+        self, test_extractor: extract_module.AdExtractor, header_text: str, expected_type: str
     ) -> None:
         """Island-prop fallback also covers PICKUP / shipping-without-costs wording."""
-        island_props:dict[str, Any] = {"shippingHeader": [0, header_text]}
+        island_props: dict[str, Any] = {"shippingHeader": [0, header_text]}
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock) as mock_web_request,
         ):
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props=island_props)
 
             assert shipping_type == expected_type
             assert costs is None
@@ -357,17 +352,13 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_island_props_without_shipping_header(
-        self, test_extractor:extract_module.AdExtractor
-    ) -> None:
+    async def test_extract_shipping_info_island_props_without_shipping_header(self, test_extractor: extract_module.AdExtractor) -> None:
         """Missing shippingHeader island prop keeps the legacy NOT_APPLICABLE behaviour."""
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError),
         ):
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(
-                island_props = {"formattedCreationDate": [0, "Heute"]}
-            )
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props={"formattedCreationDate": [0, "Heute"]})
 
             assert shipping_type == "NOT_APPLICABLE"
             assert costs is None
@@ -375,28 +366,20 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_from_real_island_props_fixture_shipping(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_from_real_island_props_fixture_shipping(self, test_extractor: extract_module.AdExtractor) -> None:
         """Real saved redesigned-page props (shipping ad) restore SHIPPING via the island fallback."""
         island_props = _load_astro_props_fixture("astro_ad_props_shipping.json")
         assert island_props["shippingHeader"] == [0, "+ Versand ab 0,99 €"]
 
-        shipping_response:dict[str, Any] = {
-            "content": json.dumps(
-                {
-                    "data": {
-                        "shippingOptionsResponse": {
-                            "options": [{"id": "DHL_001", "priceInEuroCent": 99, "packageSize": "SMALL"}]
-                        }
-                    }
-                }
-            )
+        shipping_response: dict[str, Any] = {
+            "content": json.dumps({"data": {"shippingOptionsResponse": {"options": [{"id": "DHL_001", "priceInEuroCent": 99, "packageSize": "SMALL"}]}}})
         }
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props=island_props)
 
         assert shipping_type == "SHIPPING"
         assert costs == 0.99
@@ -404,17 +387,17 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_from_real_island_props_fixture_pickup(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_from_real_island_props_fixture_pickup(self, test_extractor: extract_module.AdExtractor) -> None:
         """Real saved redesigned-page props (pickup ad) restore PICKUP via the island fallback."""
         island_props = _load_astro_props_fixture("astro_ad_props_pickup.json")
         assert island_props["shippingHeader"] == [0, "Nur Abholung"]
 
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock) as mock_web_request,
         ):
-            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props=island_props)
 
         assert shipping_type == "PICKUP"
         assert costs is None
@@ -423,7 +406,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_all_matching_options(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_info_with_all_matching_options(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test shipping info extraction with all matching options enabled."""
         shipping_response = {
             "content": json.dumps(
@@ -446,8 +429,8 @@ class TestAdExtractorShipping:
 
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value="+ Versand ab 4,89 €"),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -460,7 +443,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_all_matching_options_no_match(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_info_with_all_matching_options_no_match(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test shipping extraction when include-all is enabled but no option matches the price."""
         shipping_response = {
             "content": json.dumps(
@@ -481,8 +464,8 @@ class TestAdExtractorShipping:
 
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value="+ Versand ab 4,89 €"),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -492,7 +475,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_excluded_options(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_info_with_excluded_options(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test shipping info extraction with excluded options."""
         shipping_response = {
             "content": json.dumps(
@@ -515,8 +498,8 @@ class TestAdExtractorShipping:
 
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value="+ Versand ab 4,89 €"),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -529,7 +512,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_excluded_matching_option(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_info_with_excluded_matching_option(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test shipping info extraction when the matching option is excluded."""
         shipping_response = {
             "content": json.dumps(
@@ -551,8 +534,8 @@ class TestAdExtractorShipping:
 
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 4,89 €"),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value="+ Versand ab 4,89 €"),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -562,7 +545,7 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_with_no_matching_option(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_info_with_no_matching_option(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test shipping info extraction when price exists but NO matching option in API response."""
         shipping_response = {
             "content": json.dumps(
@@ -581,8 +564,8 @@ class TestAdExtractorShipping:
 
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "+ Versand ab 7,00 €"),
-            patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, return_value="+ Versand ab 7,00 €"),
+            patch.object(test_extractor, "web_request", new_callable=AsyncMock, return_value=shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -592,11 +575,11 @@ class TestAdExtractorShipping:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_shipping_info_timeout(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_shipping_info_timeout(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test shipping info extraction when shipping element is missing (TimeoutError)."""
         with (
             patch.object(test_extractor, "page", MagicMock()),
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page()
 
@@ -609,22 +592,22 @@ class TestAdExtractorNavigation:
     """Tests for navigation related functionality."""
 
     @pytest.mark.asyncio
-    async def test_navigate_to_ad_page_with_url(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_navigate_to_ad_page_with_url(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test navigation to ad page using a URL."""
         page_mock = AsyncMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
 
         with (
             patch.object(test_extractor, "page", page_mock),
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
-            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock) as mock_web_open,
+            patch.object(test_extractor, "web_probe", new_callable=AsyncMock, return_value=None),
         ):
             result = await test_extractor.navigate_to_ad_page("https://www.kleinanzeigen.de/s-anzeige/test/12345")
             assert result is True
             mock_web_open.assert_called_with("https://www.kleinanzeigen.de/s-anzeige/test/12345")
 
     @pytest.mark.asyncio
-    async def test_navigate_to_ad_page_with_id(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_navigate_to_ad_page_with_id(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test navigation to ad page using an ID."""
         ad_id = 12345
         page_mock = AsyncMock()
@@ -632,10 +615,10 @@ class TestAdExtractorNavigation:
 
         with (
             patch.object(test_extractor, "page", page_mock),
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
-            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_extractor, "web_click", new_callable = AsyncMock) as mock_web_click,
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock) as mock_web_open,
+            patch.object(test_extractor, "web_probe", new_callable=AsyncMock, return_value=MagicMock()),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock, return_value=MagicMock()),
+            patch.object(test_extractor, "web_click", new_callable=AsyncMock) as mock_web_click,
         ):
             result = await test_extractor.navigate_to_ad_page(ad_id)
             assert result is True
@@ -643,7 +626,7 @@ class TestAdExtractorNavigation:
             mock_web_click.assert_awaited_once_with(By.CLASS_NAME, "mfp-close")
 
     @pytest.mark.asyncio
-    async def test_navigate_to_ad_page_with_popup(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_navigate_to_ad_page_with_popup(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test navigation to ad page with popup handling."""
         page_mock = AsyncMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
@@ -651,30 +634,30 @@ class TestAdExtractorNavigation:
         input_mock = AsyncMock()
         input_mock.clear_input = AsyncMock()
         input_mock.send_keys = AsyncMock()
-        input_mock.apply = AsyncMock(return_value = True)
+        input_mock.apply = AsyncMock(return_value=True)
 
         with (
             patch.object(test_extractor, "page", page_mock),
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, return_value = input_mock),
-            patch.object(test_extractor, "web_click", new_callable = AsyncMock) as mock_web_click,
-            patch.object(test_extractor, "web_check", new_callable = AsyncMock, return_value = True),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_probe", new_callable=AsyncMock, return_value=MagicMock()),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock, return_value=input_mock),
+            patch.object(test_extractor, "web_click", new_callable=AsyncMock) as mock_web_click,
+            patch.object(test_extractor, "web_check", new_callable=AsyncMock, return_value=True),
         ):
             result = await test_extractor.navigate_to_ad_page(12345)
             assert result is True
             mock_web_click.assert_called_with(By.CLASS_NAME, "mfp-close")
 
     @pytest.mark.asyncio
-    async def test_navigate_to_ad_page_invalid_id(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_navigate_to_ad_page_invalid_id(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test navigation to ad page with invalid ID."""
         page_mock = AsyncMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-suchen.html?k0"
 
         with (
             patch.object(test_extractor, "page", page_mock),
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock) as mock_web_open,
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock) as mock_web_find,
         ):
             result = await test_extractor.navigate_to_ad_page(99999)
 
@@ -683,16 +666,16 @@ class TestAdExtractorNavigation:
         mock_web_find.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_navigate_to_ad_page_reloads_when_search_redirect_has_no_ad_content(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_navigate_to_ad_page_reloads_when_search_redirect_has_no_ad_content(self, test_extractor: extract_module.AdExtractor) -> None:
         """Retry once when the search page has not yet redirected to ad content."""
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
 
         with (
             patch.object(test_extractor, "page", page_mock),
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock) as mock_web_open,
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = [TimeoutError(), MagicMock()]),
-            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock) as mock_web_open,
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock, side_effect=[TimeoutError(), MagicMock()]),
+            patch.object(test_extractor, "web_probe", new_callable=AsyncMock, return_value=None),
         ):
             assert await test_extractor.navigate_to_ad_page(12345) is True
 
@@ -700,15 +683,15 @@ class TestAdExtractorNavigation:
         assert mock_web_open.await_args_list[1].kwargs == {"reload_if_already_open": True}
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_own_ads_urls(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test extraction of own ads URLs - basic test."""
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock) as mock_web_find_all,
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_execute", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock) as mock_web_find,
+            patch.object(test_extractor, "web_find_all", new_callable=AsyncMock) as mock_web_find_all,
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_execute", new_callable=AsyncMock),
         ):
             # --- Setup mock objects for DOM elements ---
             # Mocks needed for the actual execution flow
@@ -751,27 +734,27 @@ class TestAdExtractorNavigation:
                 [
                     call(By.ID, "my-manageitems-adlist"),
                     call(By.ID, "my-manageitems-adlist"),
-                    call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent = cardbox_mock),
+                    call(By.CSS_SELECTOR, "div h3 a.text-onSurface", parent=cardbox_mock),
                 ],
-                any_order = False,
+                any_order=False,
             )  # Check order if important
 
             mock_web_find_all.assert_has_calls(
                 [
-                    call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', timeout = 10),
-                    call(By.CLASS_NAME, "cardbox", parent = ad_list_container_mock),
+                    call(By.CSS_SELECTOR, 'button[aria-label="Nächste"]', timeout=10),
+                    call(By.CLASS_NAME, "cardbox", parent=ad_list_container_mock),
                 ],
-                any_order = False,
+                any_order=False,
             )
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_paginates_with_enabled_next_button(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_own_ads_urls_paginates_with_enabled_next_button(self, test_extractor: extract_module.AdExtractor) -> None:
         """Ensure the paginator clicks the first enabled next button and advances."""
         ad_list_container_mock = MagicMock()
         cardbox_page_one = MagicMock()
         cardbox_page_two = MagicMock()
-        link_page_one = MagicMock(attrs = {"href": "/s-anzeige/page-one/111"})
-        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/page-two/222"})
+        link_page_one = MagicMock(attrs={"href": "/s-anzeige/page-one/111"})
+        link_page_two = MagicMock(attrs={"href": "/s-anzeige/page-two/222"})
 
         next_button_enabled = AsyncMock()
         next_button_enabled.attrs = {}
@@ -782,7 +765,7 @@ class TestAdExtractorNavigation:
         next_button_call = {"count": 0}
         cardbox_call = {"count": 0}
 
-        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+        async def fake_web_find(selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> Element:
             if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return ad_list_container_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
@@ -790,7 +773,7 @@ class TestAdExtractorNavigation:
             raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
 
         async def fake_web_find_all(
-            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+            selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None
         ) -> list[Element]:
             if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
                 next_button_call["count"] += 1
@@ -805,11 +788,11 @@ class TestAdExtractorNavigation:
             raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
 
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock, side_effect=fake_web_find),
+            patch.object(test_extractor, "web_find_all", new_callable=AsyncMock, side_effect=fake_web_find_all),
         ):
             refs = await test_extractor.extract_own_ads_urls()
 
@@ -817,16 +800,16 @@ class TestAdExtractorNavigation:
         next_button_enabled.click.assert_awaited()  # triggered once during navigation
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_deduplicates_duplicate_refs_on_same_page(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_own_ads_urls_deduplicates_duplicate_refs_on_same_page(self, test_extractor: extract_module.AdExtractor) -> None:
         """Duplicate refs on one page should be deduplicated while still paginating."""
         ad_list_container_mock = MagicMock()
         cardbox_page_one_a = MagicMock()
         cardbox_page_one_b = MagicMock()
         cardbox_page_two = MagicMock()
 
-        link_page_one_a = MagicMock(attrs = {"href": "/s-anzeige/duplicate/111"})
-        link_page_one_b = MagicMock(attrs = {"href": "/s-anzeige/duplicate/111"})
-        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/page-two/222"})
+        link_page_one_a = MagicMock(attrs={"href": "/s-anzeige/duplicate/111"})
+        link_page_one_b = MagicMock(attrs={"href": "/s-anzeige/duplicate/111"})
+        link_page_two = MagicMock(attrs={"href": "/s-anzeige/page-two/222"})
 
         next_button_enabled = AsyncMock()
         next_button_enabled.attrs = {}
@@ -837,7 +820,7 @@ class TestAdExtractorNavigation:
         next_button_call = {"count": 0}
         cardbox_call = {"count": 0}
 
-        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+        async def fake_web_find(selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> Element:
             if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return ad_list_container_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
@@ -845,7 +828,7 @@ class TestAdExtractorNavigation:
             raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
 
         async def fake_web_find_all(
-            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+            selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None
         ) -> list[Element]:
             if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
                 next_button_call["count"] += 1
@@ -862,11 +845,11 @@ class TestAdExtractorNavigation:
             raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
 
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock, side_effect=fake_web_find),
+            patch.object(test_extractor, "web_find_all", new_callable=AsyncMock, side_effect=fake_web_find_all),
         ):
             refs = await test_extractor.extract_own_ads_urls()
 
@@ -874,14 +857,14 @@ class TestAdExtractorNavigation:
         next_button_enabled.click.assert_awaited()  # triggered once during navigation
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_stops_when_second_page_contains_only_seen_refs(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_own_ads_urls_stops_when_second_page_contains_only_seen_refs(self, test_extractor: extract_module.AdExtractor) -> None:
         """Pagination should stop when page 2 only contains refs already seen on page 1."""
         ad_list_container_mock = MagicMock()
         cardbox_page_one = MagicMock()
         cardbox_page_two = MagicMock()
 
-        link_page_one = MagicMock(attrs = {"href": "/s-anzeige/repeat/111"})
-        link_page_two = MagicMock(attrs = {"href": "/s-anzeige/repeat/111"})
+        link_page_one = MagicMock(attrs={"href": "/s-anzeige/repeat/111"})
+        link_page_two = MagicMock(attrs={"href": "/s-anzeige/repeat/111"})
 
         next_button_enabled = AsyncMock()
         next_button_enabled.attrs = {}
@@ -892,7 +875,7 @@ class TestAdExtractorNavigation:
         next_button_call = {"count": 0}
         cardbox_call = {"count": 0}
 
-        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+        async def fake_web_find(selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> Element:
             if selector_type == By.ID and selector_value == "my-manageitems-adlist":
                 return ad_list_container_mock
             if selector_type == By.CSS_SELECTOR and selector_value == "div h3 a.text-onSurface":
@@ -900,7 +883,7 @@ class TestAdExtractorNavigation:
             raise AssertionError(f"Unexpected selector {selector_type} {selector_value}")
 
         async def fake_web_find_all(
-            selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None
+            selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None
         ) -> list[Element]:
             if selector_type == By.CSS_SELECTOR and selector_value == 'button[aria-label="Nächste"]':
                 next_button_call["count"] += 1
@@ -915,11 +898,11 @@ class TestAdExtractorNavigation:
             raise AssertionError(f"Unexpected find_all selector {selector_type} {selector_value}")
 
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = fake_web_find_all),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock, side_effect=fake_web_find),
+            patch.object(test_extractor, "web_find_all", new_callable=AsyncMock, side_effect=fake_web_find_all),
         ):
             refs = await test_extractor.extract_own_ads_urls()
 
@@ -927,22 +910,22 @@ class TestAdExtractorNavigation:
         next_button_enabled.click.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_timeout_in_callback(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_own_ads_urls_timeout_in_callback(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test that TimeoutError in extract_page_refs callback stops pagination."""
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_execute", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock) as mock_web_find,
+            patch.object(test_extractor, "web_find_all", new_callable=AsyncMock, return_value=[]),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_execute", new_callable=AsyncMock),
         ):
             # Setup: ad list container exists, but web_find_all for cardbox raises TimeoutError
             ad_list_container_mock = MagicMock()
 
             call_count = {"count": 0}
 
-            def mock_find_side_effect(*args:Any, **kwargs:Any) -> Element:
+            def mock_find_side_effect(*args: Any, **kwargs: Any) -> Element:
                 call_count["count"] += 1
                 if call_count["count"] == 1:
                     # First call: ad list container (before pagination loop)
@@ -953,10 +936,10 @@ class TestAdExtractorNavigation:
             mock_web_find.side_effect = mock_find_side_effect
 
             # Make web_find_all for cardbox raise TimeoutError (simulating missing ad items)
-            async def mock_find_all_side_effect(*args:Any, **kwargs:Any) -> list[Element]:
+            async def mock_find_all_side_effect(*args: Any, **kwargs: Any) -> list[Element]:
                 raise TimeoutError("Ad items not found")
 
-            with patch.object(test_extractor, "web_find_all", new_callable = AsyncMock, side_effect = mock_find_all_side_effect):
+            with patch.object(test_extractor, "web_find_all", new_callable=AsyncMock, side_effect=mock_find_all_side_effect):
                 refs = await test_extractor.extract_own_ads_urls()
 
             # Pagination should stop (TimeoutError in callback returns True)
@@ -967,14 +950,14 @@ class TestAdExtractorNavigation:
         "single_item_find_result",
         [
             TimeoutError(),
-            MagicMock(attrs = {}),
+            MagicMock(attrs={}),
         ],
-        ids = ["timeout", "missing-href"],
+        ids=["timeout", "missing-href"],
     )
     async def test_extract_own_ads_urls_skips_single_item(
         self,
-        test_extractor:extract_module.AdExtractor,
-        single_item_find_result:Any,
+        test_extractor: extract_module.AdExtractor,
+        single_item_find_result: Any,
     ) -> None:
         """Bad single ad items should be skipped while valid items are still extracted."""
         ad_list_container_mock = MagicMock()
@@ -984,20 +967,20 @@ class TestAdExtractorNavigation:
         valid_link.attrs = {"href": "/s-anzeige/ok/999"}
 
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
             patch.object(
                 test_extractor,
                 "web_find_all",
-                new_callable = AsyncMock,
-                side_effect = [TimeoutError("No pagination"), [first_item, second_item]],
+                new_callable=AsyncMock,
+                side_effect=[TimeoutError("No pagination"), [first_item, second_item]],
             ),
             patch.object(
                 test_extractor,
                 "web_find",
-                new_callable = AsyncMock,
-                side_effect = [ad_list_container_mock, ad_list_container_mock, single_item_find_result, valid_link],
+                new_callable=AsyncMock,
+                side_effect=[ad_list_container_mock, ad_list_container_mock, single_item_find_result, valid_link],
             ),
         ):
             refs = await test_extractor.extract_own_ads_urls()
@@ -1005,20 +988,20 @@ class TestAdExtractorNavigation:
         assert refs == ["/s-anzeige/ok/999"]
 
     @pytest.mark.asyncio
-    async def test_extract_own_ads_urls_generic_exception_in_callback(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_own_ads_urls_generic_exception_in_callback(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test that generic Exception in extract_page_refs callback continues pagination."""
         with (
-            patch.object(test_extractor, "web_open", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(test_extractor, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_extractor, "web_open", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(test_extractor, "web_find", new_callable=AsyncMock) as mock_web_find,
+            patch.object(test_extractor, "web_scroll_page_down", new_callable=AsyncMock),
         ):
             # Setup: ad list container exists, but web_find_all raises generic Exception
             ad_list_container_mock = MagicMock()
 
             call_count = {"count": 0}
 
-            def mock_find_side_effect(*args:Any, **kwargs:Any) -> Element:
+            def mock_find_side_effect(*args: Any, **kwargs: Any) -> Element:
                 call_count["count"] += 1
                 if call_count["count"] == 1:
                     # First call: ad list container (before pagination loop)
@@ -1031,8 +1014,8 @@ class TestAdExtractorNavigation:
             with patch.object(
                 test_extractor,
                 "web_find_all",
-                new_callable = AsyncMock,
-                side_effect = [TimeoutError("No pagination"), AttributeError("Unexpected error")],
+                new_callable=AsyncMock,
+                side_effect=[TimeoutError("No pagination"), AttributeError("Unexpected error")],
             ):
                 refs = await test_extractor.extract_own_ads_urls()
 
@@ -1048,7 +1031,7 @@ class TestAdExtractorContent:
 
     @pytest.mark.asyncio
     async def test_extract_description_with_affixes(
-        self, test_extractor:extract_module.AdExtractor, description_test_cases:list[tuple[dict[str, Any], str, str]], test_bot_config:Config, tmp_path:Path
+        self, test_extractor: extract_module.AdExtractor, description_test_cases: list[tuple[dict[str, Any], str, str]], test_bot_config: Config, tmp_path: Path
     ) -> None:
         """Test extraction of description with various prefix/suffix configurations."""
         base_dir = tmp_path / "downloaded-ads"
@@ -1064,28 +1047,28 @@ class TestAdExtractorContent:
 
             with patch.multiple(
                 test_extractor,
-                web_text = AsyncMock(
-                    side_effect = [
+                web_text=AsyncMock(
+                    side_effect=[
                         "Test Title",  # Title extraction
                         web_description_with_affixes,  # Description with affixes (as it appears on web)
                         "03.02.2025",  # Creation date
                     ]
                 ),
-                web_probe = AsyncMock(return_value = None),
-                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-                _download_images_from_ad_page = AsyncMock(return_value = []),
-                _extract_contact_from_ad_page = AsyncMock(return_value = {}),
+                web_probe=AsyncMock(return_value=None),
+                web_execute=AsyncMock(return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page=AsyncMock(return_value="160"),
+                _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+                _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+                _download_images_from_ad_page=AsyncMock(return_value=[]),
+                _extract_contact_from_ad_page=AsyncMock(return_value={}),
             ):
                 ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
                 assert ad_cfg.description == expected_raw
 
     @pytest.mark.asyncio
-    async def test_extract_description_with_affixes_timeout(self, test_extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_extract_description_with_affixes_timeout(self, test_extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test handling of timeout when extracting description."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -1098,29 +1081,29 @@ class TestAdExtractorContent:
         with (
             patch.multiple(
                 test_extractor,
-                web_text = AsyncMock(
-                    side_effect = [
+                web_text=AsyncMock(
+                    side_effect=[
                         "Test Title",  # Title extraction
                         TimeoutError("Timeout"),  # Description times out
                         "03.02.2025",  # Date succeeds (not reached)
                     ]
                 ),
-                web_probe = AsyncMock(return_value = None),
-                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-                _download_images_from_ad_page = AsyncMock(return_value = []),
-                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+                web_probe=AsyncMock(return_value=None),
+                web_execute=AsyncMock(return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page=AsyncMock(return_value="160"),
+                _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+                _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+                _download_images_from_ad_page=AsyncMock(return_value=[]),
+                _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
             ),
             pytest.raises(TimeoutError),
         ):
             await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
     @pytest.mark.asyncio
-    async def test_extract_description_with_affixes_no_affixes(self, test_extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_extract_description_with_affixes_no_affixes(self, test_extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test extraction of description without any affixes in config."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -1133,22 +1116,22 @@ class TestAdExtractorContent:
 
         with patch.multiple(
             test_extractor,
-            web_text = AsyncMock(
-                side_effect = [
+            web_text=AsyncMock(
+                side_effect=[
                     "Test Title",  # Title extraction
                     raw_description,  # Description without affixes
                     "03.02.2025",  # Creation date
                 ]
             ),
-            web_probe = AsyncMock(return_value = None),
-            web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-            _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            web_probe=AsyncMock(return_value=None),
+            web_execute=AsyncMock(return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+            _extract_category_from_ad_page=AsyncMock(return_value="160"),
+            _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+            _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+            _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+            _download_images_from_ad_page=AsyncMock(return_value=[]),
+            _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
         ):
             ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
             assert ad_cfg.description == raw_description
@@ -1156,8 +1139,8 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_extract_ad_page_info_uses_css_selector_for_creation_date(
         self,
-        test_extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        test_extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         """Test creation-date extraction uses the CSS selector directly."""
         base_dir = tmp_path / "downloaded-ads"
@@ -1168,19 +1151,19 @@ class TestAdExtractorContent:
         test_extractor.page = page_mock
 
         with (
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock) as mock_web_text,
             patch.multiple(
                 test_extractor,
-                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-                _download_images_from_ad_page = AsyncMock(return_value = []),
-                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+                web_execute=AsyncMock(return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page=AsyncMock(return_value="160"),
+                _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+                _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+                _download_images_from_ad_page=AsyncMock(return_value=[]),
+                _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
             ),
-            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "web_probe", new_callable=AsyncMock, return_value=None),
         ):
             mock_web_text.side_effect = ["Test Title", "Description text", "03.02.2025"]
             ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
@@ -1192,7 +1175,7 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_extract_ad_page_info_uses_island_creation_date_when_dom_is_missing(
         self,
-        test_extractor:extract_module.AdExtractor,
+        test_extractor: extract_module.AdExtractor,
     ) -> None:
         """Use the embedded date when neither supported DOM selector is available."""
         page_mock = MagicMock()
@@ -1201,23 +1184,24 @@ class TestAdExtractorContent:
         island_props = {"formattedCreationDate": [0, "22.08.2026"]}
 
         with (
-            patch.object(test_extractor, "_extract_island_props", new_callable = AsyncMock, return_value = island_props),
-            patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "_extract_island_props", new_callable=AsyncMock, return_value=island_props),
+            patch.object(test_extractor, "web_execute", new_callable=AsyncMock, return_value=None),
             patch.object(
                 test_extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = ["Description text", TimeoutError(), TimeoutError()],
+                new_callable=AsyncMock,
+                side_effect=["Description text", TimeoutError(), TimeoutError()],
             ),
             patch.multiple(
                 test_extractor,
-                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-                _download_images_from_ad_page = AsyncMock(return_value = []),
-                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+                _fetch_anonymous_ad_dimensions=AsyncMock(return_value=None),
+                _extract_category_from_ad_page=AsyncMock(return_value="160"),
+                _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+                _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+                _download_images_from_ad_page=AsyncMock(return_value=[]),
+                _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
             ),
         ):
             ad_cfg = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345", "Test Title")
@@ -1228,7 +1212,7 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_extract_ad_page_info_uses_island_creation_date_when_broader_selector_is_not_a_date(
         self,
-        test_extractor:extract_module.AdExtractor,
+        test_extractor: extract_module.AdExtractor,
     ) -> None:
         """Ignore unrelated extra-info text and retain the valid Astro creation date."""
         page_mock = MagicMock()
@@ -1237,23 +1221,24 @@ class TestAdExtractorContent:
         island_props = {"formattedCreationDate": [0, "22.08.2026"]}
 
         with (
-            patch.object(test_extractor, "_extract_island_props", new_callable = AsyncMock, return_value = island_props),
-            patch.object(test_extractor, "web_execute", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "_extract_island_props", new_callable=AsyncMock, return_value=island_props),
+            patch.object(test_extractor, "web_execute", new_callable=AsyncMock, return_value=None),
             patch.object(
                 test_extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = ["Description text", TimeoutError(), "Anzeige online"],
+                new_callable=AsyncMock,
+                side_effect=["Description text", TimeoutError(), "Anzeige online"],
             ),
             patch.multiple(
                 test_extractor,
-                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-                _download_images_from_ad_page = AsyncMock(return_value = []),
-                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+                _fetch_anonymous_ad_dimensions=AsyncMock(return_value=None),
+                _extract_category_from_ad_page=AsyncMock(return_value="160"),
+                _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+                _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+                _download_images_from_ad_page=AsyncMock(return_value=[]),
+                _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
             ),
         ):
             ad_cfg = await test_extractor._extract_ad_page_info("/some/dir", 12345, "ad_12345", "Test Title")
@@ -1264,34 +1249,34 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_resolve_download_title_prefers_published_metadata_for_owned_overview(
         self,
-        test_extractor:extract_module.AdExtractor,
+        test_extractor: extract_module.AdExtractor,
     ) -> None:
         """Use the clean manage-ads title even for an owned-overview download."""
         test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": " Clean API Title "}}
 
-        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title:
-            title = await test_extractor._resolve_download_title(12345, owned_overview = True)
+        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable=AsyncMock) as mock_extract_title:
+            title = await test_extractor._resolve_download_title(12345, owned_overview=True)
 
         assert title == "Clean API Title"
         mock_extract_title.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_resolve_download_title_decodes_published_metadata_entities(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_resolve_download_title_decodes_published_metadata_entities(self, test_extractor: extract_module.AdExtractor) -> None:
         """Decode HTML entities only when using the cached manage-ads title."""
         test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": " Foo &#x2F; Bar &#x27;Test&#x27; &quot;Example&quot; "}}
 
-        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title:
+        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable=AsyncMock) as mock_extract_title:
             title = await test_extractor._resolve_download_title(12345)
 
         assert title == "Foo / Bar 'Test' \"Example\""
         mock_extract_title.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_resolve_download_title_falls_back_to_page_title(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_resolve_download_title_falls_back_to_page_title(self, test_extractor: extract_module.AdExtractor) -> None:
         """Keep manual page extraction unchanged when manage-ads metadata is missing."""
         test_extractor.published_ads_by_id = {12345: {"id": 12345, "title": "   "}}
 
-        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Page Title"):
+        with patch.object(test_extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Page Title"):
             title = await test_extractor._resolve_download_title(12345)
 
         assert title == "Page Title"
@@ -1299,7 +1284,7 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_resolve_download_title_strips_deleted_decoration_for_owned_overview_ad(
         self,
-        test_extractor:extract_module.AdExtractor,
+        test_extractor: extract_module.AdExtractor,
     ) -> None:
         """Strip a verified status decoration only on an owned overview fallback."""
         test_extractor.published_ads_by_id = {}
@@ -1307,10 +1292,10 @@ class TestAdExtractorContent:
         with patch.object(
             test_extractor,
             "_extract_title_from_ad_page",
-            new_callable = AsyncMock,
-            return_value = "Gelöscht • Original title",
+            new_callable=AsyncMock,
+            return_value="Gelöscht • Original title",
         ):
-            title = await test_extractor._resolve_download_title(12345, owned_overview = True)
+            title = await test_extractor._resolve_download_title(12345, owned_overview=True)
 
         assert title == "Original title"
 
@@ -1321,8 +1306,8 @@ class TestAdExtractorContent:
     )
     async def test_resolve_download_title_keeps_decorations_outside_verified_owned_context(
         self,
-        test_extractor:extract_module.AdExtractor,
-        page_title:str,
+        test_extractor: extract_module.AdExtractor,
+        page_title: str,
     ) -> None:
         """Manual downloads and unverified status words keep the literal page title."""
         test_extractor.published_ads_by_id = {}
@@ -1330,11 +1315,11 @@ class TestAdExtractorContent:
         with patch.object(
             test_extractor,
             "_extract_title_from_ad_page",
-            new_callable = AsyncMock,
-            return_value = page_title,
+            new_callable=AsyncMock,
+            return_value=page_title,
         ):
             manual_title = await test_extractor._resolve_download_title(12345)
-            owned_title = await test_extractor._resolve_download_title(12345, owned_overview = True)
+            owned_title = await test_extractor._resolve_download_title(12345, owned_overview=True)
 
         assert manual_title == page_title
         assert owned_title == ("Original title" if page_title.startswith("Gelöscht") else page_title)
@@ -1342,8 +1327,8 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_cached_title_entities_are_decoded_before_title_validation(
         self,
-        test_extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        test_extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         """Validate downloaded ad info with the decoded visible title, not encoded entity text."""
         base_dir = tmp_path / "downloaded-ads"
@@ -1357,19 +1342,19 @@ class TestAdExtractorContent:
         test_extractor.page = page_mock
 
         with (
-            patch.object(test_extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
+            patch.object(test_extractor, "web_text", new_callable=AsyncMock) as mock_web_text,
             patch.multiple(
                 test_extractor,
-                web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
-                _extract_category_from_ad_page = AsyncMock(return_value = "160"),
-                _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
-                _extract_pricing_info_from_ad_page = AsyncMock(return_value = (None, "NOT_APPLICABLE")),
-                _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-                _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-                _download_images_from_ad_page = AsyncMock(return_value = []),
-                _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+                web_execute=AsyncMock(return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+                _extract_category_from_ad_page=AsyncMock(return_value="160"),
+                _extract_special_attributes_from_ad_page=AsyncMock(return_value={}),
+                _extract_pricing_info_from_ad_page=AsyncMock(return_value=(None, "NOT_APPLICABLE")),
+                _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+                _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+                _download_images_from_ad_page=AsyncMock(return_value=[]),
+                _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
             ),
-            patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title,
+            patch.object(test_extractor, "_extract_title_from_ad_page", new_callable=AsyncMock) as mock_extract_title,
         ):
             mock_web_text.side_effect = ["Description text", "03.02.2025"]
             ad_cfg, _staging_dir, final_dir, ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
@@ -1386,8 +1371,8 @@ class TestAdExtractorContent:
     @pytest.mark.asyncio
     async def test_directory_handling_uses_published_title_for_names_and_ad_info(
         self,
-        test_extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        test_extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         """Use the canonical manage-ads title consistently for paths and persisted ad info."""
         base_dir = tmp_path / "downloaded-ads"
@@ -1396,11 +1381,11 @@ class TestAdExtractorContent:
         test_extractor.published_ads_by_id = {3421140610: {"id": 3421140610, "title": title}}
         test_extractor.config.download.ad_file_name_template = "ad_{id}_{title}"
 
-        ad_cfg = _create_test_ad_partial(title = title)
+        ad_cfg = _create_test_ad_partial(title=title)
 
         with (
-            patch.object(test_extractor, "_extract_title_from_ad_page", new_callable = AsyncMock) as mock_extract_title,
-            patch.object(test_extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+            patch.object(test_extractor, "_extract_title_from_ad_page", new_callable=AsyncMock) as mock_extract_title,
+            patch.object(test_extractor, "_extract_ad_page_info", new_callable=AsyncMock, return_value=ad_cfg),
         ):
             cfg, staging_dir, final_dir, ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(
                 base_dir,
@@ -1414,7 +1399,7 @@ class TestAdExtractorContent:
         mock_extract_title.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_data_hit_true(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_data_hit_true(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction with data hit - buyNowEligible=True."""
         # Setup extractor with published ads data
         test_extractor.published_ads_by_id = {123456789: {"id": 123456789, "buyNowEligible": True}}
@@ -1428,7 +1413,7 @@ class TestAdExtractorContent:
         assert result is True
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_data_hit_false(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_data_hit_false(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction with data hit - buyNowEligible=False."""
         test_extractor.published_ads_by_id = {123456789: {"id": 123456789, "buyNowEligible": False}}
 
@@ -1440,7 +1425,7 @@ class TestAdExtractorContent:
         assert result is False
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_data_miss(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_data_miss(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction with data miss - ad ID not in cache returns None."""
         # Cache has a different ad ID than the one in the URL - true data miss
         test_extractor.published_ads_by_id = {987654321: {"id": 987654321, "buyNowEligible": True}}
@@ -1453,7 +1438,7 @@ class TestAdExtractorContent:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_empty_published_ads(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_empty_published_ads(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction with empty published_ads_by_id - returns None."""
         test_extractor.published_ads_by_id = {}
 
@@ -1465,7 +1450,7 @@ class TestAdExtractorContent:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_invalid_url(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_invalid_url(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction with invalid URL - returns None."""
         test_extractor.published_ads_by_id = {123456789: {"id": 123456789, "buyNowEligible": True}}
 
@@ -1477,7 +1462,7 @@ class TestAdExtractorContent:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_non_boolean_value(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_non_boolean_value(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction when buyNowEligible is not a boolean."""
         test_extractor.published_ads_by_id = {123456789: {"id": 123456789, "buyNowEligible": "true"}}  # String, not bool
 
@@ -1489,7 +1474,7 @@ class TestAdExtractorContent:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_missing_buy_now_field(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_missing_buy_now_field(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction when buyNowEligible field is missing."""
         test_extractor.published_ads_by_id = {123456789: {"id": 123456789, "state": "active"}}  # No buyNowEligible
 
@@ -1501,7 +1486,7 @@ class TestAdExtractorContent:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_extract_sell_directly_integer_value(self, test_extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_sell_directly_integer_value(self, test_extractor: extract_module.AdExtractor) -> None:
         """Test sell_directly extraction when buyNowEligible is an integer (not bool)."""
         test_extractor.published_ads_by_id = {123456789: {"id": 123456789, "buyNowEligible": 1}}  # Integer, not bool
 
@@ -1517,14 +1502,14 @@ class TestAdExtractorCategory:
     """Tests for category extraction functionality."""
 
     @pytest.fixture
-    def extractor(self, test_bot_config:Config) -> extract_module.AdExtractor:
-        browser_mock = MagicMock(spec = Browser)
+    def extractor(self, test_bot_config: Config) -> extract_module.AdExtractor:
+        browser_mock = MagicMock(spec=Browser)
         config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "Test Prefix", "suffix": "Test Suffix"}}})
         return extract_module.AdExtractor(browser_mock, config, Path("downloaded-ads"))
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_category(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_category(self, extractor: extract_module.AdExtractor) -> None:
         """Test category extraction from breadcrumb."""
         category_line = MagicMock()
         first_part = MagicMock()
@@ -1533,36 +1518,36 @@ class TestAdExtractorCategory:
         second_part.attrs = {"href": "/s-spielzeug/c23"}
 
         with (
-            patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = [category_line]) as mock_web_find,
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_part, second_part]) as mock_web_find_all,
+            patch.object(extractor, "web_find", new_callable=AsyncMock, side_effect=[category_line]) as mock_web_find,
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[first_part, second_part]) as mock_web_find_all,
         ):
             result = await extractor._extract_category_from_ad_page()
             assert result == "17/23"
 
             mock_web_find.assert_awaited_once_with(By.ID, "vap-brdcrmb")
-            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
+            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent=category_line)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_category_single_identifier(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_category_single_identifier(self, extractor: extract_module.AdExtractor) -> None:
         """Test category extraction when only a single breadcrumb code exists."""
         category_line = MagicMock()
         first_part = MagicMock()
         first_part.attrs = {"href": "/s-kleidung/c42"}
 
         with (
-            patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = [category_line]) as mock_web_find,
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [first_part]) as mock_web_find_all,
+            patch.object(extractor, "web_find", new_callable=AsyncMock, side_effect=[category_line]) as mock_web_find,
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[first_part]) as mock_web_find_all,
         ):
             result = await extractor._extract_category_from_ad_page()
             assert result == "42/42"
 
             mock_web_find.assert_awaited_once_with(By.ID, "vap-brdcrmb")
-            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
+            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent=category_line)
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_category_fallback_to_legacy_selectors(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_category_fallback_to_legacy_selectors(self, extractor: extract_module.AdExtractor) -> None:
         """Test category extraction when breadcrumb links are not available and legacy selectors are used."""
         category_line = MagicMock()
         first_part = MagicMock()
@@ -1571,8 +1556,8 @@ class TestAdExtractorCategory:
         second_part.attrs = {"href": 67890}  # This will need str() conversion
 
         with (
-            patch.object(extractor, "web_find", new_callable = AsyncMock) as mock_web_find,
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError) as mock_web_find_all,
+            patch.object(extractor, "web_find", new_callable=AsyncMock) as mock_web_find,
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, side_effect=TimeoutError) as mock_web_find_all,
         ):
             mock_web_find.side_effect = [category_line, first_part, second_part]
 
@@ -1580,44 +1565,42 @@ class TestAdExtractorCategory:
             assert result == "12345/67890"
 
             mock_web_find.assert_any_call(By.ID, "vap-brdcrmb")
-            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent = category_line)
-            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(3)", parent = category_line)
-            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent = category_line)
+            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(2)", parent=category_line)
+            mock_web_find.assert_any_call(By.CSS_SELECTOR, "a:nth-of-type(3)", parent=category_line)
+            mock_web_find_all.assert_awaited_once_with(By.CSS_SELECTOR, "a", parent=category_line)
 
     @pytest.mark.asyncio
-    async def test_extract_category_legacy_selectors_timeout(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_category_legacy_selectors_timeout(self, extractor: extract_module.AdExtractor) -> None:
         """Ensure fallback timeout re-raises with translated message."""
         category_line = MagicMock()
 
-        async def fake_web_find(selector_type:By, selector_value:str, *, parent:Element | None = None, timeout:int | float | None = None) -> Element:
+        async def fake_web_find(selector_type: By, selector_value: str, *, parent: Element | None = None, timeout: int | float | None = None) -> Element:
             if selector_type == By.ID and selector_value == "vap-brdcrmb":
                 return category_line
             raise TimeoutError("legacy selectors missing")
 
         with (
-            patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = fake_web_find),
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError),
-            pytest.raises(TimeoutError, match = "Unable to locate breadcrumb fallback selectors"),
+            patch.object(extractor, "web_find", new_callable=AsyncMock, side_effect=fake_web_find),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, side_effect=TimeoutError),
+            pytest.raises(TimeoutError, match="Unable to locate breadcrumb fallback selectors"),
         ):
             await extractor._extract_category_from_ad_page()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_empty(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_empty(self, extractor: extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when empty."""
-        belen_conf:dict[str, Any] = {"ad_attributes": ""}
-        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
+        belen_conf: dict[str, Any] = {"ad_attributes": ""}
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable=AsyncMock, return_value={}):
             result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
             assert result == {}
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_not_empty(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_not_empty(self, extractor: extract_module.AdExtractor) -> None:
         """Test extraction of special attributes when not empty."""
 
-        special_atts = {
-            "ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"
-        }
+        special_atts = {"ad_attributes": "versand_s:t|color_s:creme|groesse_s:68|condition_s:alright|type_s:accessoires|art_s:maedchen"}
         result = await extractor._extract_special_attributes_from_ad_page(special_atts)
         assert len(result) == 5
         assert "versand_s" not in result
@@ -1634,14 +1617,14 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_dom_fallback_when_missing(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_dom_fallback_when_missing(self, extractor: extract_module.AdExtractor) -> None:
         """When ad_attributes is missing, special attributes should be extracted via DOM fallback."""
-        belen_conf:dict[str, Any] = {}
+        belen_conf: dict[str, Any] = {}
         with patch.object(
             extractor,
             "_extract_special_attributes_from_dom",
-            new_callable = AsyncMock,
-            return_value = {"condition_s": "new"},
+            new_callable=AsyncMock,
+            return_value={"condition_s": "new"},
         ):
             result = await extractor._extract_special_attributes_from_ad_page(belen_conf)
 
@@ -1649,25 +1632,25 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor: extract_module.AdExtractor) -> None:
         """DOM fallback should extract condition_s from #viewad-details section."""
         detail_item = MagicMock()
         detail_item.text = "Zustand Neu"
 
-        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+        async def text_side_effect(by: Any, selector: str, *, parent: Any = None, **__: Any) -> str:
             if parent is detail_item:
                 return "Neu"
             return ""
 
-        async def visible_text_side_effect(element:Any) -> str:
+        async def visible_text_side_effect(element: Any) -> str:
             if element is detail_item:
                 return "Zustand Neu"
             return ""
 
         with (
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
-            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[detail_item]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, side_effect=text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1675,17 +1658,17 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_from_dom_skips_malformed_row(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_from_dom_skips_malformed_row(self, extractor: extract_module.AdExtractor) -> None:
         """DOM fallback should skip rows where web_text raises TimeoutError and still extract valid rows."""
         good_item = MagicMock()
         good_item.text = "Zustand Neu"
 
-        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+        async def text_side_effect(by: Any, selector: str, *, parent: Any = None, **__: Any) -> str:
             if parent is good_item:
                 return "Neu"
             raise TimeoutError("value span not found")
 
-        async def visible_text_side_effect(element:Any) -> str:
+        async def visible_text_side_effect(element: Any) -> str:
             if element is good_item:
                 return "Zustand Neu"
             return ""
@@ -1696,11 +1679,11 @@ class TestAdExtractorCategory:
             patch.object(
                 extractor,
                 "web_find_all",
-                new_callable = AsyncMock,
-                return_value = [malformed_item, good_item],
+                new_callable=AsyncMock,
+                return_value=[malformed_item, good_item],
             ),
-            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, side_effect=text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1708,46 +1691,46 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_from_dom_returns_empty_when_no_details_section(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_from_dom_returns_empty_when_no_details_section(self, extractor: extract_module.AdExtractor) -> None:
         """DOM fallback should return empty dict when the details section is not found."""
         with patch.object(
             extractor,
             "web_find_all",
-            new_callable = AsyncMock,
-            side_effect = TimeoutError,
+            new_callable=AsyncMock,
+            side_effect=TimeoutError,
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_extract_special_attributes_falls_back_when_belen_conf_is_missing(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_falls_back_when_belen_conf_is_missing(self, extractor: extract_module.AdExtractor) -> None:
         """Use the DOM fallback when BelenConf is unavailable."""
-        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {"condition_s": "ok"}):
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable=AsyncMock, return_value={"condition_s": "ok"}):
             result = await extractor._extract_special_attributes_from_ad_page(None)
 
         assert result == {"condition_s": "ok"}
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_from_dom_skips_unrecognized_label(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_from_dom_skips_unrecognized_label(self, extractor: extract_module.AdExtractor) -> None:
         """DOM fallback should skip rows whose label is not in the lookup map."""
         detail_item = MagicMock()
 
-        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+        async def text_side_effect(by: Any, selector: str, *, parent: Any = None, **__: Any) -> str:
             if parent is detail_item:
                 return "SomeValue"
             return ""
 
-        async def visible_text_side_effect(element:Any) -> str:
+        async def visible_text_side_effect(element: Any) -> str:
             if element is detail_item:
                 return "UnrecognizedLabel SomeValue"
             return ""
 
         with (
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
-            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[detail_item]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, side_effect=text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1755,24 +1738,24 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_special_attributes_from_dom_skips_unmapped_condition_value(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_special_attributes_from_dom_skips_unmapped_condition_value(self, extractor: extract_module.AdExtractor) -> None:
         """DOM fallback should skip condition rows whose display value is not in the API mapping."""
         detail_item = MagicMock()
 
-        async def text_side_effect(by:Any, selector:str, *, parent:Any = None, **__:Any) -> str:
+        async def text_side_effect(by: Any, selector: str, *, parent: Any = None, **__: Any) -> str:
             if parent is detail_item:
                 return "Unbekannt"
             return ""
 
-        async def visible_text_side_effect(element:Any) -> str:
+        async def visible_text_side_effect(element: Any) -> str:
             if element is detail_item:
                 return "Zustand Unbekannt"
             return ""
 
         with (
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [detail_item]),
-            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = text_side_effect),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[detail_item]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, side_effect=text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=visible_text_side_effect),
         ):
             result = await extractor._extract_special_attributes_from_dom()
 
@@ -1783,30 +1766,30 @@ class TestAdExtractorContact:
     """Tests for contact information extraction."""
 
     @pytest.fixture
-    def extractor(self, test_bot_config:Config) -> extract_module.AdExtractor:
-        browser_mock = MagicMock(spec = Browser)
+    def extractor(self, test_bot_config: Config) -> extract_module.AdExtractor:
+        browser_mock = MagicMock(spec=Browser)
         config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "Test Prefix", "suffix": "Test Suffix"}}})
         return extract_module.AdExtractor(browser_mock, config, Path("downloaded-ads"))
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_contact_info(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_info(self, extractor: extract_module.AdExtractor) -> None:
         """Test extraction of contact information."""
         street_element = MagicMock()
         contact_person_element = MagicMock()
         name_element = MagicMock()
 
-        async def visible_text_side_effect(element:Any) -> str:
+        async def visible_text_side_effect(element: Any) -> str:
             if element is street_element:
                 return "Example Street 123,"
             return ""
 
         with (
             patch.object(extractor, "page", MagicMock()),
-            patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, contact_person_element, name_element, None]),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text_side_effect),
+            patch.object(extractor, "web_text", new_callable=AsyncMock) as mock_web_text,
+            patch.object(extractor, "web_find", new_callable=AsyncMock),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[street_element, contact_person_element, name_element, None]),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=visible_text_side_effect),
         ):
             mock_web_text.side_effect = [
                 "12345 Berlin - Mitte",
@@ -1822,48 +1805,48 @@ class TestAdExtractorContact:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_contact_info_timeout(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_info_timeout(self, extractor: extract_module.AdExtractor) -> None:
         """Test contact info extraction when elements are not found."""
         with (
             patch.object(extractor, "page", MagicMock()),
-            patch.object(extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError()),
-            patch.object(extractor, "web_find", new_callable = AsyncMock, side_effect = TimeoutError()),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, side_effect=TimeoutError()),
+            patch.object(extractor, "web_find", new_callable=AsyncMock, side_effect=TimeoutError()),
             pytest.raises(TimeoutError),
         ):
             await extractor._extract_contact_from_ad_page()
 
     @pytest.mark.asyncio
-    async def test_extract_contact_uses_island_name_without_legacy_contact_container(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_uses_island_name_without_legacy_contact_container(self, extractor: extract_module.AdExtractor) -> None:
         """Keep the seller name when the redesigned page omits viewad-contact."""
         island_props = {"userDetails": [0, {"contactName": [0, "DanielP"]}]}
 
         with (
-            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, return_value="12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[None, None, None]),
         ):
-            contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
+            contact = await extractor._extract_contact_from_ad_page(island_props=island_props)
 
         assert contact.name == "DanielP"
         assert contact.street is None
         assert contact.phone is None
 
     @pytest.mark.asyncio
-    async def test_extract_contact_uses_redesigned_seller_link(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_uses_redesigned_seller_link(self, extractor: extract_module.AdExtractor) -> None:
         """Use the redesigned seller-profile link when legacy name markup is absent."""
         contact_element = MagicMock()
         seller_link = MagicMock()
 
         with (
-            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_element, None, seller_link, None]),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, return_value = "DanielP"),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, return_value="12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[None, contact_element, None, seller_link, None]),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, return_value="DanielP"),
         ):
             contact = await extractor._extract_contact_from_ad_page()
 
         assert contact.name == "DanielP"
 
     @pytest.mark.asyncio
-    async def test_extract_contact_uses_span_when_legacy_name_has_no_link(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_uses_span_when_legacy_name_has_no_link(self, extractor: extract_module.AdExtractor) -> None:
         """Support legacy seller names rendered without an anchor element."""
         contact_element = MagicMock()
         name_element = MagicMock()
@@ -1872,21 +1855,21 @@ class TestAdExtractorContact:
             patch.object(
                 extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = ["12345 Berlin - Mitte", TimeoutError(), "DanielP"],
+                new_callable=AsyncMock,
+                side_effect=["12345 Berlin - Mitte", TimeoutError(), "DanielP"],
             ),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_element, name_element, None]),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[None, contact_element, name_element, None]),
         ):
             contact = await extractor._extract_contact_from_ad_page()
 
         assert contact.name == "DanielP"
 
     @pytest.mark.asyncio
-    async def test_extract_contact_keeps_empty_name_when_no_seller_source_exists(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_keeps_empty_name_when_no_seller_source_exists(self, extractor: extract_module.AdExtractor) -> None:
         """Return an empty seller name when neither DOM nor Astro data provides one."""
         with (
-            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, return_value="12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[None, None, None]),
         ):
             contact = await extractor._extract_contact_from_ad_page()
 
@@ -1894,7 +1877,7 @@ class TestAdExtractorContact:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_contact_info_with_street_timeout(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_info_with_street_timeout(self, extractor: extract_module.AdExtractor) -> None:
         """Test street extraction timeout does not abort contact extraction."""
         contact_person_element = MagicMock()
         name_element = MagicMock()
@@ -1902,10 +1885,10 @@ class TestAdExtractorContact:
 
         with (
             patch.object(extractor, "page", MagicMock()),
-            patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [street_element, contact_person_element, name_element, None]),
-            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, side_effect = TimeoutError()),
+            patch.object(extractor, "web_text", new_callable=AsyncMock) as mock_web_text,
+            patch.object(extractor, "web_find", new_callable=AsyncMock),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[street_element, contact_person_element, name_element, None]),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=TimeoutError()),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User"]
 
@@ -1918,7 +1901,7 @@ class TestAdExtractorContact:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_contact_info_with_phone_timeout(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_info_with_phone_timeout(self, extractor: extract_module.AdExtractor) -> None:
         """Test phone extraction timeout does not abort contact extraction."""
         contact_person_element = MagicMock()
         name_element = MagicMock()
@@ -1926,9 +1909,9 @@ class TestAdExtractorContact:
 
         with (
             patch.object(extractor, "page", MagicMock()),
-            patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_person_element, name_element, phone_element]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock) as mock_web_text,
+            patch.object(extractor, "web_find", new_callable=AsyncMock),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[None, contact_person_element, name_element, phone_element]),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User", TimeoutError()]
 
@@ -1941,7 +1924,7 @@ class TestAdExtractorContact:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_contact_info_with_phone(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_extract_contact_info_with_phone(self, extractor: extract_module.AdExtractor) -> None:
         """Test extraction of contact information including phone number."""
         contact_person_element = MagicMock()
         name_element = MagicMock()
@@ -1949,9 +1932,9 @@ class TestAdExtractorContact:
 
         with (
             patch.object(extractor, "page", MagicMock()),
-            patch.object(extractor, "web_text", new_callable = AsyncMock) as mock_web_text,
-            patch.object(extractor, "web_find", new_callable = AsyncMock),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_person_element, name_element, phone_element]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock) as mock_web_text,
+            patch.object(extractor, "web_find", new_callable=AsyncMock),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, side_effect=[None, contact_person_element, name_element, phone_element]),
         ):
             mock_web_text.side_effect = ["12345 Berlin - Mitte", "Test User", "+49(0)1234 567890"]
 
@@ -1963,13 +1946,13 @@ class TestAdExtractorDownload:
     """Tests for download functionality."""
 
     @pytest.fixture
-    def extractor(self, test_bot_config:Config) -> extract_module.AdExtractor:
-        browser_mock = MagicMock(spec = Browser)
+    def extractor(self, test_bot_config: Config) -> extract_module.AdExtractor:
+        browser_mock = MagicMock(spec=Browser)
         config = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "Test Prefix", "suffix": "Test Suffix"}}})
         return extract_module.AdExtractor(browser_mock, config, Path("downloaded-ads"))
 
     @pytest.mark.asyncio
-    async def test_download_ad(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test downloading an ad - directory creation and saving ad data."""
         # Use tmp_path for OS-agnostic path handling
         download_base = tmp_path / "downloaded-ads"
@@ -1977,11 +1960,11 @@ class TestAdExtractorDownload:
         staging_dir = download_base / ".tmp-ad_12345"
         staging_yaml_path = staging_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         with (
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True) as mock_save_dict,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2000,31 +1983,31 @@ class TestAdExtractorDownload:
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
             assert actual_path == staging_yaml_path
-            assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode = "json")
+            assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode="json")
             assert final_dir.exists()
             assert not staging_dir.exists()
 
     @pytest.mark.asyncio
-    async def test_download_ad_passes_active_override(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_passes_active_override(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test that download_ad forwards the active override to extraction."""
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
         extractor.download_dir = download_base
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         with (
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True),
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
-                _create_test_ad_partial(active = False),
+                _create_test_ad_partial(active=False),
                 staging_dir,
                 final_dir,
                 "ad_12345",
             )
 
-            await extractor.download_ad(12345, active = False)
+            await extractor.download_ad(12345, active=False)
 
             await_args = mock_extract_with_dir.await_args
             assert await_args is not None
@@ -2032,18 +2015,18 @@ class TestAdExtractorDownload:
             assert await_args.kwargs["active_override"] is False
 
     @pytest.mark.asyncio
-    async def test_download_ad_writes_schema_compliant_yaml(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_writes_schema_compliant_yaml(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test that downloaded ad YAML validates against ad.schema.json."""
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
         yaml_path = final_dir / "ad_12345.yaml"
         extractor.download_dir = download_base
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
-        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
-                _create_test_ad_partial(created_on = "2026-03-08T00:00:00+01:00", updated_on = "2026-03-09T01:02:03+01:00"),
+                _create_test_ad_partial(created_on="2026-03-08T00:00:00+01:00", updated_on="2026-03-09T01:02:03+01:00"),
                 staging_dir,
                 final_dir,
                 "ad_12345",
@@ -2051,7 +2034,7 @@ class TestAdExtractorDownload:
 
             await extractor.download_ad(12345)
 
-        loaded_ad = YAML(typ = "safe").load(await asyncio.to_thread(_read_text_file, yaml_path))
+        loaded_ad = YAML(typ="safe").load(await asyncio.to_thread(_read_text_file, yaml_path))
         schema = json.loads(await asyncio.to_thread(_read_text_file, SCHEMA_PATH))
 
         Draft202012Validator(schema).validate(loaded_ad)
@@ -2060,17 +2043,17 @@ class TestAdExtractorDownload:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_download_images_no_images(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_download_images_no_images(self, extractor: extract_module.AdExtractor) -> None:
         """Test image download when no images are found."""
         with (
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=None),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[]),
         ):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345")
             assert len(image_paths) == 0
 
     @pytest.mark.asyncio
-    async def test_download_images_uses_island_urls_after_missing_dom_gallery(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_download_images_uses_island_urls_after_missing_dom_gallery(self, extractor: extract_module.AdExtractor) -> None:
         """Download valid island image URLs and skip malformed entries independently."""
         island_props = {
             "imageDetails": [
@@ -2089,35 +2072,35 @@ class TestAdExtractorDownload:
         }
 
         with (
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=None),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[]),
             patch.object(
                 extract_module.AdExtractor,
                 "_download_and_save_image_sync",
-                side_effect = ["/some/dir/ad_12345__img1.jpg", None],
+                side_effect=["/some/dir/ad_12345__img1.jpg", None],
             ) as download_image,
         ):
-            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345", island_props = island_props)
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345", island_props=island_props)
 
         assert image_paths == ["ad_12345__img1.jpg"]
         assert download_image.call_args_list[0].args[0] == "https://images.example/one.jpg"
         assert download_image.call_args_list[1].args[0] == "https://images.example/two.jpg"
 
     @pytest.mark.asyncio
-    async def test_download_images_uses_island_urls_when_legacy_gallery_is_empty(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_download_images_uses_island_urls_when_legacy_gallery_is_empty(self, extractor: extract_module.AdExtractor) -> None:
         """Fall back when a legacy gallery container exists but contains no images."""
         island_props = {"imageDetails": [0, {"imageList": [0, [[0, {"xxLargeUrl": [0, "https://images.example/one.jpg"]}]]]}]}
 
         with (
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = []),
-            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value = "/some/dir/ad_12345__img1.jpg"),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=MagicMock()),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[]),
+            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value="/some/dir/ad_12345__img1.jpg"),
         ):
-            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345", island_props = island_props)
+            image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345", island_props=island_props)
 
         assert image_paths == ["ad_12345__img1.jpg"]
 
-    def test_extract_island_image_urls_skips_unusable_values(self, extractor:extract_module.AdExtractor) -> None:
+    def test_extract_island_image_urls_skips_unusable_values(self, extractor: extract_module.AdExtractor) -> None:
         """Ignore malformed image structures and URLs from embedded Astro data."""
         assert extractor._extract_island_image_urls({"imageDetails": [0, []]}) == []
         assert extractor._extract_island_image_urls({"imageDetails": [0, {"imageList": [0, {}]}]}) == []
@@ -2130,17 +2113,17 @@ class TestAdExtractorDownload:
         assert extractor._extract_island_image_urls(malformed_entries) == []
 
     @pytest.mark.asyncio
-    async def test_download_images_from_island_handles_missing_urls_and_extraction_errors(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_download_images_from_island_handles_missing_urls_and_extraction_errors(self, extractor: extract_module.AdExtractor) -> None:
         """Treat unusable Astro image data as a non-fatal fallback failure."""
         empty_props = {"imageDetails": [0, {"imageList": [0, []]}]}
         assert await extractor._download_images_from_island("/some/dir", "ad_12345", empty_props) == []
 
-        with patch.object(extractor, "_extract_island_image_urls", side_effect = RuntimeError("bad data")):
+        with patch.object(extractor, "_extract_island_image_urls", side_effect=RuntimeError("bad data")):
             assert await extractor._download_images_from_island("/some/dir", "ad_12345", empty_props) == []
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_download_images_with_none_url(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_download_images_with_none_url(self, extractor: extract_module.AdExtractor) -> None:
         """Test image download when some images have None as src attribute."""
         image_box_mock = MagicMock()
 
@@ -2152,9 +2135,9 @@ class TestAdExtractorDownload:
         img_without_url.attrs = {"src": None}
 
         with (
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = image_box_mock),
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [img_with_url, img_without_url]),
-            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value = "/some/dir/ad_12345__img1.jpg"),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=image_box_mock),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[img_with_url, img_without_url]),
+            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value="/some/dir/ad_12345__img1.jpg"),
         ):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", "ad_12345")
 
@@ -2164,7 +2147,7 @@ class TestAdExtractorDownload:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_ad_page_info_with_directory_handling_final_dir_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_extract_ad_page_info_with_directory_handling_final_dir_exists(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test directory handling when final_dir already exists - extraction should stage."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2184,34 +2167,34 @@ class TestAdExtractorDownload:
             patch.object(
                 extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = [
+                new_callable=AsyncMock,
+                side_effect=[
                     "Test Title",  # Title extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
             ),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=None),
             patch.object(
                 extractor,
                 "web_execute",
-                new_callable = AsyncMock,
-                return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
+                new_callable=AsyncMock,
+                return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
             ),
-            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
-            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
-            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
-            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
-            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
-            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable=AsyncMock, return_value="160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable=AsyncMock, return_value={}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable=AsyncMock, return_value=(None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable=AsyncMock, return_value=("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable=AsyncMock, return_value=False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable=AsyncMock, return_value=[]),
             patch.object(
                 extractor,
                 "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(
-                    name = "Test",
-                    zipcode = "12345",
-                    location = "Berlin",
+                new_callable=AsyncMock,
+                return_value=ContactPartial(
+                    name="Test",
+                    zipcode="12345",
+                    location="Berlin",
                 ),
             ),
         ):
@@ -2225,7 +2208,7 @@ class TestAdExtractorDownload:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_ad_page_info_with_directory_handling_rename_enabled(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_extract_ad_page_info_with_directory_handling_rename_enabled(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test directory handling when temp_dir exists and rename_existing_folders is True."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2248,34 +2231,34 @@ class TestAdExtractorDownload:
             patch.object(
                 extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = [
+                new_callable=AsyncMock,
+                side_effect=[
                     "Test Title",  # Title extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
             ),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=None),
             patch.object(
                 extractor,
                 "web_execute",
-                new_callable = AsyncMock,
-                return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
+                new_callable=AsyncMock,
+                return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
             ),
-            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
-            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
-            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
-            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
-            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
-            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable=AsyncMock, return_value="160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable=AsyncMock, return_value={}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable=AsyncMock, return_value=(None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable=AsyncMock, return_value=("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable=AsyncMock, return_value=False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable=AsyncMock, return_value=[]),
             patch.object(
                 extractor,
                 "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(
-                    name = "Test",
-                    zipcode = "12345",
-                    location = "Berlin",
+                new_callable=AsyncMock,
+                return_value=ContactPartial(
+                    name="Test",
+                    zipcode="12345",
+                    location="Berlin",
                 ),
             ),
         ):
@@ -2292,7 +2275,7 @@ class TestAdExtractorDownload:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
-    async def test_extract_ad_page_info_with_directory_handling_use_existing(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_extract_ad_page_info_with_directory_handling_use_existing(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test directory handling when temp_dir exists and rename_existing_folders is False (default)."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2315,34 +2298,34 @@ class TestAdExtractorDownload:
             patch.object(
                 extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = [
+                new_callable=AsyncMock,
+                side_effect=[
                     "Test Title",  # Title extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
             ),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=None),
             patch.object(
                 extractor,
                 "web_execute",
-                new_callable = AsyncMock,
-                return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
+                new_callable=AsyncMock,
+                return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
             ),
-            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
-            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
-            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
-            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
-            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
-            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable=AsyncMock, return_value="160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable=AsyncMock, return_value={}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable=AsyncMock, return_value=(None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable=AsyncMock, return_value=("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable=AsyncMock, return_value=False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable=AsyncMock, return_value=[]),
             patch.object(
                 extractor,
                 "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(
-                    name = "Test",
-                    zipcode = "12345",
-                    location = "Berlin",
+                new_callable=AsyncMock,
+                return_value=ContactPartial(
+                    name="Test",
+                    zipcode="12345",
+                    location="Berlin",
                 ),
             ),
         ):
@@ -2356,7 +2339,7 @@ class TestAdExtractorDownload:
             assert ad_cfg.title == "Test Title"
 
     @pytest.mark.asyncio
-    async def test_download_ad_with_umlauts_in_title(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_with_umlauts_in_title(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """Test cross-platform Unicode handling for ad titles with umlauts (issue #728).
 
         Verifies that:
@@ -2379,34 +2362,34 @@ class TestAdExtractorDownload:
             patch.object(
                 extractor,
                 "web_text",
-                new_callable = AsyncMock,
-                side_effect = [
+                new_callable=AsyncMock,
+                side_effect=[
                     title_with_umlauts,  # Title extraction
                     "Description text",  # Description
                     "03.02.2025",  # Creation date
                 ],
             ),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=None),
             patch.object(
                 extractor,
                 "web_execute",
-                new_callable = AsyncMock,
-                return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
+                new_callable=AsyncMock,
+                return_value={"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}},
             ),
-            patch.object(extractor, "_extract_category_from_ad_page", new_callable = AsyncMock, return_value = "160"),
-            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable = AsyncMock, return_value = {}),
-            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable = AsyncMock, return_value = (None, "NOT_APPLICABLE")),
-            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable = AsyncMock, return_value = ("NOT_APPLICABLE", None, None)),
-            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable = AsyncMock, return_value = False),
-            patch.object(extractor, "_download_images_from_ad_page", new_callable = AsyncMock, return_value = []),
+            patch.object(extractor, "_extract_category_from_ad_page", new_callable=AsyncMock, return_value="160"),
+            patch.object(extractor, "_extract_special_attributes_from_ad_page", new_callable=AsyncMock, return_value={}),
+            patch.object(extractor, "_extract_pricing_info_from_ad_page", new_callable=AsyncMock, return_value=(None, "NOT_APPLICABLE")),
+            patch.object(extractor, "_extract_shipping_info_from_ad_page", new_callable=AsyncMock, return_value=("NOT_APPLICABLE", None, None)),
+            patch.object(extractor, "_extract_sell_directly_from_ad_page", new_callable=AsyncMock, return_value=False),
+            patch.object(extractor, "_download_images_from_ad_page", new_callable=AsyncMock, return_value=[]),
             patch.object(
                 extractor,
                 "_extract_contact_from_ad_page",
-                new_callable = AsyncMock,
-                return_value = ContactPartial(
-                    name = "Test",
-                    zipcode = "12345",
-                    location = "Berlin",
+                new_callable=AsyncMock,
+                return_value=ContactPartial(
+                    name="Test",
+                    zipcode="12345",
+                    location="Berlin",
                 ),
             ),
         ):
@@ -2428,14 +2411,14 @@ class TestAdExtractorDownload:
             )
 
             # save_dict normalizes path to NFC, matching the NFC directory name
-            dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(), header = header_string)
+            dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(), header=header_string)
 
             # Verify file was created successfully (no FileNotFoundError)
             assert ad_file_path.exists()
             assert ad_file_path.is_file()
 
     @pytest.mark.asyncio
-    async def test_download_ad_uses_custom_folder_and_file_templates(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_uses_custom_folder_and_file_templates(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "listing_12345_Test Advertisement Title"
         ad_file_stem = "listing_12345_Test Advertisement Title"
@@ -2444,11 +2427,11 @@ class TestAdExtractorDownload:
         extractor.download_dir = download_base
         extractor.config.download.folder_name_template = "listing_{id}_{title}"
         extractor.config.download.ad_file_name_template = "listing_{id}_{title}"
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         with (
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True) as mock_save_dict,
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True) as mock_save_dict,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2464,7 +2447,7 @@ class TestAdExtractorDownload:
             assert Path(mock_save_dict.call_args[0][0]) == yaml_path
 
     @pytest.mark.asyncio
-    async def test_download_ad_replaces_final_dir_after_staging_success(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_replaces_final_dir_after_staging_success(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
@@ -2473,14 +2456,14 @@ class TestAdExtractorDownload:
         final_yaml = final_dir / "ad_12345.yaml"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
         old_file.write_text("old content")
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
         original_rename = Path.rename
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch.object(Path, "rename", autospec = True, side_effect = original_rename) as mock_rename,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch.object(Path, "rename", autospec=True, side_effect=original_rename) as mock_rename,
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2504,7 +2487,10 @@ class TestAdExtractorDownload:
     @pytest.mark.parametrize("error_type", [OSError, TimeoutError])
     @pytest.mark.asyncio
     async def test_download_ad_preserves_final_dir_when_yaml_write_fails(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path, error_type:type[OSError],
+        self,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
+        error_type: type[OSError],
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
@@ -2513,14 +2499,14 @@ class TestAdExtractorDownload:
         old_file = final_dir / "old_file.txt"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
         old_file.write_text("old content")
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = error_type("write failed")),
-            patch.object(Path, "rename", autospec = True) as mock_rename,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True, side_effect=error_type("write failed")),
+            patch.object(Path, "rename", autospec=True) as mock_rename,
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2529,7 +2515,7 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            with pytest.raises(error_type, match = "write failed"):
+            with pytest.raises(error_type, match="write failed"):
                 await extractor.download_ad(12345)
 
         assert final_dir.exists()
@@ -2541,8 +2527,8 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_cleans_staging_when_yaml_write_fails_without_existing_final_dir(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
@@ -2550,12 +2536,12 @@ class TestAdExtractorDownload:
         backup_dir = download_base / ".bak-ad_12345"
 
         extractor.download_dir = download_base
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
-            patch.object(Path, "rename", autospec = True) as mock_rename,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True, side_effect=OSError("write failed")),
+            patch.object(Path, "rename", autospec=True) as mock_rename,
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2564,7 +2550,7 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            with pytest.raises(OSError, match = "write failed"):
+            with pytest.raises(OSError, match="write failed"):
                 await extractor.download_ad(12345)
 
         assert not final_dir.exists()
@@ -2575,8 +2561,8 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_skips_staging_cleanup_when_staging_dir_is_missing(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
@@ -2585,9 +2571,9 @@ class TestAdExtractorDownload:
         extractor.download_dir = download_base
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree,
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True, side_effect=OSError("write failed")),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True) as mock_rmtree,
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2596,7 +2582,7 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            with pytest.raises(OSError, match = "write failed"):
+            with pytest.raises(OSError, match="write failed"):
                 await extractor.download_ad(12345)
 
         mock_rmtree.assert_not_called()
@@ -2604,18 +2590,18 @@ class TestAdExtractorDownload:
     @pytest.mark.parametrize(
         ("cleanup_target", "expected_warning"),
         [
-            pytest.param("staging", "Could not remove staging directory", id = "staging"),
-            pytest.param("backup", "Could not remove backup directory", id = "backup"),
+            pytest.param("staging", "Could not remove staging directory", id="staging"),
+            pytest.param("backup", "Could not remove backup directory", id="backup"),
         ],
     )
     @pytest.mark.asyncio
     async def test_download_ad_logs_warning_when_cleanup_fails(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
-        cleanup_target:str,
-        expected_warning:str,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        cleanup_target: str,
+        expected_warning: str,
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
@@ -2624,10 +2610,10 @@ class TestAdExtractorDownload:
         final_yaml = final_dir / "ad_12345.yaml"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
-        staging_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
+        staging_dir.mkdir(parents=True)
 
-        def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(path: str | Path, *_args: object, **_kwargs: object) -> None:
             normalized_path = Path(path)
             if cleanup_target == "backup" and normalized_path == backup_dir:
                 raise PermissionError("busy")
@@ -2638,10 +2624,10 @@ class TestAdExtractorDownload:
 
         if cleanup_target == "staging":
             with (
-                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True, side_effect = OSError("write failed")),
-                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-                patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+                patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True, side_effect=OSError("write failed")),
+                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+                patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
                 caplog.at_level("WARNING"),
             ):
                 mock_extract_with_dir.return_value = (
@@ -2650,13 +2636,13 @@ class TestAdExtractorDownload:
                     final_dir,
                     "ad_12345",
                 )
-                with pytest.raises(OSError, match = "write failed"):
+                with pytest.raises(OSError, match="write failed"):
                     await extractor.download_ad(12345)
         else:
             with (
-                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-                patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+                patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+                patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+                patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
                 caplog.at_level("WARNING"),
             ):
                 mock_extract_with_dir.return_value = (
@@ -2678,7 +2664,7 @@ class TestAdExtractorDownload:
         assert any(expected_warning in message for message in caplog.messages)
 
     @pytest.mark.asyncio
-    async def test_download_ad_restores_final_dir_when_swap_rename_fails(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_restores_final_dir_when_swap_rename_fails(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
@@ -2686,23 +2672,23 @@ class TestAdExtractorDownload:
         old_file = final_dir / "old_file.txt"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
         old_file.write_text("old content")
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         original_rename = Path.rename
-        rename_calls:list[tuple[Path, Path]] = []
+        rename_calls: list[tuple[Path, Path]] = []
 
-        def rename_side_effect(path_obj:Path, target:Path) -> Path:
+        def rename_side_effect(path_obj: Path, target: Path) -> Path:
             rename_calls.append((path_obj, target))
             if path_obj == staging_dir and target == final_dir:
                 raise OSError("rename failed")
             return original_rename(path_obj, target)
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
-            patch.object(Path, "rename", autospec = True, side_effect = rename_side_effect),
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True),
+            patch.object(Path, "rename", autospec=True, side_effect=rename_side_effect),
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2711,7 +2697,7 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            with pytest.raises(OSError, match = "rename failed"):
+            with pytest.raises(OSError, match="rename failed"):
                 await extractor.download_ad(12345)
 
         assert final_dir.exists()
@@ -2725,7 +2711,7 @@ class TestAdExtractorDownload:
         ]
 
     @pytest.mark.asyncio
-    async def test_download_ad_fails_when_backup_dir_already_exists(self, extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+    async def test_download_ad_fails_when_backup_dir_already_exists(self, extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
         staging_dir = download_base / ".tmp-ad_12345"
@@ -2733,12 +2719,12 @@ class TestAdExtractorDownload:
         old_file = final_dir / "old_file.txt"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
         old_file.write_text("old content")
-        staging_dir.mkdir(parents = True)
-        backup_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
+        backup_dir.mkdir(parents=True)
 
-        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
                 staging_dir,
@@ -2757,8 +2743,8 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_does_not_restore_preexisting_backup_when_final_dir_missing(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
@@ -2767,11 +2753,11 @@ class TestAdExtractorDownload:
         backup_file = backup_dir / "old_file.txt"
 
         extractor.download_dir = download_base
-        staging_dir.mkdir(parents = True)
-        backup_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
+        backup_dir.mkdir(parents=True)
         backup_file.write_text("old content")
 
-        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir:
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir:
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
                 staging_dir,
@@ -2790,9 +2776,9 @@ class TestAdExtractorDownload:
     @pytest.mark.asyncio
     async def test_download_ad_logs_restore_error_when_backup_restore_fails(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         download_base = tmp_path / "downloaded-ads"
         final_dir = download_base / "ad_12345_Test Advertisement Title"
@@ -2801,13 +2787,13 @@ class TestAdExtractorDownload:
         old_file = final_dir / "old_file.txt"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
         old_file.write_text("old content")
-        staging_dir.mkdir(parents = True)
+        staging_dir.mkdir(parents=True)
 
         original_rename = Path.rename
 
-        def rename_side_effect(path_obj:Path, target:Path) -> Path:
+        def rename_side_effect(path_obj: Path, target: Path) -> Path:
             if path_obj == staging_dir and target == final_dir:
                 raise OSError("staging rename failed")
             if path_obj == backup_dir and target == final_dir:
@@ -2815,9 +2801,9 @@ class TestAdExtractorDownload:
             return original_rename(path_obj, target)
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract_with_dir,
-            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec = True),
-            patch.object(Path, "rename", autospec = True, side_effect = rename_side_effect),
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract_with_dir,
+            patch("kleinanzeigen_bot.extract.dicts.save_dict", autospec=True),
+            patch.object(Path, "rename", autospec=True, side_effect=rename_side_effect),
         ):
             mock_extract_with_dir.return_value = (
                 _create_test_ad_partial(),
@@ -2826,7 +2812,7 @@ class TestAdExtractorDownload:
                 "ad_12345",
             )
 
-            with caplog.at_level("ERROR"), pytest.raises(OSError, match = "staging rename failed"):
+            with caplog.at_level("ERROR"), pytest.raises(OSError, match="staging rename failed"):
                 await extractor.download_ad(12345)
 
         assert not final_dir.exists()
@@ -2838,17 +2824,17 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_cleans_staging_on_failure(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
         expected_staging_dir = base_dir / ".tmp-ad_12345"
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = RuntimeError("extract failed")),
-            pytest.raises(RuntimeError, match = "extract failed"),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, side_effect=RuntimeError("extract failed")),
+            pytest.raises(RuntimeError, match="extract failed"),
         ):
             await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -2858,8 +2844,8 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_removes_stale_staging_dir(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2868,11 +2854,11 @@ class TestAdExtractorDownload:
         stale_file = stale_staging_dir / "stale.txt"
         stale_file.write_text("stale")
 
-        ad_cfg = _create_test_ad_partial(title = "Test Title")
+        ad_cfg = _create_test_ad_partial(title="Test Title")
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, return_value=ad_cfg),
         ):
             _cfg, staging_dir, _final_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -2883,26 +2869,26 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_continues_when_stale_cleanup_raises_but_dir_is_gone(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
         stale_staging_dir = base_dir / ".tmp-ad_12345"
         stale_staging_dir.mkdir()
 
-        ad_cfg = _create_test_ad_partial(title = "Test Title")
+        ad_cfg = _create_test_ad_partial(title="Test Title")
 
         original_rmtree = shutil.rmtree
 
-        def rmtree_side_effect(path:str, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(path: str, *_args: object, **_kwargs: object) -> None:
             original_rmtree(path)
             raise OSError("cleanup race")
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, return_value=ad_cfg),
         ):
             _cfg, staging_dir, _final_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -2912,8 +2898,8 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_skips_legacy_rename_when_final_dir_exists(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2922,13 +2908,13 @@ class TestAdExtractorDownload:
         legacy_dir.mkdir()
         final_dir.mkdir()
 
-        ad_cfg = _create_test_ad_partial(title = "Test Title")
+        ad_cfg = _create_test_ad_partial(title="Test Title")
 
         extractor.config.download.rename_existing_folders = True
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, return_value = ad_cfg),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, return_value=ad_cfg),
         ):
             _cfg, staging_dir, result_dir, _ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -2941,8 +2927,8 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_aborts_when_stale_staging_cleanup_fails(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2950,11 +2936,11 @@ class TestAdExtractorDownload:
         stale_staging_dir.mkdir()
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = PermissionError("busy")),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock) as mock_extract,
-            pytest.raises(OSError, match = "Could not remove stale staging directory"),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=PermissionError("busy")),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock) as mock_extract,
+            pytest.raises(OSError, match="Could not remove stale staging directory"),
         ):
             await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -2965,8 +2951,8 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_retries_stale_staging_cleanup(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
@@ -2975,9 +2961,9 @@ class TestAdExtractorDownload:
         stale_marker = stale_staging_dir / "stale.txt"
         stale_marker.write_text("stale")
         original_rmtree = shutil.rmtree
-        calls:int = 0
+        calls: int = 0
 
-        def rmtree_side_effect(path:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(path: str | Path, *_args: object, **_kwargs: object) -> None:
             nonlocal calls
             calls += 1
             if calls == 1:
@@ -2985,15 +2971,15 @@ class TestAdExtractorDownload:
             original_rmtree(path)
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
             patch.object(
                 extractor,
                 "_extract_ad_page_info",
-                new_callable = AsyncMock,
-                return_value = _create_test_ad_partial(title = "Test Title"),
+                new_callable=AsyncMock,
+                return_value=_create_test_ad_partial(title="Test Title"),
             ) as mock_extract,
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
         ):
             ad_cfg, staging_dir, final_dir, ad_file_stem = await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -3005,13 +2991,13 @@ class TestAdExtractorDownload:
         assert ad_file_stem == "ad_12345"
         assert not stale_marker.exists()
 
-    def test_remove_tree_with_retries_returns_when_path_disappears_after_failure(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_returns_when_path_disappears_after_failure(self, tmp_path: Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
         original_rmtree = shutil.rmtree
-        calls:int = 0
+        calls: int = 0
 
-        def rmtree_side_effect(target:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(target: str | Path, *_args: object, **_kwargs: object) -> None:
             nonlocal calls
             calls += 1
             if calls == 1:
@@ -3020,21 +3006,21 @@ class TestAdExtractorDownload:
             raise AssertionError("rmtree should not be retried once the path disappears")
 
         with (
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
         ):
             extract_module._remove_tree_with_retries(path)
 
         assert calls == 1
         assert not path.exists()
 
-    def test_remove_tree_with_retries_retries_then_succeeds(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_retries_then_succeeds(self, tmp_path: Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
         original_rmtree = shutil.rmtree
-        calls:int = 0
+        calls: int = 0
 
-        def rmtree_side_effect(target:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(target: str | Path, *_args: object, **_kwargs: object) -> None:
             nonlocal calls
             calls += 1
             if calls == 1:
@@ -3042,8 +3028,8 @@ class TestAdExtractorDownload:
             original_rmtree(target)
 
         with (
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
         ):
             extract_module._remove_tree_with_retries(path)
 
@@ -3053,36 +3039,36 @@ class TestAdExtractorDownload:
     @pytest.mark.parametrize(
         ("error_factory", "expected", "winerror"),
         [
-            pytest.param(lambda: PermissionError("busy"), True, None, id = "permissionerror"),
-            pytest.param(lambda: OSError(errno.EACCES, "denied"), True, None, id = "eacces"),
-            pytest.param(lambda: OSError(errno.EPERM, "denied"), True, None, id = "eperm"),
-            pytest.param(lambda: OSError(errno.EBUSY, "busy"), True, None, id = "ebusy"),
-            pytest.param(lambda: OSError("busy"), False, None, id = "generic-oserror"),
-            pytest.param(lambda: OSError("busy"), True, 5, id = "winerror-access-denied"),
-            pytest.param(lambda: OSError("busy"), True, 32, id = "winerror-sharing-violation"),
-            pytest.param(lambda: ValueError("bad"), False, None, id = "non-oserror"),
+            pytest.param(lambda: PermissionError("busy"), True, None, id="permissionerror"),
+            pytest.param(lambda: OSError(errno.EACCES, "denied"), True, None, id="eacces"),
+            pytest.param(lambda: OSError(errno.EPERM, "denied"), True, None, id="eperm"),
+            pytest.param(lambda: OSError(errno.EBUSY, "busy"), True, None, id="ebusy"),
+            pytest.param(lambda: OSError("busy"), False, None, id="generic-oserror"),
+            pytest.param(lambda: OSError("busy"), True, 5, id="winerror-access-denied"),
+            pytest.param(lambda: OSError("busy"), True, 32, id="winerror-sharing-violation"),
+            pytest.param(lambda: ValueError("bad"), False, None, id="non-oserror"),
         ],
     )
-    def test_is_retryable_rmtree_error(self, error_factory:Any, expected:bool, winerror:int | None) -> None:
+    def test_is_retryable_rmtree_error(self, error_factory: Any, expected: bool, winerror: int | None) -> None:
         error = error_factory()
         if winerror is not None:
             setattr(error, "winerror", winerror)
         assert extract_module._is_retryable_rmtree_error(error) is expected
 
-    def test_remove_tree_with_retries_fails_fast_for_non_retryable_error(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_fails_fast_for_non_retryable_error(self, tmp_path: Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
-        calls:int = 0
+        calls: int = 0
 
-        def rmtree_side_effect(_target:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(_target: str | Path, *_args: object, **_kwargs: object) -> None:
             nonlocal calls
             calls += 1
             raise OSError(errno.EINVAL, "invalid")
 
         with (
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
-            pytest.raises(OSError, match = "invalid"),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
+            pytest.raises(OSError, match="invalid"),
         ):
             extract_module._remove_tree_with_retries(path)
 
@@ -3092,11 +3078,11 @@ class TestAdExtractorDownload:
     def test_handle_rmtree_onexc_adds_write_bit_preserving_other_mode_bits_on_windows(self) -> None:
         path = "C:/Temp/readonly.txt"
         retry_func = MagicMock()
-        stat_result = MagicMock(st_mode = 0o555)
+        stat_result = MagicMock(st_mode=0o555)
 
         with (
             patch("kleinanzeigen_bot.extract.os.name", "nt"),
-            patch("kleinanzeigen_bot.extract.os.stat", return_value = stat_result) as mock_stat,
+            patch("kleinanzeigen_bot.extract.os.stat", return_value=stat_result) as mock_stat,
             patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
         ):
             extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
@@ -3105,7 +3091,7 @@ class TestAdExtractorDownload:
         mock_chmod.assert_called_once_with(path, 0o555 | stat.S_IWRITE)
         retry_func.assert_called_once_with(path)
 
-    def test_handle_rmtree_onexc_skips_chmod_on_posix(self, tmp_path:Path) -> None:
+    def test_handle_rmtree_onexc_skips_chmod_on_posix(self, tmp_path: Path) -> None:
         path = str(tmp_path / "readonly.txt")
         retry_func = MagicMock()
 
@@ -3122,12 +3108,12 @@ class TestAdExtractorDownload:
     def test_handle_rmtree_onexc_ignores_chmod_failures_on_windows(self) -> None:
         path = "C:/Temp/readonly.txt"
         retry_func = MagicMock()
-        stat_result = MagicMock(st_mode = 0o555)
+        stat_result = MagicMock(st_mode=0o555)
 
         with (
             patch("kleinanzeigen_bot.extract.os.name", "nt"),
-            patch("kleinanzeigen_bot.extract.os.stat", return_value = stat_result),
-            patch("kleinanzeigen_bot.extract.os.chmod", side_effect = OSError("chmod failed")),
+            patch("kleinanzeigen_bot.extract.os.stat", return_value=stat_result),
+            patch("kleinanzeigen_bot.extract.os.chmod", side_effect=OSError("chmod failed")),
         ):
             extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
 
@@ -3139,7 +3125,7 @@ class TestAdExtractorDownload:
 
         with (
             patch("kleinanzeigen_bot.extract.os.name", "nt"),
-            patch("kleinanzeigen_bot.extract.os.stat", side_effect = OSError("stat failed")),
+            patch("kleinanzeigen_bot.extract.os.stat", side_effect=OSError("stat failed")),
             patch("kleinanzeigen_bot.extract.os.chmod") as mock_chmod,
         ):
             extract_module._handle_rmtree_onexc(retry_func, path, PermissionError("busy"))
@@ -3147,50 +3133,50 @@ class TestAdExtractorDownload:
         mock_chmod.assert_not_called()
         retry_func.assert_called_once_with(path)
 
-    def test_handle_rmtree_onexc_raises_for_non_retryable_error(self, tmp_path:Path) -> None:
+    def test_handle_rmtree_onexc_raises_for_non_retryable_error(self, tmp_path: Path) -> None:
         path = str(tmp_path / "file.txt")
         retry_func = MagicMock()
 
-        with pytest.raises(OSError, match = "bad"):
+        with pytest.raises(OSError, match="bad"):
             extract_module._handle_rmtree_onexc(retry_func, path, OSError(errno.EINVAL, "bad"))
 
         retry_func.assert_not_called()
 
-    def test_remove_tree_with_retries_returns_when_path_missing(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_returns_when_path_missing(self, tmp_path: Path) -> None:
         path = tmp_path / "missing-staging"
 
-        with patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree:
+        with patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True) as mock_rmtree:
             extract_module._remove_tree_with_retries(path)
 
         mock_rmtree.assert_not_called()
 
-    def test_remove_tree_with_retries_returns_when_rmtree_reports_missing(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_returns_when_rmtree_reports_missing(self, tmp_path: Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
 
-        with patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = FileNotFoundError()) as mock_rmtree:
+        with patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=FileNotFoundError()) as mock_rmtree:
             extract_module._remove_tree_with_retries(path)
 
         mock_rmtree.assert_called_once()
 
-    def test_remove_tree_with_retries_returns_when_path_disappears_before_final_check(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_returns_when_path_disappears_before_final_check(self, tmp_path: Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
-        calls:int = 0
+        calls: int = 0
 
-        def rmtree_side_effect(_target:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(_target: str | Path, *_args: object, **_kwargs: object) -> None:
             nonlocal calls
             calls += 1
             raise PermissionError("busy")
 
-        exists_calls:int = 0
+        exists_calls: int = 0
         observed_false = False
         original_exists = Path.exists
 
         # Budget the mocked exists checks so _remove_tree_with_retries sees one pre-loop check,
         # _RMTREE_RETRY_ATTEMPTS in-loop retries, and then a final False via exists_side_effect;
         # observed_false confirms the last_error path is suppressed once the tree is gone.
-        def exists_side_effect(self:Path) -> bool:
+        def exists_side_effect(self: Path) -> bool:
             nonlocal exists_calls, observed_false
             if self == path:
                 exists_calls += 1
@@ -3200,9 +3186,9 @@ class TestAdExtractorDownload:
             return original_exists(self)
 
         with (
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch("kleinanzeigen_bot.extract.Path.exists", autospec = True, side_effect = exists_side_effect),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.Path.exists", autospec=True, side_effect=exists_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
         ):
             extract_module._remove_tree_with_retries(path)
 
@@ -3210,20 +3196,20 @@ class TestAdExtractorDownload:
         assert exists_calls > extract_module._RMTREE_RETRY_ATTEMPTS
         assert observed_false
 
-    def test_remove_tree_with_retries_raises_after_exhausting_retries(self, tmp_path:Path) -> None:
+    def test_remove_tree_with_retries_raises_after_exhausting_retries(self, tmp_path: Path) -> None:
         path = tmp_path / "staging"
         path.mkdir()
-        calls:int = 0
+        calls: int = 0
 
-        def rmtree_side_effect(_target:str | Path, *_args:object, **_kwargs:object) -> None:
+        def rmtree_side_effect(_target: str | Path, *_args: object, **_kwargs: object) -> None:
             nonlocal calls
             calls += 1
             raise PermissionError("busy")
 
         with (
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = rmtree_side_effect),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
-            pytest.raises(PermissionError, match = "busy"),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=rmtree_side_effect),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
+            pytest.raises(PermissionError, match="busy"),
         ):
             extract_module._remove_tree_with_retries(path)
 
@@ -3234,20 +3220,20 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_logs_warning_when_failure_cleanup_fails(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
-        caplog:pytest.LogCaptureFixture,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = RuntimeError("extract failed")),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True, side_effect = PermissionError("busy")),
-            patch("kleinanzeigen_bot.extract.time.sleep", return_value = None),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, side_effect=RuntimeError("extract failed")),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True, side_effect=PermissionError("busy")),
+            patch("kleinanzeigen_bot.extract.time.sleep", return_value=None),
             caplog.at_level("WARNING"),
-            pytest.raises(RuntimeError, match = "extract failed"),
+            pytest.raises(RuntimeError, match="extract failed"),
         ):
             await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -3257,23 +3243,23 @@ class TestAdExtractorDownload:
     # pylint: disable=protected-access
     async def test_extract_ad_page_info_with_directory_handling_skips_failure_cleanup_when_staging_is_missing(
         self,
-        extractor:extract_module.AdExtractor,
-        tmp_path:Path,
+        extractor: extract_module.AdExtractor,
+        tmp_path: Path,
     ) -> None:
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
         expected_staging_dir = base_dir / ".tmp-ad_12345"
 
-        async def failing_extract(*_args:object, **_kwargs:object) -> None:
+        async def failing_extract(*_args: object, **_kwargs: object) -> None:
             if expected_staging_dir.exists():
                 expected_staging_dir.rmdir()
             raise RuntimeError("extract failed")
 
         with (
-            patch.object(extractor, "_extract_title_from_ad_page", new_callable = AsyncMock, return_value = "Test Title"),
-            patch.object(extractor, "_extract_ad_page_info", new_callable = AsyncMock, side_effect = failing_extract),
-            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec = True) as mock_rmtree,
-            pytest.raises(RuntimeError, match = "extract failed"),
+            patch.object(extractor, "_extract_title_from_ad_page", new_callable=AsyncMock, return_value="Test Title"),
+            patch.object(extractor, "_extract_ad_page_info", new_callable=AsyncMock, side_effect=failing_extract),
+            patch("kleinanzeigen_bot.extract.shutil.rmtree", autospec=True) as mock_rmtree,
+            pytest.raises(RuntimeError, match="extract failed"),
         ):
             await extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -3281,46 +3267,46 @@ class TestAdExtractorDownload:
         assert all(Path(call.args[0]) != expected_staging_dir for call in mock_rmtree.call_args_list)
 
     @pytest.mark.asyncio
-    async def test_download_images_use_provided_ad_file_stem(self, extractor:extract_module.AdExtractor) -> None:
+    async def test_download_images_use_provided_ad_file_stem(self, extractor: extract_module.AdExtractor) -> None:
         image_box_mock = MagicMock()
 
         img_with_url = MagicMock()
         img_with_url.attrs = {"src": "http://example.com/valid_image.jpg"}
 
         with (
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, return_value = image_box_mock),
-            patch.object(extractor, "web_find_all", new_callable = AsyncMock, return_value = [img_with_url]),
-            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value = "/some/dir/listing_12345__img1.jpg"),
+            patch.object(extractor, "web_probe", new_callable=AsyncMock, return_value=image_box_mock),
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[img_with_url]),
+            patch.object(extract_module.AdExtractor, "_download_and_save_image_sync", return_value="/some/dir/listing_12345__img1.jpg"),
         ):
             image_paths = await extractor._download_images_from_ad_page("/some/dir", "listing_12345")
 
         assert image_paths == ["listing_12345__img1.jpg"]
 
-    def test_render_download_ad_file_stem_reserves_suffix_budget(self, extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_ad_file_stem_reserves_suffix_budget(self, extractor: extract_module.AdExtractor) -> None:
         long_title = "x" * 600
         stem = extractor._render_download_ad_file_stem(12345, long_title)
 
         assert "12345" in stem
         assert len(stem) <= 255 - len("__img9999.jpeg")
 
-    def test_render_download_folder_name_applies_folder_name_max_length(self, extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_folder_name_applies_folder_name_max_length(self, extractor: extract_module.AdExtractor) -> None:
         extractor.config.download.folder_name_max_length = 24
         folder_name = extractor._render_download_folder_name(12345, "title " * 20)
 
         assert len(folder_name) <= 24
         assert "12345" in folder_name
 
-    def test_render_download_name_with_budget_handles_literal_only_template(self, extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_name_with_budget_handles_literal_only_template(self, extractor: extract_module.AdExtractor) -> None:
         rendered = extractor._render_download_name_with_budget("prefix", 12345, "Any Title", 6)
 
         assert rendered == "prefix"
 
-    def test_render_download_name_with_budget_handles_zero_title_budget(self, extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_name_with_budget_handles_zero_title_budget(self, extractor: extract_module.AdExtractor) -> None:
         rendered = extractor._render_download_name_with_budget("{id}_{title}", 12345, "Any Title", 5)
 
         assert rendered == "12345"
 
-    def test_render_download_name_with_budget_handles_title_before_id(self, extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_name_with_budget_handles_title_before_id(self, extractor: extract_module.AdExtractor) -> None:
         rendered = extractor._render_download_name_with_budget("{title}_{id}", 12345, "Any Title", 20)
 
         assert "12345" in rendered
@@ -3330,27 +3316,26 @@ class TestAdExtractorDownload:
     @pytest.mark.parametrize(
         "rendered_stem",
         [
-            "ad_12345",            # matches saved filename — direct lookup
-            "ad_12345_newtitle",   # mismatched — triggers glob fallback
+            "ad_12345",  # matches saved filename — direct lookup
+            "ad_12345_newtitle",  # mismatched — triggers glob fallback
         ],
     )
     @pytest.mark.parametrize(
         "apr_fields",
         [
-            pytest.param({}, id = "absent"),
-            pytest.param({"auto_price_reduction": None}, id = "null"),
-            pytest.param({"auto_price_reduction": {}}, id = "empty-disabled"),
+            pytest.param({}, id="absent"),
+            pytest.param({"auto_price_reduction": None}, id="null"),
+            pytest.param({"auto_price_reduction": {}}, id="empty-disabled"),
             pytest.param(
                 {"auto_price_reduction": {"enabled": True, "strategy": "PERCENTAGE", "amount": 10, "min_price": 1}},
-                id = "valid",
+                id="valid",
             ),
         ],
     )
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_download_ad_preserves_local_settings_when_enabled(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path, rendered_stem:str,
-        apr_fields:dict[str, Any], caplog:pytest.LogCaptureFixture
+        self, extractor: extract_module.AdExtractor, tmp_path: Path, rendered_stem: str, apr_fields: dict[str, Any], caplog: pytest.LogCaptureFixture
     ) -> None:
         """Re-downloading an existing ad with preserve_local_settings=True keeps local counters and overrides."""
         download_base = tmp_path / "downloaded-ads"
@@ -3358,12 +3343,12 @@ class TestAdExtractorDownload:
         staging_dir = download_base / ".tmp-ad_12345"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
-        staging_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
+        staging_dir.mkdir(parents=True)
 
         # Write an existing ad YAML with local-only fields set to non-default values
         existing_yaml = final_dir / "ad_12345.yaml"
-        existing_data:dict[str, Any] = {
+        existing_data: dict[str, Any] = {
             "title": "Old Advertisement Title",
             "description": "Old description text",
             "category": "Garten & Freizeit > Camping",
@@ -3378,7 +3363,7 @@ class TestAdExtractorDownload:
 
         extractor.config.download.preserve_local_settings = True
 
-        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract:
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = (
                 _create_test_ad_partial(),
                 staging_dir,
@@ -3408,7 +3393,7 @@ class TestAdExtractorDownload:
 
     @pytest.mark.asyncio
     async def test_download_ad_logs_warning_when_preservation_fails(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path, caplog:pytest.LogCaptureFixture
+        self, extractor: extract_module.AdExtractor, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
         """When preservation validation fails, a warning is logged and the download proceeds normally."""
         download_base = tmp_path / "downloaded-ads"
@@ -3416,12 +3401,12 @@ class TestAdExtractorDownload:
         staging_dir = download_base / ".tmp-ad_12345"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
-        staging_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
+        staging_dir.mkdir(parents=True)
 
         # Write an existing YAML so preservation is triggered
         existing_yaml = final_dir / "ad_12345.yaml"
-        existing_data:dict[str, Any] = {
+        existing_data: dict[str, Any] = {
             "title": "Old Advertisement Title",
             "description": "Old description text",
             "category": "Dienstleistungen",
@@ -3437,8 +3422,8 @@ class TestAdExtractorDownload:
         ad_cfg = _create_test_ad_partial()
 
         with (
-            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract,
-            patch.object(AdPartial, "model_validate", side_effect = ValueError("validation failed")),
+            patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract,
+            patch.object(AdPartial, "model_validate", side_effect=ValueError("validation failed")),
         ):
             mock_extract.return_value = (
                 ad_cfg,
@@ -3454,11 +3439,11 @@ class TestAdExtractorDownload:
         assert not staging_dir.exists()
         assert any("Could not preserve local settings" in message for message in caplog.messages)
 
-    @pytest.mark.parametrize("apr_value", [{"enabled": True}, False], ids = ["incomplete", "false"])
+    @pytest.mark.parametrize("apr_value", [{"enabled": True}, False], ids=["incomplete", "false"])
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_download_ad_preserves_other_fields_when_apr_invalid(
-        self, extractor:extract_module.AdExtractor, tmp_path:Path, apr_value:Any, caplog:pytest.LogCaptureFixture
+        self, extractor: extract_module.AdExtractor, tmp_path: Path, apr_value: Any, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Malformed auto_price_reduction skips only that field; counters still preserved."""
         download_base = tmp_path / "downloaded-ads"
@@ -3466,12 +3451,12 @@ class TestAdExtractorDownload:
         staging_dir = download_base / ".tmp-ad_12345"
 
         extractor.download_dir = download_base
-        final_dir.mkdir(parents = True)
-        staging_dir.mkdir(parents = True)
+        final_dir.mkdir(parents=True)
+        staging_dir.mkdir(parents=True)
 
         # Write existing YAML with a malformed auto_price_reduction
         existing_yaml = final_dir / "ad_12345.yaml"
-        existing_data:dict[str, Any] = {
+        existing_data: dict[str, Any] = {
             "title": "Old Advertisement Title",
             "description": "Old description text",
             "category": "Dienstleistungen",
@@ -3486,7 +3471,7 @@ class TestAdExtractorDownload:
 
         extractor.config.download.preserve_local_settings = True
 
-        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as mock_extract:
+        with patch.object(extractor, "_extract_ad_page_info_with_directory_handling", new_callable=AsyncMock) as mock_extract:
             mock_extract.return_value = (
                 _create_test_ad_partial(),
                 staging_dir,
@@ -3510,49 +3495,49 @@ class TestRenderDownloadNameWithBudgetWarnings:
 
     def test_truncate_log_snippet_returns_value_when_within_limit(self) -> None:
         """Values within max_length are returned unchanged."""
-        result = extract_module.AdExtractor._truncate_log_snippet("short", max_length = 10)
+        result = extract_module.AdExtractor._truncate_log_snippet("short", max_length=10)
 
         assert result == "short"
 
     def test_truncate_log_snippet_truncates_and_respects_limit(self) -> None:
         """Values over max_length are truncated and final length stays within the cap."""
-        result = extract_module.AdExtractor._truncate_log_snippet("x" * 150, max_length = 20)
+        result = extract_module.AdExtractor._truncate_log_snippet("x" * 150, max_length=20)
 
         assert result == ("x" * 17) + "..."
         assert len(result) == 20
 
     def test_truncate_log_snippet_handles_small_limits(self) -> None:
         """Small limits return a shortened ellipsis-only preview."""
-        result = extract_module.AdExtractor._truncate_log_snippet("abcdef", max_length = 2)
+        result = extract_module.AdExtractor._truncate_log_snippet("abcdef", max_length=2)
 
         assert result == ".."
 
     def test_truncate_log_snippet_returns_empty_for_zero_max_length(self) -> None:
         """Zero max_length returns empty string."""
-        result = extract_module.AdExtractor._truncate_log_snippet("any value", max_length = 0)
+        result = extract_module.AdExtractor._truncate_log_snippet("any value", max_length=0)
 
         assert not result
 
     def test_truncate_log_snippet_returns_empty_for_negative_max_length(self) -> None:
         """Negative max_length returns empty string."""
-        result = extract_module.AdExtractor._truncate_log_snippet("any value", max_length = -1)
+        result = extract_module.AdExtractor._truncate_log_snippet("any value", max_length=-1)
 
         assert not result
 
     def test_truncate_log_snippet_returns_exact_ellipsis_at_limit_three(self) -> None:
         """When max_length equals ellipsis length, return exact ellipsis."""
-        result = extract_module.AdExtractor._truncate_log_snippet("long value here", max_length = 3)
+        result = extract_module.AdExtractor._truncate_log_snippet("long value here", max_length=3)
 
         assert result == "..."
 
-    def test_render_download_name_with_title_only_template(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_name_with_title_only_template(self, test_extractor: extract_module.AdExtractor) -> None:
         """Template with only {title} placeholder (no {id}) renders correctly."""
         rendered = test_extractor._render_download_name_with_budget("{title}", 12345, "My Item Title", 50)
 
         assert rendered == "My Item Title"
         assert "12345" not in rendered
 
-    def test_render_download_name_with_title_only_truncated(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_name_with_title_only_truncated(self, test_extractor: extract_module.AdExtractor) -> None:
         """Template with only {title} truncates when budget is tight."""
         rendered = test_extractor._render_download_name_with_budget("{title}", 12345, "Very Long Title Here", 10)
 
@@ -3560,14 +3545,14 @@ class TestRenderDownloadNameWithBudgetWarnings:
         # Title is truncated to fit budget via sanitize_folder_name
         assert rendered == "Very Long"
 
-    def test_render_download_name_ignores_unknown_placeholder(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_render_download_name_ignores_unknown_placeholder(self, test_extractor: extract_module.AdExtractor) -> None:
         """Unknown placeholders are ignored (defensive fallback)."""
         rendered = test_extractor._render_download_name_with_budget("prefix_{unknown}_suffix", 12345, "Title", 50)
 
         # Unknown placeholder is skipped, only literals remain
         assert rendered == "prefix__suffix"
 
-    def test_no_warning_when_everything_fits(self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture) -> None:
+    def test_no_warning_when_everything_fits(self, test_extractor: extract_module.AdExtractor, caplog: pytest.LogCaptureFixture) -> None:
         """No warning when all placeholders fit within budget."""
         with caplog.at_level("WARNING"):
             rendered = test_extractor._render_download_name_with_budget("{id}_{title}", 12345, "Short", 50)
@@ -3576,7 +3561,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "Short" in rendered
         assert "truncated" not in caplog.text.lower()
 
-    def test_truncates_id_when_budget_exhausted(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_truncates_id_when_budget_exhausted(self, test_extractor: extract_module.AdExtractor) -> None:
         """{id} is truncated to fit within budget."""
         rendered = test_extractor._render_download_name_with_budget("{id}", 12345678901234567890, "", 5)
 
@@ -3586,8 +3571,8 @@ class TestRenderDownloadNameWithBudgetWarnings:
 
     def test_truncates_title_when_budget_exhausted(
         self,
-        test_extractor:extract_module.AdExtractor,
-        caplog:pytest.LogCaptureFixture,
+        test_extractor: extract_module.AdExtractor,
+        caplog: pytest.LogCaptureFixture,
     ) -> None:
         """{title} is truncated to fit within budget while {id} is preserved."""
         with caplog.at_level("WARNING"):
@@ -3598,7 +3583,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert len(rendered) <= 12
         assert any("Download name truncated {title} placeholder" in record.getMessage() for record in caplog.records)
 
-    def test_id_protected_over_literals(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_id_protected_over_literals(self, test_extractor: extract_module.AdExtractor) -> None:
         """{id} is protected over literal text with tight budget."""
         rendered = test_extractor._render_download_name_with_budget("LONGPREFIX_{id}", 12345, "", 10)
 
@@ -3609,7 +3594,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "12345" in rendered
         assert len(rendered) <= 10
 
-    def test_title_truncated_to_reserve_id_space(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_title_truncated_to_reserve_id_space(self, test_extractor: extract_module.AdExtractor) -> None:
         """{title} is truncated to reserve space for {id} and literals."""
         rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345, "Very Long Title", 18)
 
@@ -3618,7 +3603,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "Very Long Title" not in rendered
         assert len(rendered) <= 18
 
-    def test_title_before_id_with_tight_budget_preserves_full_id(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_title_before_id_with_tight_budget_preserves_full_id(self, test_extractor: extract_module.AdExtractor) -> None:
         """When budget is tight, {title} is truncated before {id} and separators."""
         rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345, "Any Title", 14)
 
@@ -3626,7 +3611,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert "12345" in rendered
         assert len(rendered) <= 14
 
-    def test_literals_preserved_before_title(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_literals_preserved_before_title(self, test_extractor: extract_module.AdExtractor) -> None:
         """Literal text is preserved before {title} under budget pressure."""
         # Budget calculation: PREFIX_ (7) + 12345 (5) + _ (1) = 13 chars reserved for id+literals
         # Remaining budget for title: 15 - 13 = 2 chars → "Hello" truncated to "He"
@@ -3636,7 +3621,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert rendered == "PREFIX_12345_He"
         assert len(rendered) <= 15
 
-    def test_suffix_literal_preserved_with_tight_budget(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_suffix_literal_preserved_with_tight_budget(self, test_extractor: extract_module.AdExtractor) -> None:
         """Suffix literal survives when {title} truncates first under tight budget."""
         # Priority: {id} > literals > {title}
         # Budget 18: id=12345 (5) + _ (1) + _SUFFIX (7) = 13 chars for id+suffix literals
@@ -3647,7 +3632,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert rendered.endswith("_SUFFIX")
         assert len(rendered) <= 18
 
-    def test_title_truncates_before_suffix_and_id(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_title_truncates_before_suffix_and_id(self, test_extractor: extract_module.AdExtractor) -> None:
         """When {title} precedes suffix literal and {id}, title truncates to preserve both."""
         # Priority: {id} > literals > {title}
         # Budget 20: id=12345 (5) + _SUFFIX_ (8) = 13 chars for id+suffix literals
@@ -3659,7 +3644,7 @@ class TestRenderDownloadNameWithBudgetWarnings:
         assert rendered.endswith("_12345")
         assert len(rendered) <= 20
 
-    def test_truncates_both_id_and_title_under_extreme_budget(self, test_extractor:extract_module.AdExtractor) -> None:
+    def test_truncates_both_id_and_title_under_extreme_budget(self, test_extractor: extract_module.AdExtractor) -> None:
         """Both {id} and {title} are truncated to fit within a tight budget."""
         rendered = test_extractor._render_download_name_with_budget("{title}_{id}", 12345678901234567890, "Very Long Title Here", 15)
 
@@ -3698,16 +3683,14 @@ class TestAdExtractorAnonymousFallback:
 
     def test_dimensions_from_belen_conf(self) -> None:
         """BelenConf yields its dimensions; anything unexpected yields an empty dict."""
-        assert extract_module.AdExtractor._dimensions_from_belen_conf(
-            {"universalAnalyticsOpts": {"dimensions": {"ad_type": "OFFER"}}}
-        ) == {"ad_type": "OFFER"}
+        assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": {"dimensions": {"ad_type": "OFFER"}}}) == {"ad_type": "OFFER"}
         assert extract_module.AdExtractor._dimensions_from_belen_conf(None) == {}
         assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": "unexpected"}) == {}
         assert extract_module.AdExtractor._dimensions_from_belen_conf({"universalAnalyticsOpts": {"dimensions": "unexpected"}}) == {}
 
     @pytest.mark.asyncio
     async def test_extract_ad_page_uses_anonymous_dimensions_when_belen_conf_is_missing(
-        self, test_extractor:extract_module.AdExtractor, tmp_path:Path
+        self, test_extractor: extract_module.AdExtractor, tmp_path: Path
     ) -> None:
         """Without window.BelenConf the dimensions are taken from one anonymous request."""
         base_dir = tmp_path / "downloaded-ads"
@@ -3715,20 +3698,20 @@ class TestAdExtractorAnonymousFallback:
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
-        fallback_mock = AsyncMock(return_value = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json"))
+        fallback_mock = AsyncMock(return_value=_load_astro_props_fixture("anonymous_ad_dimensions_sample.json"))
 
         with patch.multiple(
             test_extractor,
-            web_text = AsyncMock(side_effect = ["Test Title", "Test Description", "03.02.2025"]),
-            web_probe = AsyncMock(return_value = None),
-            web_execute = AsyncMock(return_value = None),
-            _fetch_anonymous_ad_dimensions = fallback_mock,
-            _extract_category_from_ad_page = AsyncMock(return_value = "17/23"),
-            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (15.0, "FIXED")),
-            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-            _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            web_text=AsyncMock(side_effect=["Test Title", "Test Description", "03.02.2025"]),
+            web_probe=AsyncMock(return_value=None),
+            web_execute=AsyncMock(return_value=None),
+            _fetch_anonymous_ad_dimensions=fallback_mock,
+            _extract_category_from_ad_page=AsyncMock(return_value="17/23"),
+            _extract_pricing_info_from_ad_page=AsyncMock(return_value=(15.0, "FIXED")),
+            _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+            _download_images_from_ad_page=AsyncMock(return_value=[]),
+            _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
         ):
             ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -3738,35 +3721,33 @@ class TestAdExtractorAnonymousFallback:
         assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
 
     @pytest.mark.asyncio
-    async def test_extract_ad_page_skips_anonymous_request_when_belen_conf_is_present(
-        self, test_extractor:extract_module.AdExtractor, tmp_path:Path
-    ) -> None:
+    async def test_extract_ad_page_skips_anonymous_request_when_belen_conf_is_present(self, test_extractor: extract_module.AdExtractor, tmp_path: Path) -> None:
         """The classic ad page provides the dimensions itself, so no extra request is made."""
         base_dir = tmp_path / "downloaded-ads"
         base_dir.mkdir()
         page_mock = MagicMock()
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
-        fallback_mock = AsyncMock(return_value = None)
+        fallback_mock = AsyncMock(return_value=None)
 
         with patch.multiple(
             test_extractor,
-            web_text = AsyncMock(side_effect = ["Test Title", "Test Description", "03.02.2025"]),
-            web_probe = AsyncMock(return_value = None),
-            web_execute = AsyncMock(
-                return_value = {
+            web_text=AsyncMock(side_effect=["Test Title", "Test Description", "03.02.2025"]),
+            web_probe=AsyncMock(return_value=None),
+            web_execute=AsyncMock(
+                return_value={
                     "universalAnalyticsOpts": {
                         "dimensions": {"ad_type": "OFFER", "l3_category_id": "gesellschaftsspiele", "ad_attributes": "art_s:gesellschaftsspiele"}
                     }
                 }
             ),
-            _fetch_anonymous_ad_dimensions = fallback_mock,
-            _extract_category_from_ad_page = AsyncMock(return_value = "17/23"),
-            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (15.0, "FIXED")),
-            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("NOT_APPLICABLE", None, None)),
-            _extract_sell_directly_from_ad_page = AsyncMock(return_value = False),
-            _download_images_from_ad_page = AsyncMock(return_value = []),
-            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+            _fetch_anonymous_ad_dimensions=fallback_mock,
+            _extract_category_from_ad_page=AsyncMock(return_value="17/23"),
+            _extract_pricing_info_from_ad_page=AsyncMock(return_value=(15.0, "FIXED")),
+            _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+            _download_images_from_ad_page=AsyncMock(return_value=[]),
+            _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
         ):
             ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
 
@@ -3785,7 +3766,7 @@ class TestAdExtractorAnonymousFallback:
             ("note_s:size:large|art_s:tische", {"note_s": "size:large", "art_s": "tische"}),
         ],
     )
-    def test_parse_ad_attributes(self, ad_attributes:str, expected:dict[str, str]) -> None:
+    def test_parse_ad_attributes(self, ad_attributes: str, expected: dict[str, str]) -> None:
         """Shipping keys are dropped and values may themselves contain a colon."""
         assert extract_module.AdExtractor._parse_ad_attributes(ad_attributes) == expected
 
@@ -3821,7 +3802,7 @@ class TestAdExtractorAnonymousFallback:
             ("", False),
         ],
     )
-    def test_is_trusted_ad_page_url(self, test_extractor:extract_module.AdExtractor, url:str, trusted:bool) -> None:
+    def test_is_trusted_ad_page_url(self, test_extractor: extract_module.AdExtractor, url: str, trusted: bool) -> None:
         """Only https on a Kleinanzeigen host may be requested."""
         assert test_extractor._is_trusted_ad_page_url(url) is trusted
 
@@ -3834,9 +3815,7 @@ class TestAdExtractorAnonymousFallback:
             ("https://169.254.169.254/latest/meta-data/", False),
         ],
     )
-    def test_redirect_handler_only_follows_trusted_targets(
-        self, test_extractor:extract_module.AdExtractor, newurl:str, followed:bool
-    ) -> None:
+    def test_redirect_handler_only_follows_trusted_targets(self, test_extractor: extract_module.AdExtractor, newurl: str, followed: bool) -> None:
         """A redirect cannot steer the fallback request off the trusted host."""
         handler = extract_module._TrustedHostRedirectHandler(test_extractor._is_trusted_ad_page_url)
         request = Request("https://www.kleinanzeigen.de/s-anzeige/123")  # noqa: S310 trusted literal
@@ -3853,9 +3832,7 @@ class TestAdExtractorAnonymousFallback:
             (None, "Grün"),  # no charset declared -> utf-8
         ],
     )
-    def test_fetch_page_source_sync_decodes_body(
-        self, test_extractor:extract_module.AdExtractor, charset:str | None, expected:str
-    ) -> None:
+    def test_fetch_page_source_sync_decodes_body(self, test_extractor: extract_module.AdExtractor, charset: str | None, expected: str) -> None:
         """The response is decoded with the declared charset, defaulting to utf-8."""
         response = MagicMock()
         response.headers.get_content_charset.return_value = charset
@@ -3881,23 +3858,21 @@ class TestAdExtractorAnonymousFallback:
             IncompleteRead(b"partial"),
         ],
     )
-    def test_fetch_page_source_sync_returns_none_on_error(self, test_extractor:extract_module.AdExtractor, error:Exception) -> None:
+    def test_fetch_page_source_sync_returns_none_on_error(self, test_extractor: extract_module.AdExtractor, error: Exception) -> None:
         """Network, socket and URL errors are swallowed so the download can continue."""
         with patch("kleinanzeigen_bot.extract.urllib_request.build_opener") as build_opener:
             build_opener.return_value.open.side_effect = error
             assert test_extractor._fetch_page_source_sync("https://www.kleinanzeigen.de/ad", 5.0) is None
 
     @pytest.mark.asyncio
-    async def test_fetch_anonymous_ad_dimensions_paces_request_and_uses_configured_timeout(
-        self, test_extractor:extract_module.AdExtractor
-    ) -> None:
+    async def test_fetch_anonymous_ad_dimensions_paces_request_and_uses_configured_timeout(self, test_extractor: extract_module.AdExtractor) -> None:
         """The single extra request is paced and uses the configured page_load timeout."""
         dimensions = _load_astro_props_fixture("anonymous_ad_dimensions_sample.json")
         page_html = "<script>window.BelenConf = { universalAnalyticsOpts: { dimensions: " + json.dumps(dimensions) + " } }</script>"
 
         with (
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock) as web_sleep,
-            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = page_html) as fetch,
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock) as web_sleep,
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value=page_html) as fetch,
         ):
             result = await test_extractor._fetch_anonymous_ad_dimensions(12345)
 
@@ -3908,12 +3883,10 @@ class TestAdExtractorAnonymousFallback:
         fetch.assert_called_once_with("https://www.kleinanzeigen.de/s-anzeige/12345", test_extractor.timeout("page_load"))
 
     @pytest.mark.asyncio
-    async def test_fetch_anonymous_ad_dimensions_returns_none_when_request_fails(
-        self, test_extractor:extract_module.AdExtractor
-    ) -> None:
+    async def test_fetch_anonymous_ad_dimensions_returns_none_when_request_fails(self, test_extractor: extract_module.AdExtractor) -> None:
         """A failed request is reported as None rather than raising."""
         with (
-            patch.object(test_extractor, "web_sleep", new_callable = AsyncMock),
-            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = None),
+            patch.object(test_extractor, "web_sleep", new_callable=AsyncMock),
+            patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value=None),
         ):
             assert await test_extractor._fetch_anonymous_ad_dimensions(12345) is None
