@@ -1677,6 +1677,38 @@ class TestAdExtractorCategory:
 
         assert result == {"art_s": "weiteres", "condition_s": "alright"}
 
+    # pylint: disable=protected-access
+    def test_extract_special_attributes_from_island_skips_unusable_entries(self, extractor:extract_module.AdExtractor) -> None:
+        """Malformed entries, unknown labels and unknown condition texts are skipped without dropping usable attributes."""
+        island_props:dict[str, Any] = {
+            "localizedAttributes": [1, [
+                [0, "not-a-dict"],
+                [0, {"localizedValue": [0, None], "localizedName": [0, "Art"]}],
+                [0, {"localizedValue": [0, "Unbekannt"], "localizedName": [0, "Zustand"]}],
+                [0, {"localizedValue": [0, "Andere Fahrräder"], "localizedName": [0, "Typ"]}],
+                [0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}],
+            ]],
+        }
+
+        assert extractor._extract_special_attributes_from_island(island_props) == {"art_s": "Zubehör"}
+
+    @pytest.mark.parametrize(
+        "island_props",
+        [
+            None,
+            {"localizedAttributes": [1, []]},
+            {"localizedAttributes": [1, [[0, {"localizedValue": [0, "Andere Fahrräder"], "localizedName": [0, "Typ"]}]]]},
+        ],
+    )
+    # pylint: disable=protected-access
+    def test_extract_special_attributes_from_island_returns_empty_without_recognized_attributes(
+        self,
+        extractor:extract_module.AdExtractor,
+        island_props:dict[str, Any] | None,
+    ) -> None:
+        """No island data, an empty attribute list or only unknown labels yield no special attributes."""
+        assert extractor._extract_special_attributes_from_island(island_props) == {}
+
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor:extract_module.AdExtractor) -> None:
@@ -1896,17 +1928,48 @@ class TestAdExtractorContact:
     async def test_extract_contact_prefers_island_name_over_avatar_link(self, extractor:extract_module.AdExtractor) -> None:
         """The first seller link of the redesigned layout is the avatar and only contains the initials."""
         contact_element = MagicMock()
+        avatar_link = MagicMock()
         island_props = {"userDetails": [0, {"contactName": [0, "Jane Doe"], "initials": [0, "J"]}]}
+
+        async def probe_side_effect(by:By, value:str, **_kwargs:Any) -> Any:
+            if by == By.ID and value == "viewad-contact":
+                return contact_element
+            if by == By.CSS_SELECTOR and value == "a[href*='/s-bestandsliste.html']":
+                return avatar_link
+            return None
 
         with (
             patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
-            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_element, None, None]),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
             patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, return_value = "J") as mock_visible_text,
         ):
             contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
 
         assert contact.name == "Jane Doe"
         mock_visible_text.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_warns_when_island_has_no_seller_name_and_no_link(
+        self,
+        extractor:extract_module.AdExtractor,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Keep the seller name empty and warn when neither the seller link nor the island data provide a name."""
+        contact_element = MagicMock()
+        island_props = {"userDetails": [0, {"initials": [0, "J"]}]}
+
+        async def probe_side_effect(by:By, value:str, **_kwargs:Any) -> Any:
+            return contact_element if by == By.ID and value == "viewad-contact" else None
+
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            caplog.at_level("WARNING"),
+        ):
+            contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
+
+        assert not contact.name
+        assert any("Could not extract seller name from contact area or Astro component data" in message for message in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_extract_contact_uses_span_when_legacy_name_has_no_link(self, extractor:extract_module.AdExtractor) -> None:
