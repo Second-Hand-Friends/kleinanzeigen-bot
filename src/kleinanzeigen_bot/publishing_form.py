@@ -360,13 +360,24 @@ async def set_contact_location(web:WebScrapingMixin, location:str) -> None:
 
     # kleinanzeigen.de switched the city field to a read-only <input> whose
     # value is derived from the entered zip code; it is no longer a
-    # selectable combobox. When the page already prefilled a non-empty
-    # value, accept it instead of trying (and failing) to open a combobox.
-    if city_tag == "input" and "readonly" in city_attrs and selected_city:
-        LOG.info(
-            "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.",
-            selected_city,
-        )
+    # selectable combobox. The derivation happens asynchronously after the
+    # zip code is typed, so the field can transiently still show a stale
+    # value left over from a previous ad in the same browser session/tab.
+    # Wait for it to converge on the target location instead of accepting
+    # whatever non-empty value happens to be present at this instant.
+    if city_tag == "input" and "readonly" in city_attrs:
+        async def _derived_city_matches_target() -> bool:
+            current = await read_city_selection_text(web)
+            return location_matches_target(target, current)
+
+        try:
+            await web.web_await(_derived_city_matches_target, timeout = city_timeout)
+        except TimeoutError as ex:
+            stale_value = await read_city_selection_text(web)
+            raise TimeoutError(
+                _("Zip-derived city ('%s') did not converge to expected location: %s") % (stale_value, target)
+            ) from ex
+        LOG.info("ad-city is a <input readonly>, derived value converged to target '%s'.", target)
         return
 
     if city_tag != "button" or city_role != "combobox":

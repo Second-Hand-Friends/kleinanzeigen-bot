@@ -283,7 +283,8 @@ kleinanzeigen_bot/publishing_form.py:
 
   set_contact_location:
     "Unsupported city element type while setting contact location: <%s>": "Nicht unterstützter Stadt-Elementtyp beim Setzen des Kontaktorts: <%s>"
-    "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.": "ad-city ist ein <input readonly> mit Wert '%s' (aus PLZ abgeleitet) - übernehme statt Combobox-Auswahl."
+    "Zip-derived city ('%s') did not converge to expected location: %s": "Aus der PLZ abgeleitete Stadt ('%s') hat sich nicht auf den erwarteten Ort eingestellt: %s"
+    "ad-city is a <input readonly>, derived value converged to target '%s'.": "ad-city ist ein <input readonly>, abgeleiteter Wert entspricht dem Zielort '%s'."
 
   set_category:
     "Unknown category alias '%s'. Use a category name from categories.yaml or a numeric category path.": "Unbekannter Kategorie-Alias '%s'. Verwenden Sie einen Kategorienamen aus categories.yaml oder einen numerischen Kategoriepfad."

@@ -344,18 +344,76 @@ class TestKleinanzeigenBotContactLocationHardening:
 
     @pytest.mark.asyncio
     async def test_set_contact_location_accepts_readonly_input_with_zip_derived_value(self, test_bot:KleinanzeigenBot) -> None:
-        """When ad-city is a readonly <input> with a non-empty prefilled value (zip-derived), accept it."""
+        """When ad-city is a readonly <input> whose value already matches the target, accept it."""
         city_input = MagicMock(spec = Element)
         city_input.local_name = "input"
         city_input.attrs = {"readonly": "", "value": "Metroville - Riverside"}
 
+        async def web_await_immediate(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            return await result if asyncio.iscoroutine(result) else result
+
         with (
             patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = "Metroville - Riverside"),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_immediate),
             patch("kleinanzeigen_bot.publishing_form.select_city_combobox_option", new_callable = AsyncMock) as combobox_mock,
         ):
             await set_contact_location(test_bot, "Metroville")
             combobox_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_readonly_input_waits_out_stale_zip_derived_value(self, test_bot:KleinanzeigenBot) -> None:
+        """A readonly ad-city input can transiently show a stale value left over from a previously
+        published ad in the same browser tab before the async zip->city derivation catches up.
+        set_contact_location must wait for it to converge on the target rather than accepting the
+        stale value at face value (regression test for the silent-wrong-location bug)."""
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+        city_input.attrs = {"readonly": "", "value": "Rivertown"}
+
+        # First call = initial early-return check (stale); remaining calls come from inside the
+        # convergence condition, simulating the value settling to the target after 2 polls.
+        city_texts = AsyncMock(side_effect = ["Rivertown", "Rivertown", "Metroville - Riverside"])
+
+        async def web_await_polling(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            for _attempt in range(5):
+                result = condition()
+                value = await result if asyncio.iscoroutine(result) else result
+                if value:
+                    return value
+            raise TimeoutError("Condition not met")
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", city_texts),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_polling),
+            patch("kleinanzeigen_bot.publishing_form.select_city_combobox_option", new_callable = AsyncMock) as combobox_mock,
+        ):
+            await set_contact_location(test_bot, "Metroville")
+            combobox_mock.assert_not_called()
+        assert city_texts.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_set_contact_location_raises_when_readonly_input_never_converges(self, test_bot:KleinanzeigenBot) -> None:
+        """If the zip-derived readonly city never converges on the target, fail loudly instead of
+        silently publishing under the wrong location."""
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+        city_input.attrs = {"readonly": "", "value": "Rivertown"}
+
+        async def web_await_never_converges(condition:Callable[..., Awaitable[bool] | bool], **_:Any) -> Any:
+            result = condition()
+            await result if asyncio.iscoroutine(result) else result
+            raise TimeoutError("Condition not met")
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form.read_city_selection_text", new_callable = AsyncMock, return_value = "Rivertown"),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = web_await_never_converges),
+            pytest.raises(TimeoutError, match = "did not converge to expected location"),
+        ):
+            await set_contact_location(test_bot, "Metroville")
 
     # ------------------------------------------------------------------
     # read_city_selection_text: edge-case branches
