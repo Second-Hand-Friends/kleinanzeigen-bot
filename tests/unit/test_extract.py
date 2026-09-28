@@ -1649,6 +1649,36 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
+    async def test_extract_special_attributes_falls_back_to_island_data(self, extractor:extract_module.AdExtractor) -> None:
+        """The redesigned layout has no BelenConf attributes and no details section, only island data."""
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {}}}
+        island_props:dict[str, Any] = {
+            "localizedAttributes": [1, [
+                [0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}],
+                [0, {"localizedValue": [0, "Andere Fahrräder"], "localizedName": [0, "Typ"]}],
+                [0, {"localizedValue": [0, "In Ordnung"], "localizedName": [0, "Zustand"]}],
+            ]],
+        }
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
+            result = await extractor._extract_special_attributes_from_ad_page(belen_conf, island_props = island_props)
+
+        assert result == {"art_s": "Zubehör", "condition_s": "alright"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_prefers_belen_conf_over_island_data(self, extractor:extract_module.AdExtractor) -> None:
+        """Island data is only a fallback and must not override the BelenConf attributes."""
+        belen_conf:dict[str, Any] = {"universalAnalyticsOpts": {"dimensions": {"ad_attributes": "art_s:weiteres|condition_s:alright"}}}
+        island_props:dict[str, Any] = {
+            "localizedAttributes": [1, [[0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}]]],
+        }
+
+        result = await extractor._extract_special_attributes_from_ad_page(belen_conf, island_props = island_props)
+
+        assert result == {"art_s": "weiteres", "condition_s": "alright"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
     async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor:extract_module.AdExtractor) -> None:
         """DOM fallback should extract condition_s from #viewad-details section."""
         detail_item = MagicMock()
@@ -1861,6 +1891,22 @@ class TestAdExtractorContact:
             contact = await extractor._extract_contact_from_ad_page()
 
         assert contact.name == "DanielP"
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_prefers_island_name_over_avatar_link(self, extractor:extract_module.AdExtractor) -> None:
+        """The first seller link of the redesigned layout is the avatar and only contains the initials."""
+        contact_element = MagicMock()
+        island_props = {"userDetails": [0, {"contactName": [0, "Jane Doe"], "initials": [0, "J"]}]}
+
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = [None, contact_element, None, None]),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, return_value = "J") as mock_visible_text,
+        ):
+            contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
+
+        assert contact.name == "Jane Doe"
+        mock_visible_text.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_extract_contact_uses_span_when_legacy_name_has_no_link(self, extractor:extract_module.AdExtractor) -> None:
