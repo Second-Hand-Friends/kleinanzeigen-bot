@@ -1091,10 +1091,14 @@ class AdExtractor(WebScrapingMixin):
         if not isinstance(price_data, dict):
             return None
         price_type = self._unwrap_island_value(price_data.get("type"))
-        if price_type not in {"FIXED", "NEGOTIABLE", "GIVE_AWAY"}:
+        if not isinstance(price_type, str) or price_type not in {"FIXED", "NEGOTIABLE", "GIVE_AWAY"}:
             price_type = "NOT_APPLICABLE"
         amount = self._unwrap_island_value(price_data.get("amount"))
         price = int(amount) if isinstance(amount, int | float) and not isinstance(amount, bool) else None
+        if price_type == "GIVE_AWAY":
+            price = None
+        elif price_type == "FIXED" and price is None:
+            price_type = "NOT_APPLICABLE"
         LOG.debug("Falling back to price island prop: %s %s", price, price_type)
         return price, price_type
 

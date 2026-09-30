@@ -277,20 +277,47 @@ class TestAdExtractorPricing:
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_pricing_give_away_from_island_when_price_element_empty(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Give-away ads on the redesigned layout render an empty #viewad-price; the island prop supplies GIVE_AWAY."""
-        island_props:dict[str, Any] = {"price": [0, {"amount": [0, None], "type": [0, "GIVE_AWAY"]}]}
+        """Give-away pricing ignores an incidental numeric island amount."""
+        island_props:dict[str, Any] = {"price": [0, {"amount": [0, 0], "type": [0, "GIVE_AWAY"]}]}
         with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
 
         assert price is None
         assert price_type == "GIVE_AWAY"
 
+    @pytest.mark.parametrize(
+        ("amount", "price_type"),
+        [
+            (None, "FIXED"),
+            (None, []),
+            (None, {}),
+        ],
+        ids = ["fixed-without-amount", "list-type", "dict-type"],
+    )
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_pricing_normalizes_invalid_island_data(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        amount:int | None,
+        price_type:Any,
+    ) -> None:
+        """Malformed island pricing yields a model-compatible no-price fallback."""
+        island_props:dict[str, Any] = {"price": [0, {"amount": [0, amount], "type": [0, price_type]}]}
+        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""):
+            price, extracted_price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
+
+        assert price is None
+        assert extracted_price_type == "NOT_APPLICABLE"
+
     @pytest.mark.asyncio
     # pylint: disable=protected-access
     async def test_extract_pricing_empty_element_without_island_data(
-        self, test_extractor:extract_module.AdExtractor, caplog:pytest.LogCaptureFixture
+        self,
+        test_extractor:extract_module.AdExtractor,
+        caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """An empty #viewad-price without island price data yields NOT_APPLICABLE and a warning instead of crashing."""
+        """An empty #viewad-price without island data yields NOT_APPLICABLE and emits a warning."""
         with (
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""),
             caplog.at_level("WARNING"),
@@ -299,7 +326,7 @@ class TestAdExtractorPricing:
 
         assert price is None
         assert price_type == "NOT_APPLICABLE"
-        assert any("Price element is empty" in message for message in caplog.messages)
+        assert any(record.name == extract_module.__name__ and record.levelname == "WARNING" for record in caplog.records)
 
 
 class TestAdExtractorShipping:
