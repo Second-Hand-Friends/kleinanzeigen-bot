@@ -1186,10 +1186,12 @@ class AdExtractor(WebScrapingMixin):
     ) -> dict[str, str]:
         """
         Extracts the special attributes from the canonical ad dimensions.
+        Without dimension attributes, the ad details section and then the island data are used.
         If no items are available then special_attributes is empty
 
         :param dimensions: the dimensions as returned by ``window.BelenConf``
             (``universalAnalyticsOpts.dimensions``) or by :meth:`_fetch_anonymous_ad_dimensions`
+        :param island_props: optional Astro island props from the redesigned layout
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
 
@@ -1221,22 +1223,23 @@ class AdExtractor(WebScrapingMixin):
 
         for item in detail_items:
             try:
-                value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
-                full_text = (await self.extract_visible_text(item)).strip().lower()
+                value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip()
+                full_text = (await self.extract_visible_text(item)).strip()
             except TimeoutError:
                 LOG.debug("Skipping detail row without extractable value in DOM fallback.")
                 continue
-            label = full_text.removesuffix(value_text).strip()
+            label = full_text.lower().removesuffix(value_text.lower()).strip()
 
             attr_key = _LABEL_TO_KEY.get(label)
             if not attr_key:
                 continue
 
             if attr_key == "condition_s":
-                api_value = _CONDITION_DISPLAY_TO_API.get(value_text)
+                api_value = _CONDITION_DISPLAY_TO_API.get(value_text.lower())
                 if api_value:
                     attributes[attr_key] = api_value
             else:
+                # keep the display casing: publishing matches option labels case-sensitively
                 attributes[attr_key] = value_text
 
         if attributes:
