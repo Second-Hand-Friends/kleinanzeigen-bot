@@ -65,6 +65,7 @@ _CONDITION_DISPLAY_TO_API:Final[dict[str, str]] = {
 }
 validate_condition_api_mapping("_CONDITION_DISPLAY_TO_API", _CONDITION_DISPLAY_TO_API)
 _LABEL_TO_KEY:Final[dict[str, str]] = {
+    "art": "art_s",
     "zustand": "condition_s",
 }
 DOWNLOAD_CREATION_DATE_SELECTOR:Final[str] = "#viewad-extra-info > div:nth-child(1) > span:nth-child(2)"
@@ -902,7 +903,7 @@ class AdExtractor(WebScrapingMixin):
 
         info["description"] = description_text.strip()
 
-        info["special_attributes"] = await self._extract_special_attributes_from_ad_page(dimensions)
+        info["special_attributes"] = await self._extract_special_attributes_from_ad_page(dimensions, island_props = island_props)
 
         if "schaden_s" in info["special_attributes"]:
             # change f to  'nein' and 't' to 'ja'
@@ -1177,20 +1178,27 @@ class AdExtractor(WebScrapingMixin):
         parsed = dict(item.split(":", 1) for item in ad_attributes.split("|") if ":" in item)
         return {key: value for key, value in parsed.items() if not key.endswith(".versand_s") and key != "versand_s"}
 
-    async def _extract_special_attributes_from_ad_page(self, dimensions:dict[str, Any] | None) -> dict[str, str]:
+    async def _extract_special_attributes_from_ad_page(
+        self,
+        dimensions:dict[str, Any] | None,
+        *,
+        island_props:dict[str, Any] | None = None,
+    ) -> dict[str, str]:
         """
         Extracts the special attributes from the canonical ad dimensions.
+        Without dimension attributes, the ad details section and then the island data are used.
         If no items are available then special_attributes is empty
 
         :param dimensions: the dimensions as returned by ``window.BelenConf``
             (``universalAnalyticsOpts.dimensions``) or by :meth:`_fetch_anonymous_ad_dimensions`
+        :param island_props: optional Astro island props from the redesigned layout
         :return: a dictionary (possibly empty) where the keys are the attribute names, mapped to their values
         """
 
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
         special_attributes_str = dimensions.get("ad_attributes") if isinstance(dimensions, dict) else None
         if not special_attributes_str:
-            return await self._extract_special_attributes_from_dom()
+            return await self._extract_special_attributes_from_dom() or self._extract_special_attributes_from_island(island_props)
         return self._parse_ad_attributes(special_attributes_str)
 
     async def _extract_special_attributes_from_dom(self) -> dict[str, str]:
@@ -1215,26 +1223,62 @@ class AdExtractor(WebScrapingMixin):
 
         for item in detail_items:
             try:
-                value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip().lower()
-                full_text = (await self.extract_visible_text(item)).strip().lower()
+                value_text = (await self.web_text(By.CSS_SELECTOR, ".addetailslist--detail--value", parent = item)).strip()
+                full_text = (await self.extract_visible_text(item)).strip()
             except TimeoutError:
                 LOG.debug("Skipping detail row without extractable value in DOM fallback.")
                 continue
-            label = full_text.removesuffix(value_text).strip()
+            label = full_text.lower().removesuffix(value_text.lower()).strip()
 
             attr_key = _LABEL_TO_KEY.get(label)
             if not attr_key:
                 continue
 
             if attr_key == "condition_s":
-                api_value = _CONDITION_DISPLAY_TO_API.get(value_text)
+                api_value = _CONDITION_DISPLAY_TO_API.get(value_text.lower())
                 if api_value:
                     attributes[attr_key] = api_value
             else:
+                # keep the display casing: publishing matches option labels case-sensitively
                 attributes[attr_key] = value_text
 
         if attributes:
             LOG.debug("Extracted special attributes from DOM fallback: %s", attributes)
+        return attributes
+
+    def _extract_special_attributes_from_island(self, island_props:dict[str, Any] | None) -> dict[str, str]:
+        """Extract special attributes from the ``localizedAttributes`` island prop of the redesigned layout.
+
+        The redesigned page has neither ``BelenConf`` attributes nor a ``#viewad-details`` section,
+        the attributes are only available as display labels/values (e.g. "Art" -> "Zubehör").
+        """
+        attributes:dict[str, str] = {}
+        localized_attributes = self._unwrap_island_value((island_props or {}).get("localizedAttributes"))
+        if not isinstance(localized_attributes, list):
+            return attributes
+
+        for raw_entry in localized_attributes:
+            entry = self._unwrap_island_value(raw_entry)
+            if not isinstance(entry, dict):
+                continue
+            label = self._unwrap_island_value(entry.get("localizedName"))
+            value = self._unwrap_island_value(entry.get("localizedValue"))
+            if not isinstance(label, str) or not isinstance(value, str):
+                continue
+
+            attr_key = _LABEL_TO_KEY.get(label.strip().lower())
+            if not attr_key:
+                continue
+
+            if attr_key == "condition_s":
+                api_value = _CONDITION_DISPLAY_TO_API.get(value.strip().lower())
+                if api_value:
+                    attributes[attr_key] = api_value
+            else:
+                attributes[attr_key] = value.strip()
+
+        if attributes:
+            LOG.debug("Extracted special attributes from island data: %s", attributes)
         return attributes
 
     def _extract_pricing_info_from_island(self, island_props:dict[str, Any] | None) -> tuple[int | None, str] | None:
@@ -1459,13 +1503,18 @@ class AdExtractor(WebScrapingMixin):
                 except TimeoutError:  # edge case: name without link
                     name = await self.web_text(By.TAG_NAME, "span", parent = name_element)
             else:
-                # Redesigned layout: seller name is in a link to /s-bestandsliste.html?userId=
-                name_link = await self.web_probe(
+                # Redesigned layout: the first link to /s-bestandsliste.html?userId= is the avatar
+                # showing only the initials, so prefer the full name from the island data.
+                user_details = self._unwrap_island_value((island_props or {}).get("userDetails", {}))
+                island_name = self._unwrap_island_value(user_details.get("contactName", "")) if isinstance(user_details, dict) else ""
+                name_link = None if island_name else await self.web_probe(
                     By.CSS_SELECTOR,
                     "a[href*='/s-bestandsliste.html']",
                     parent = contact_person_element,
                 )
-                if name_link is not None:
+                if island_name:
+                    name = str(island_name)
+                elif name_link is not None:
                     name = await self.extract_visible_text(name_link)
                 elif island_props:
                     # Island fallback: extract contact name from embedded JSON

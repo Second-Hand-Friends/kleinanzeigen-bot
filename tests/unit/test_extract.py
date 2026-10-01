@@ -1705,6 +1705,68 @@ class TestAdExtractorCategory:
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
+    async def test_extract_special_attributes_falls_back_to_island_data(self, extractor:extract_module.AdExtractor) -> None:
+        """Neither the page nor the anonymous fallback delivered dimensions and there is no details section."""
+        dimensions:dict[str, Any] = {}
+        island_props:dict[str, Any] = {
+            "localizedAttributes": [1, [
+                [0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}],
+                [0, {"localizedValue": [0, "Andere Fahrräder"], "localizedName": [0, "Typ"]}],
+                [0, {"localizedValue": [0, "In Ordnung"], "localizedName": [0, "Zustand"]}],
+            ]],
+        }
+        with patch.object(extractor, "_extract_special_attributes_from_dom", new_callable = AsyncMock, return_value = {}):
+            result = await extractor._extract_special_attributes_from_ad_page(dimensions, island_props = island_props)
+
+        assert result == {"art_s": "Zubehör", "condition_s": "alright"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_prefers_dimensions_over_island_data(self, extractor:extract_module.AdExtractor) -> None:
+        """Island data is only a fallback and must not override the canonical dimension attributes."""
+        dimensions:dict[str, Any] = {"ad_attributes": "art_s:weiteres|condition_s:alright"}
+        island_props:dict[str, Any] = {
+            "localizedAttributes": [1, [[0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}]]],
+        }
+
+        result = await extractor._extract_special_attributes_from_ad_page(dimensions, island_props = island_props)
+
+        assert result == {"art_s": "weiteres", "condition_s": "alright"}
+
+    # pylint: disable=protected-access
+    def test_extract_special_attributes_from_island_skips_unusable_entries(self, extractor:extract_module.AdExtractor) -> None:
+        """Malformed entries, unknown labels and unknown condition texts are skipped without dropping usable attributes."""
+        island_props:dict[str, Any] = {
+            "localizedAttributes": [1, [
+                [0, "not-a-dict"],
+                [0, {"localizedValue": [0, None], "localizedName": [0, "Art"]}],
+                [0, {"localizedValue": [0, "Unbekannt"], "localizedName": [0, "Zustand"]}],
+                [0, {"localizedValue": [0, "Andere Fahrräder"], "localizedName": [0, "Typ"]}],
+                [0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}],
+            ]],
+        }
+
+        assert extractor._extract_special_attributes_from_island(island_props) == {"art_s": "Zubehör"}
+
+    @pytest.mark.parametrize(
+        "island_props",
+        [
+            None,
+            {"localizedAttributes": [1, []]},
+            {"localizedAttributes": [1, [[0, {"localizedValue": [0, "Andere Fahrräder"], "localizedName": [0, "Typ"]}]]]},
+        ],
+    )
+    # pylint: disable=protected-access
+    def test_extract_special_attributes_from_island_returns_empty_without_recognized_attributes(
+        self,
+        extractor:extract_module.AdExtractor,
+        island_props:dict[str, Any] | None,
+    ) -> None:
+        """No island data, an empty attribute list or only unknown labels yield no special attributes."""
+        assert extractor._extract_special_attributes_from_island(island_props) == {}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
     async def test_extract_special_attributes_from_dom_extracts_condition(self, extractor: extract_module.AdExtractor) -> None:
         """DOM fallback should extract condition_s from #viewad-details section."""
         detail_item = MagicMock()
@@ -1728,6 +1790,29 @@ class TestAdExtractorCategory:
             result = await extractor._extract_special_attributes_from_dom()
 
         assert result == {"condition_s": "new"}
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_extract_special_attributes_from_dom_keeps_art_display_casing(self, extractor: extract_module.AdExtractor) -> None:
+        """Non-condition values keep their display casing, since publishing matches option labels case-sensitively."""
+        art_item = MagicMock()
+        condition_item = MagicMock()
+        values = {id(art_item): ("Art Zubehör", "Zubehör"), id(condition_item): ("Zustand In Ordnung", "In Ordnung")}
+
+        async def text_side_effect(by: Any, selector: str, *, parent: Any = None, **__: Any) -> str:
+            return values[id(parent)][1]
+
+        async def visible_text_side_effect(element: Any) -> str:
+            return values[id(element)][0]
+
+        with (
+            patch.object(extractor, "web_find_all", new_callable=AsyncMock, return_value=[art_item, condition_item]),
+            patch.object(extractor, "web_text", new_callable=AsyncMock, side_effect=text_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable=AsyncMock, side_effect=visible_text_side_effect),
+        ):
+            result = await extractor._extract_special_attributes_from_dom()
+
+        assert result == {"art_s": "Zubehör", "condition_s": "alright"}
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
@@ -1917,6 +2002,53 @@ class TestAdExtractorContact:
             contact = await extractor._extract_contact_from_ad_page()
 
         assert contact.name == "DanielP"
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_prefers_island_name_over_avatar_link(self, extractor:extract_module.AdExtractor) -> None:
+        """The first seller link of the redesigned layout is the avatar and only contains the initials."""
+        contact_element = MagicMock()
+        avatar_link = MagicMock()
+        island_props = {"userDetails": [0, {"contactName": [0, "Jane Doe"], "initials": [0, "J"]}]}
+
+        async def probe_side_effect(by:By, value:str, **_kwargs:Any) -> Any:
+            if by == By.ID and value == "viewad-contact":
+                return contact_element
+            if by == By.CSS_SELECTOR and value == "a[href*='/s-bestandsliste.html']":
+                return avatar_link
+            return None
+
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            patch.object(extractor, "extract_visible_text", new_callable = AsyncMock, return_value = "J") as mock_visible_text,
+        ):
+            contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
+
+        assert contact.name == "Jane Doe"
+        mock_visible_text.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_extract_contact_warns_when_island_has_no_seller_name_and_no_link(
+        self,
+        extractor:extract_module.AdExtractor,
+        caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Keep the seller name empty and warn when neither the seller link nor the island data provide a name."""
+        contact_element = MagicMock()
+        island_props = {"userDetails": [0, {"initials": [0, "J"]}]}
+
+        async def probe_side_effect(by:By, value:str, **_kwargs:Any) -> Any:
+            return contact_element if by == By.ID and value == "viewad-contact" else None
+
+        with (
+            patch.object(extractor, "web_text", new_callable = AsyncMock, return_value = "12345 Berlin - Mitte"),
+            patch.object(extractor, "web_probe", new_callable = AsyncMock, side_effect = probe_side_effect),
+            caplog.at_level("WARNING"),
+        ):
+            contact = await extractor._extract_contact_from_ad_page(island_props = island_props)
+
+        assert not contact.name
+        assert any("Could not extract seller name from contact area or Astro component data" in message for message in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_extract_contact_uses_span_when_legacy_name_has_no_link(self, extractor: extract_module.AdExtractor) -> None:
@@ -3828,6 +3960,59 @@ class TestAdExtractorAnonymousFallback:
         assert ad_cfg.type == "OFFER"
         assert ad_cfg.category == "17/23/gesellschaftsspiele"
         assert ad_cfg.special_attributes == {"art_s": "gesellschaftsspiele"}
+
+    @pytest.mark.parametrize(
+        ("anonymous_dimensions", "dom_attributes", "expected"),
+        [
+            ({"ad_attributes": "art_s:weiteres"}, {"art_s": "Spiele"}, {"art_s": "weiteres"}),
+            (None, {"art_s": "Spiele"}, {"art_s": "Spiele"}),
+            (None, {}, {"art_s": "Zubehör", "condition_s": "alright"}),
+        ],
+        ids=["anonymous-dimensions-win", "dom-before-island", "island-last"],
+    )
+    @pytest.mark.asyncio
+    async def test_extract_ad_page_special_attributes_precedence_on_redesigned_page(
+        self,
+        test_extractor: extract_module.AdExtractor,
+        tmp_path: Path,
+        anonymous_dimensions: dict[str, Any] | None,
+        dom_attributes: dict[str, str],
+        expected: dict[str, str],
+    ) -> None:
+        """Without window.BelenConf: anonymous dimensions first, then the DOM, then the island data."""
+        base_dir = tmp_path / "downloaded-ads"
+        base_dir.mkdir()
+        page_mock = MagicMock()
+        page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
+        test_extractor.page = page_mock
+        island_props: dict[str, Any] = {
+            "localizedAttributes": [
+                1,
+                [
+                    [0, {"localizedValue": [0, "Zubehör"], "localizedName": [0, "Art"]}],
+                    [0, {"localizedValue": [0, "In Ordnung"], "localizedName": [0, "Zustand"]}],
+                ],
+            ],
+        }
+
+        with patch.multiple(
+            test_extractor,
+            web_text=AsyncMock(side_effect=["Test Title", "Test Description", "03.02.2025"]),
+            web_probe=AsyncMock(return_value=None),
+            web_execute=AsyncMock(return_value=None),
+            _extract_island_props=AsyncMock(return_value=island_props),
+            _fetch_anonymous_ad_dimensions=AsyncMock(return_value=anonymous_dimensions),
+            _extract_special_attributes_from_dom=AsyncMock(return_value=dom_attributes),
+            _extract_category_from_ad_page=AsyncMock(return_value="17/23"),
+            _extract_pricing_info_from_ad_page=AsyncMock(return_value=(15, "FIXED")),
+            _extract_shipping_info_from_ad_page=AsyncMock(return_value=("NOT_APPLICABLE", None, None)),
+            _extract_sell_directly_from_ad_page=AsyncMock(return_value=False),
+            _download_images_from_ad_page=AsyncMock(return_value=[]),
+            _extract_contact_from_ad_page=AsyncMock(return_value=ContactPartial()),
+        ):
+            ad_cfg, _staging_dir, _final_dir, _ad_file_stem = await test_extractor._extract_ad_page_info_with_directory_handling(base_dir, 12345)
+
+        assert ad_cfg.special_attributes == expected
 
     @pytest.mark.parametrize(
         ("ad_attributes", "expected"),
