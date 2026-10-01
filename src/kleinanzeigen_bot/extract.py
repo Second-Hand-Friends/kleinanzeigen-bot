@@ -907,7 +907,7 @@ class AdExtractor(WebScrapingMixin):
         if "schaden_s" in info["special_attributes"]:
             # change f to  'nein' and 't' to 'ja'
             info["special_attributes"]["schaden_s"] = info["special_attributes"]["schaden_s"].translate(str.maketrans({"t": "ja", "f": "nein"}))
-        info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page()
+        info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page(island_props = island_props)
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page(island_props = island_props)
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
         info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem, island_props = island_props)
@@ -1237,31 +1237,62 @@ class AdExtractor(WebScrapingMixin):
             LOG.debug("Extracted special attributes from DOM fallback: %s", attributes)
         return attributes
 
-    async def _extract_pricing_info_from_ad_page(self) -> tuple[float | None, str]:
+    def _extract_pricing_info_from_island(self, island_props:dict[str, Any] | None) -> tuple[int | None, str] | None:
+        """Return price and price type from the ``price`` island prop, or ``None`` if it is absent."""
+        price_data = self._unwrap_island_value((island_props or {}).get("price"))
+        if not isinstance(price_data, dict):
+            return None
+        price_type = self._unwrap_island_value(price_data.get("type"))
+        if not isinstance(price_type, str) or price_type not in {"FIXED", "NEGOTIABLE", "GIVE_AWAY"}:
+            price_type = "NOT_APPLICABLE"
+        amount = self._unwrap_island_value(price_data.get("amount"))
+        price = int(amount) if isinstance(amount, int | float) and not isinstance(amount, bool) else None
+        if price_type == "GIVE_AWAY":
+            price = None
+        elif price_type == "FIXED" and price is None:
+            price_type = "NOT_APPLICABLE"
+        LOG.debug("Falling back to price island prop: %s %s", price, price_type)
+        return price, price_type
+
+    async def _extract_pricing_info_from_ad_page(self, *, island_props:dict[str, Any] | None = None) -> tuple[int | None, str]:
         """
         Extracts the pricing information (price and pricing type) from an ad page.
 
+        On the redesigned (Astro) layout ``#viewad-price`` can be absent or empty
+        (e.g. on give-away ads). In that case the ``price`` island prop is used
+        as a fallback.
+
+        :param island_props: optional Astro island props from the redesigned layout
         :return: the price of the offer (optional); and the pricing type
         """
         try:
             price_str:str = await self.web_text(By.ID, "viewad-price")
-            price:int | None = None
-            match price_str.rsplit(maxsplit = 1)[-1]:
-                case "€":
-                    price_type = "FIXED"
-                    # replace('.', '') is to remove the thousands separator before parsing as int
-                    price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
-                case "VB":
-                    price_type = "NEGOTIABLE"
-                    if price_str != "VB":  # can be either 'X € VB', or just 'VB'
-                        price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
-                case "verschenken":
-                    price_type = "GIVE_AWAY"
-                case _:
-                    price_type = "NOT_APPLICABLE"
-            return price, price_type
         except TimeoutError:  # no 'commercial' ad, has no pricing box etc.
-            return None, "NOT_APPLICABLE"
+            return self._extract_pricing_info_from_island(island_props) or (None, "NOT_APPLICABLE")
+
+        price_tokens = price_str.rsplit(maxsplit = 1)
+        if not price_tokens:  # price box present but empty (redesigned layout)
+            island_pricing = self._extract_pricing_info_from_island(island_props)
+            if island_pricing is None:
+                LOG.warning("Price element is empty and no price data was found; using price type NOT_APPLICABLE")
+                return None, "NOT_APPLICABLE"
+            return island_pricing
+
+        price:int | None = None
+        match price_tokens[-1]:
+            case "€":
+                price_type = "FIXED"
+                # replace('.', '') is to remove the thousands separator before parsing as int
+                price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
+            case "VB":
+                price_type = "NEGOTIABLE"
+                if price_str != "VB":  # can be either 'X € VB', or just 'VB'
+                    price = int(price_str.replace(".", "").split(maxsplit = 1)[0])
+            case "verschenken":
+                price_type = "GIVE_AWAY"
+            case _:
+                price_type = "NOT_APPLICABLE"
+        return price, price_type
 
     async def _extract_shipping_text_from_dom(self) -> str | None:
         """Return the legacy shipping wording element, or ``None`` if it is absent."""
