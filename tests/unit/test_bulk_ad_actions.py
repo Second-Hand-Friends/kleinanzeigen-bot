@@ -25,14 +25,16 @@ class Overview:
         self.pages = pages
         self.failed_id = failed_id
         self.action = action
-        self.page = 0
+        # like the real overview, the last viewed page is restored unless the URL sets pageNumber (#1302)
+        self.page = len(pages) - 1
         self.visited:list[int] = []
         self.attempted:list[int] = []
         self.succeeded:list[int] = []
 
     async def open(self, url:str) -> None:
-        assert url == "https://example.invalid/m-meine-anzeigen.html"
-        self.page = 0
+        assert url.startswith("https://example.invalid/m-meine-anzeigen.html")
+        if "pageNumber=1" in url:
+            self.page = 0
         self.visited.append(self.page)
 
     async def next_page(self) -> None:

@@ -43,6 +43,39 @@ class TestNavigatePaginatedAdOverview:
             callback.assert_awaited_once_with(1)
             assert open_mock.await_count == int(open_page)
 
+    @pytest.mark.parametrize(
+        ("page_url", "expected"),
+        [
+            (None, "https://www.kleinanzeigen.de/m-meine-anzeigen.html?pageNumber=1&keyword="),
+            ("https://example.invalid/m-meine-anzeigen.html?tab=ADS", "https://example.invalid/m-meine-anzeigen.html?tab=ADS&pageNumber=1&keyword="),
+            (
+                "https://example.invalid/m-meine-anzeigen.html?pageNumber=3&keyword=lamp&tab=ADS",
+                "https://example.invalid/m-meine-anzeigen.html?tab=ADS&pageNumber=1&keyword=",
+            ),
+        ],
+        ids = ["default-url", "keeps-other-params", "replaces-page-and-keyword"],
+    )
+    @pytest.mark.asyncio
+    async def test_opens_overview_on_first_page(self, page_url:str | None, expected:str) -> None:
+        """The overview restores the last page and search from sessionStorage, so the URL pins both (#1302)."""
+        mixin = WebScrapingMixin()
+        callback = AsyncMock(return_value = True)
+
+        with (
+            patch.object(mixin, "web_open", new_callable = AsyncMock) as open_mock,
+            patch.object(mixin, "web_sleep", new_callable = AsyncMock),
+            patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
+            patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
+            patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(mixin, "timeout", return_value = 10),
+        ):
+            if page_url is None:
+                await mixin.navigate_paginated_ad_overview(callback)
+            else:
+                await mixin.navigate_paginated_ad_overview(callback, page_url = page_url)
+
+        open_mock.assert_awaited_once_with(expected)
+
     @pytest.mark.asyncio
     async def test_single_page_action_returns_false(self) -> None:
         """Test pagination on single page where action returns False."""

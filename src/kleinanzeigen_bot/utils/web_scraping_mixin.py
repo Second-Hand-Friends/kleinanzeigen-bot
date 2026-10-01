@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final, cast, overload
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 import nodriver, psutil  # isort: skip
 from nodriver.cdp import browser as cdp_browser, input_ as cdp_input  # isort: skip
@@ -270,6 +270,20 @@ def _filter_viewport_sizes(sizes:Sequence[str], avail_w:int, avail_h:int) -> lis
         if w <= avail_w and h <= avail_h:
             fitting.append(size)
     return fitting
+
+
+# The ad overview restores these UI-stored query parameters from ``sessionStorage`` unless the URL
+# sets them, so a plain URL can open on a later page or with a stale search filter (issue #1302).
+# ``sort`` needs no pinning: the page adds a default ``sort`` to every URL lacking one.
+_AD_OVERVIEW_UNFILTERED_FIRST_PAGE:Final[dict[str, str]] = {"pageNumber": "1", "keyword": ""}
+
+
+def _ad_overview_first_page_url(page_url:str) -> str:
+    """Return ``page_url`` pinned to the first, unfiltered overview page; other parameters are kept."""
+    parts = urlsplit(page_url)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values = True) if key not in _AD_OVERVIEW_UNFILTERED_FIRST_PAGE]
+    query.extend(_AD_OVERVIEW_UNFILTERED_FIRST_PAGE.items())
+    return urlunsplit(parts._replace(query = urlencode(query)))
 
 
 def _is_headless_browser_arg(arg:str) -> bool:
@@ -1735,7 +1749,8 @@ class WebScrapingMixin:  # noqa: PLR0904
             page_action: Async callable that receives current_page number and returns True if action succeeded/should stop
             page_url: URL of the paginated overview page (default: kleinanzeigen ad management page)
             max_pages: Maximum number of pages to navigate (safety limit)
-            open_page: Open page_url first; False preserves an overview reached through site navigation
+            open_page: Open page_url first, pinned to its first, unfiltered page; False preserves an
+                overview reached through site navigation
 
         Returns:
             True if page_action returned True on any page, False otherwise
@@ -1752,7 +1767,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         """
         if open_page:
             try:
-                await self.web_open(page_url)
+                await self.web_open(_ad_overview_first_page_url(page_url))
             except TimeoutError:
                 LOG.warning("Failed to open ad overview page at %s: timeout", page_url)
                 return False
