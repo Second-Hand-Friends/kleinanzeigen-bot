@@ -283,7 +283,8 @@ kleinanzeigen_bot/publishing_form.py:
 
   set_contact_location:
     "Unsupported city element type while setting contact location: <%s>": "Nicht unterstützter Stadt-Elementtyp beim Setzen des Kontaktorts: <%s>"
-    "ad-city is a <input readonly> with value '%s' (zip-derived) - accepting instead of combobox selection.": "ad-city ist ein <input readonly> mit Wert '%s' (aus PLZ abgeleitet) - übernehme statt Combobox-Auswahl."
+    "Zip-derived city ('%s') did not converge to expected location: %s": "Aus der PLZ abgeleitete Stadt ('%s') hat sich nicht auf den erwarteten Ort eingestellt: %s"
+    "ad-city is a <input readonly>, derived value converged to target '%s'.": "ad-city ist ein <input readonly>, abgeleiteter Wert entspricht dem Zielort '%s'."
 
   set_category:
     "Unknown category alias '%s'. Use a category name from categories.yaml or a numeric category path.": "Unbekannter Kategorie-Alias '%s'. Verwenden Sie einen Kategorienamen aus categories.yaml oder einen numerischen Kategoriepfad."
@@ -731,6 +732,12 @@ kleinanzeigen_bot/extract.py:
 
   _extract_ad_page_info:
     "Could not extract creation date from any selector or Astro component data.": "Erstellungsdatum konnte weder über Selektoren noch über Astro-Komponentendaten extrahiert werden."
+    ? "Ad %s: neither BelenConf nor the anonymous fallback delivered ad dimensions; category attributes may stay incomplete and publishing can fail."
+    : "Für Anzeige %s haben weder BelenConf noch der anonyme Fallback Anzeigen-Dimensionen geliefert; Kategorie-Attribute können unvollständig bleiben und das Veröffentlichen kann fehlschlagen."
+
+  _fetch_anonymous_ad_dimensions:
+    "Ad %s: anonymous fallback request failed.": "Anonymer Fallback-Abruf für Anzeige %s fehlgeschlagen."
+    "Ad %s: anonymous fallback response contains no usable ad dimensions.": "Die Antwort des anonymen Fallbacks für Anzeige %s enthält keine verwendbaren Anzeigen-Dimensionen."
 
   _extract_contact_from_ad_page:
     "No street given in the contact.": "Keine Straße in den Kontaktdaten angegeben."
@@ -742,6 +749,9 @@ kleinanzeigen_bot/extract.py:
     "Falling back to legacy breadcrumb selectors; collected ids: %s": "Weiche auf ältere Breadcrumb-Selektoren aus; gesammelte IDs: %s"
     "Legacy breadcrumb selectors not found within %.1f seconds (collected ids: %s)": "Ältere Breadcrumb-Selektoren nicht innerhalb von %.1f Sekunden gefunden (gesammelte IDs: %s)"
     "Unable to locate breadcrumb fallback selectors within %(seconds).1f seconds.": "Ältere Breadcrumb-Selektoren konnten nicht innerhalb von %(seconds).1f Sekunden gefunden werden."
+
+  _extract_pricing_info_from_ad_page:
+    "Price element is empty and no price data was found; using price type NOT_APPLICABLE": "Preisfeld ist leer und es wurden keine Preisdaten gefunden; verwende Preistyp NOT_APPLICABLE"
 
   _extract_sell_directly_from_ad_page:
     "Could not extract ad ID from URL: %s": "Konnte Anzeigen-ID nicht aus der URL extrahieren: %s"

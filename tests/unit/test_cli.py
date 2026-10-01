@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import logging
+import os
 import runpy
 import sys
 from datetime import timedelta
@@ -199,6 +200,42 @@ class TestCliMain:
 
         assert exc_info.value.code == 0
         assert calls == [["kleinanzeigen-bot", "version"]]
+
+
+class TestFrozenLibraryPathRestore:
+    """Tests for _restore_library_path_for_subprocesses (PyInstaller LD_LIBRARY_PATH leak)."""
+
+    @pytest.fixture(autouse = True)
+    def _frozen_linux(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(cli, "is_frozen", lambda: True)
+        monkeypatch.setattr(sys, "platform", "linux")
+
+    def test_restores_original_value(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LD_LIBRARY_PATH", "/bundle/_MEI123")
+        monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/opt/lib")
+
+        cli._restore_library_path_for_subprocesses()  # noqa: SLF001
+
+        assert os.environ["LD_LIBRARY_PATH"] == "/opt/lib"
+
+    def test_removes_bundle_path_when_no_original(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("LD_LIBRARY_PATH", "/bundle/_MEI123")
+        monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising = False)
+
+        cli._restore_library_path_for_subprocesses()  # noqa: SLF001
+
+        assert "LD_LIBRARY_PATH" not in os.environ
+
+    @pytest.mark.parametrize(("frozen", "platform"), [(False, "linux"), (True, "darwin"), (True, "win32")])
+    def test_leaves_environment_untouched_elsewhere(self, monkeypatch:pytest.MonkeyPatch, frozen:bool, platform:str) -> None:
+        monkeypatch.setattr(cli, "is_frozen", lambda: frozen)
+        monkeypatch.setattr(sys, "platform", platform)
+        monkeypatch.setenv("LD_LIBRARY_PATH", "/bundle/_MEI123")
+        monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising = False)
+
+        cli._restore_library_path_for_subprocesses()  # noqa: SLF001
+
+        assert os.environ["LD_LIBRARY_PATH"] == "/bundle/_MEI123"
 
 
 class TestNodriverPatchGuard:

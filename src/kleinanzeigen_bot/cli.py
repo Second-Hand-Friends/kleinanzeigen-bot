@@ -62,6 +62,24 @@ class ParsedArgs:
     workspace_mode:str | None = None
 
 
+def _restore_library_path_for_subprocesses() -> None:
+    """Undo PyInstaller's ``LD_LIBRARY_PATH`` override so child processes use the system libraries.
+
+    The frozen Linux binary points ``LD_LIBRARY_PATH`` at its bundled libraries. Child processes
+    inherit it, so a browser launched through a wrapper (e.g. ``flatpak run``) loads the bundled,
+    older libssl and fails before Chrome starts ("version `OPENSSL_3.4.0' not found"), which
+    surfaces only as "Failed to connect to browser". PyInstaller keeps the original value in
+    ``LD_LIBRARY_PATH_ORIG``. The running process is unaffected: glibc reads the variable at startup.
+    """
+    if not is_frozen() or not sys.platform.startswith("linux"):
+        return
+    original = os.environ.get("LD_LIBRARY_PATH_ORIG")
+    if original is None:
+        os.environ.pop("LD_LIBRARY_PATH", None)
+    else:
+        os.environ["LD_LIBRARY_PATH"] = original
+
+
 def _warn_unpatched_nodriver() -> None:
     """Check installed nodriver for the CDP re-attach patch marker and warn if missing.
 
@@ -342,6 +360,7 @@ def main(args:Sequence[str]) -> None:
         )  # [1:] removes the first empty blank line
 
     _loggers.configure_console_logging()
+    _restore_library_path_for_subprocesses()
     _warn_unpatched_nodriver()
     signal.signal(signal.SIGINT, _error_handlers.on_sigint)
     atexit.register(_loggers.flush_all_handlers)
