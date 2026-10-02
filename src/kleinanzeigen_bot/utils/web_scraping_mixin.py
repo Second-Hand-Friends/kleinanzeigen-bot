@@ -18,6 +18,7 @@ from nodriver.core.connection import ProtocolException
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
+from kleinanzeigen_bot import ad_overview
 from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import HumanizationConfig, TimeoutConfig
 
@@ -1735,7 +1736,8 @@ class WebScrapingMixin:  # noqa: PLR0904
             page_action: Async callable that receives current_page number and returns True if action succeeded/should stop
             page_url: URL of the paginated overview page (default: kleinanzeigen ad management page)
             max_pages: Maximum number of pages to navigate (safety limit)
-            open_page: Open page_url first; False preserves an overview reached through site navigation
+            open_page: Open page_url first, pinned to its first, unfiltered page; False preserves an
+                overview reached through site navigation
 
         Returns:
             True if page_action returned True on any page, False otherwise
@@ -1752,7 +1754,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         """
         if open_page:
             try:
-                await self.web_open(page_url)
+                await self.web_open(ad_overview.first_page_url(page_url))
             except TimeoutError:
                 LOG.warning("Failed to open ad overview page at %s: timeout", page_url)
                 return False
@@ -2116,6 +2118,35 @@ class WebScrapingMixin:  # noqa: PLR0904
             await self.web_sleep()
         else:
             LOG.debug("Consent banner not present; continuing without dismissal")
+
+    async def reset_ad_overview_state(self) -> None:
+        """Drop the ad overview's stored page and search before reaching it through site navigation.
+
+        The overview restores these parameters from ``sessionStorage`` (``queryParams``) when its
+        URL lacks them (issue #1302), and a navigation click cannot set them in the URL. Must run
+        on the overview's origin; a missing or unreadable entry is left untouched. Best effort: on a
+        timeout the navigation continues as before, with whatever state the page has stored.
+        """
+        try:
+            removed = await self.web_execute(f"""
+                (() => {{
+                    try {{
+                        const stored = JSON.parse(sessionStorage.getItem("queryParams") || "null");
+                        if (!stored || typeof stored !== "object") return [];
+                        const removed = {json.dumps(list(ad_overview.UNFILTERED_FIRST_PAGE_PARAMS))}.filter(key => key in stored);
+                        removed.forEach(key => delete stored[key]);
+                        if (removed.length) sessionStorage.setItem("queryParams", JSON.stringify(stored));
+                        return removed;
+                    }} catch (e) {{
+                        return [];
+                    }}
+                }})()
+            """)
+        except TimeoutError as ex:
+            LOG.warning("Could not reset the stored ad overview page and search: %s", ex)
+            return
+        if removed:
+            LOG.debug("Reset stored ad overview parameters: %s", removed)
 
     async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
         """Locate a ``<button role="combobox">`` by walking from its backing hidden input.

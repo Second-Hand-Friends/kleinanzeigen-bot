@@ -8,6 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -25,14 +26,17 @@ class Overview:
         self.pages = pages
         self.failed_id = failed_id
         self.action = action
-        self.page = 0
+        # like the real overview, the last viewed page is restored unless the URL sets pageNumber (#1302)
+        self.page = len(pages) - 1
         self.visited:list[int] = []
         self.attempted:list[int] = []
         self.succeeded:list[int] = []
 
     async def open(self, url:str) -> None:
-        assert url == "https://example.invalid/m-meine-anzeigen.html"
-        self.page = 0
+        parts = urlsplit(url)
+        assert f"{parts.scheme}://{parts.netloc}{parts.path}" == "https://example.invalid/m-meine-anzeigen.html"
+        if page_number := parse_qs(parts.query).get("pageNumber"):
+            self.page = int(page_number[0]) - 1
         self.visited.append(self.page)
 
     async def next_page(self) -> None:

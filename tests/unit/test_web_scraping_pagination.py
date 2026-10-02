@@ -44,6 +44,36 @@ class TestNavigatePaginatedAdOverview:
             assert open_mock.await_count == int(open_page)
 
     @pytest.mark.asyncio
+    async def test_opens_overview_on_first_page(self) -> None:
+        """The overview restores the last page and search from sessionStorage, so the URL pins both (#1302)."""
+        mixin = WebScrapingMixin()
+
+        with (
+            patch.object(mixin, "web_open", new_callable = AsyncMock) as open_mock,
+            patch.object(mixin, "web_sleep", new_callable = AsyncMock),
+            patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
+            patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("No pagination")),
+            patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(mixin, "timeout", return_value = 10),
+        ):
+            await mixin.navigate_paginated_ad_overview(AsyncMock(return_value = True))
+
+        open_mock.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen.html?pageNumber=1&keyword=")
+
+    @pytest.mark.asyncio
+    async def test_reset_ad_overview_state_tolerates_timeout(self, caplog:pytest.LogCaptureFixture) -> None:
+        """A timed-out reset is reported and the navigation continues as before."""
+        mixin = WebScrapingMixin()
+
+        with (
+            patch.object(mixin, "web_execute", new_callable = AsyncMock, side_effect = TimeoutError("page not responding")),
+            caplog.at_level("WARNING"),
+        ):
+            await mixin.reset_ad_overview_state()
+
+        assert any("Could not reset the stored ad overview page and search" in message for message in caplog.messages)
+
+    @pytest.mark.asyncio
     async def test_single_page_action_returns_false(self) -> None:
         """Test pagination on single page where action returns False."""
         mixin = WebScrapingMixin()
