@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, reserve_flow
+from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, published_ads, reserve_flow
 from . import login_flow as _login_flow
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
@@ -138,6 +138,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self._handle_update_content_hash()
                 case "status":
                     self._handle_status()
+                case "list":
+                    await self._handle_list()
                 case "publish":
                     await self._handle_publish()
                 case "update":
@@ -263,6 +265,13 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_color = _color.should_use_color()
         output = ad_status.render_status_rows(rows, color = use_color)
         print(output)
+
+    async def _handle_list(self) -> None:
+        """Show current online ads without loading or changing local ad files."""
+        self._bootstrap_runtime()
+        await self._open_logged_in_browser()
+        ads = await published_ads.fetch_published_ads(self, self.root_url, strict = True)
+        print(published_ads.render_published_ads(ads))
 
     async def _handle_publish(self) -> None:
         self._bootstrap_runtime()

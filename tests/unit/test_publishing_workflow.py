@@ -12,7 +12,7 @@ import os
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path, PureWindowsPath
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -1421,3 +1421,32 @@ async def test_open_ad_for_edit_uses_overview_clicks(test_bot:KleinanzeigenBot, 
         call(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]'),
     ]
     assert edit_link.click.await_count == (0 if found_page is None else 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("package_selection", ["BASIS", "MANUAL"])
+async def test_publish_ad_passes_configured_package_selection(
+    test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], package_selection:Literal["BASIS", "MANUAL"], tmp_path:Path,
+) -> None:
+    """The publishing config reaches the submission boundary for new ads."""
+    test_bot.config.publishing.package_selection = package_selection
+    ad_cfg = Ad.model_validate(base_ad_config | {"id": None})
+    ad_cfg_orig = ad_cfg.model_dump()
+    ad_file = str(tmp_path / "ad.yaml")
+    with (
+        patch.object(test_bot, "web_open", new_callable = AsyncMock),
+        patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction"),
+        patch("kleinanzeigen_bot.publishing_form.fill_ad_form", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.publishing_submission.submit_and_confirm_ad", new_callable = AsyncMock,
+              return_value = 12345) as submit,
+        patch("kleinanzeigen_bot.publishing_persistence.persist_published_ad"),
+    ):
+        await test_bot.publish_ad(
+            ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE,
+        )
+    submit.assert_awaited_once_with(
+        test_bot, ad_file, ad_cfg, AdUpdateStrategy.REPLACE,
+        captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+        known_published_ad_ids = None, package_selection = package_selection,
+    )

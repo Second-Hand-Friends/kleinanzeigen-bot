@@ -15,6 +15,7 @@ _LOCAL/
 /*.log
 /src/kleinanzeigen_bot/_version.py
 downloaded-ads
+/new-ads-*/
 
 # python
 __pycache__

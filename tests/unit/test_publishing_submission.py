@@ -3,11 +3,14 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for publishing submission functionality."""
 
+import json
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from nodejs_wheel import node
+from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
@@ -734,3 +737,535 @@ class TestPublishedAdsRecovery:
             )
 
         redirect_recover_mock.assert_not_awaited()
+
+
+# This small DOM fixture executes the production browser scripts in the Node
+# runtime already provided by the development toolchain. It has no networking.
+_DOM_FIXTURE = r"""
+const payload = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const clicks = [];
+class Element {
+    constructor(spec, parent = null) {
+        this.tagName = (spec.tag || 'div').toUpperCase();
+        this.attrs = spec.attrs || {};
+        this.id = this.attrs.id || '';
+        this.htmlFor = this.attrs.for || '';
+        this.ownText = spec.text || '';
+        this.hidden = Boolean(spec.hidden);
+        this.disabled = Boolean(spec.disabled);
+        this.validationMessage = spec.validationMessage || '';
+        this.invalid = Boolean(spec.invalid);
+        this.parentElement = parent;
+        this.children = (spec.children || []).map(child => new Element(child, this));
+    }
+    get innerText() { return [this.ownText, ...this.children.map(child => child.innerText)].filter(Boolean).join(' '); }
+    get textContent() { return this.innerText; }
+    getAttribute(name) { return this.attrs[name] ?? null; }
+    getClientRects() {
+        for (let element = this; element; element = element.parentElement) if (element.hidden) return [];
+        return [{}];
+    }
+    contains(element) {
+        for (let candidate = element; candidate; candidate = candidate.parentElement) if (candidate === this) return true;
+        return false;
+    }
+    matches(selector) {
+        return selector.split(',').some(raw => {
+            let part = raw.trim();
+            if (part === '*') return true;
+            if (part.startsWith('.')) return (this.attrs.class || '').split(' ').includes(part.slice(1));
+            if (part.includes(':invalid')) {
+                if (!this.invalid) return false;
+                part = part.replace(':invalid', '');
+            }
+            const tag = part.match(/^[a-z]+/i)?.[0];
+            if (tag && this.tagName !== tag.toUpperCase()) return false;
+            return [...part.matchAll(/\[([\w-]+)(?:(\$?=)"([^"]*)")?\]/g)].every(([, name, op, value]) => {
+                const actual = this.getAttribute(name);
+                if (actual === null) return false;
+                return !op || (op === '$=' ? actual.endsWith(value) : actual === value);
+            });
+        });
+    }
+    querySelectorAll(selector) {
+        return this.children.flatMap(child => [child, ...child.querySelectorAll('*')]).filter(child => child.matches(selector));
+    }
+    closest(selector) {
+        for (let element = this; element; element = element.parentElement) if (element.matches(selector)) return element;
+        return null;
+    }
+    click() {
+        clicks.push(this.innerText);
+        if (this.getAttribute('role') === 'radio') {
+            for (const radio of document.querySelectorAll('button[role="radio"]')) radio.attrs['aria-checked'] = 'false';
+            this.attrs['aria-checked'] = 'true';
+        }
+    }
+}
+const body = new Element(payload.dom);
+const document = {
+    body,
+    querySelectorAll: selector => body.querySelectorAll(selector),
+    getElementById: id => [body, ...body.querySelectorAll('*')].find(element => element.id === id) || null,
+};
+const window = {location: {pathname: payload.pathname}};
+const getComputedStyle = element => ({visibility: element.getClientRects().length ? 'visible' : 'hidden'});
+const result = eval(payload.script);
+process.stdout.write(JSON.stringify({result, clicks}));
+"""
+
+
+def _run_dom_script(script:str, dom:dict[str, Any], *, pathname:str = "/p-anzeigentypauswahl/216/123/draft") -> dict[str, Any]:
+    """Execute a production script against a synthetic DOM without a browser."""
+    completed = node(
+        ["-e", _DOM_FIXTURE], return_completed_process = True,
+        input = json.dumps({"script": script, "dom": dom, "pathname": pathname}),
+        capture_output = True, text = True, encoding = "utf-8", check = True, timeout = 10,
+    )
+    return cast(dict[str, Any], json.loads(completed.stdout))
+
+
+def _basis_dom(*, selected:bool = True) -> dict[str, Any]:
+    """Build two independent package cards like the observed listing screen."""
+    return {"tag": "body", "children": [{"tag": "main", "children": [
+        {"children": [
+            {"tag": "button", "text": "Basis Paket", "attrs": {"role": "radio", "aria-checked": str(selected).lower()}},
+            {"tag": "p", "text": "Kostenlos inserieren – ohne zusätzliche Vorteile."},
+            {"tag": "h3", "text": "Kostenlos"},
+            {"tag": "p", "text": "60 Tage Anzeigendauer."},
+        ]},
+        {"children": [
+            {"tag": "button", "text": "Plus Paket", "attrs": {"role": "radio", "aria-checked": str(not selected).lower()}},
+            {"tag": "h3", "text": "11,99 €"},
+        ]},
+        {"tag": "button", "text": "Anzeige aufgeben"},
+    ]}]}
+
+
+def _editor_dom(*, container:str = "main", errors:bool = False) -> dict[str, Any]:
+    """Build an editor with React aria-invalid status errors and no native error."""
+    return {"tag": "body", "children": [
+        {"tag": container, "children": [
+            {"tag": "input", "attrs": {"id": "ad-title"}},
+            {"children": [
+                {"tag": "label", "text": "Kilometerstand", "attrs": {"for": "autos.km"}},
+                {"tag": "input", "attrs": {"id": "autos.km", "aria-invalid": str(errors).lower(), "aria-describedby": "km-message"}},
+                {"tag": "p", "text": "Bitte gib einen Wert ein." if errors else "Trage den Kilometerstand ein.",
+                 "attrs": {"id": "km-message", "role": "status"}},
+            ]},
+            {"tag": "button", "text": "Nächster Schritt"},
+        ]},
+        {"tag": "aside", "children": [{"tag": "p", "text": "Unrelated page error", "attrs": {"id": "other-error"}}]},
+    ]}
+
+
+class TestFreeBasisPackage:
+    """The real package script must never choose a paid or unverified option."""
+
+    @pytest.mark.parametrize(("action", "selected", "expected_clicks", "expected_state"), [
+        ("inspect", True, [], "ready"),
+        ("select", True, [], "ready"),
+        ("select", False, ["Basis Paket"], "waiting"),
+        ("submit", True, ["Anzeige aufgeben"], "submitted"),
+        ("submit", False, [], "unsafe"),
+    ])
+    def test_only_chosen_free_basis_can_be_submitted(
+        self, action:str, selected:bool, expected_clicks:list[str], expected_state:str,
+    ) -> None:
+        script = publishing_submission._FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps(action))
+        result = _run_dom_script(script, _basis_dom(selected = selected))
+        assert result["result"]["state"] == expected_state
+        assert result["clicks"] == expected_clicks
+
+    @pytest.mark.parametrize("case", ["paid", "extra-fee", "hidden-free-price", "duplicate-basis",
+                             "shared-free-text", "disabled", "double-selected", "missing-submit"])
+    def test_rejects_paid_ambiguous_and_unavailable_packages(self, case:str) -> None:
+        dom = _basis_dom()
+        cards = dom["children"][0]["children"]
+        basis = cards[0]
+        if case == "paid":
+            basis["children"][2]["text"] = "9,99 €"
+        elif case == "extra-fee":
+            basis["children"].append({"tag": "p", "text": "Gebühr 5,00 EUR"})
+        elif case == "hidden-free-price":
+            basis["children"][2]["hidden"] = True
+        elif case == "duplicate-basis":
+            cards.append({"tag": "button", "text": "Basis Paket", "attrs": {"role": "radio"}})
+        elif case == "shared-free-text":
+            cards.extend(basis["children"][1:3])
+            basis["children"] = basis["children"][:1]
+        elif case == "disabled":
+            basis["children"][0]["disabled"] = True
+        elif case == "double-selected":
+            cards[1]["children"][0]["attrs"]["aria-checked"] = "true"
+        else:
+            cards.pop(2)
+        script = publishing_submission._FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps("submit"))
+        result = _run_dom_script(script, dom)
+        assert result["result"]["state"] == "unsafe"
+        assert result["clicks"] == []
+
+    def test_draft_route_is_not_publication_confirmation(self) -> None:
+        result = _run_dom_script(
+            publishing_submission._FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps("submit")),
+            _basis_dom(), pathname = "/p-anzeige-aufgeben-schritt2.html",
+        )
+        assert result["result"]["state"] == "waiting"
+        assert result["clicks"] == []
+
+
+class TestReactFormValidation:
+    """Read referenced status errors with and without a native form container."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("container", ["form", "main", "div"])
+    async def test_reports_referenced_react_errors_without_native_invalid_state(self, test_bot:KleinanzeigenBot, container:str) -> None:
+        with patch.object(
+            test_bot, "web_execute", new_callable = AsyncMock,
+            side_effect = lambda script: _run_dom_script(script, _editor_dom(container = container, errors = True))["result"],
+        ):
+            result = await publishing_submission._get_form_validation_errors(test_bot)
+        assert result == ["Kilometerstand: Bitte gib einen Wert ein."]
+
+    @pytest.mark.asyncio
+    async def test_ignores_status_hints_and_unrelated_page_errors(self, test_bot:KleinanzeigenBot) -> None:
+        with patch.object(
+            test_bot, "web_execute", new_callable = AsyncMock,
+            side_effect = lambda script: _run_dom_script(script, _editor_dom())["result"],
+        ):
+            result = await publishing_submission._get_form_validation_errors(test_bot)
+        assert result == []
+
+
+class TestStagedPackageSubmission:
+    """Exercise the complete staged boundary with production scripts and fake DOMs."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("scenario", ["normal", "already-package", "invalid", "paid", "submit-timeout", "submit-response-lost"])
+    async def test_next_step_and_free_basis_are_handled_without_duplicate_submits(
+        self, test_bot:KleinanzeigenBot, scenario:str,
+    ) -> None:
+        stage = "package" if scenario == "already-package" else "editor"
+        selected = False
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            nonlocal stage, selected
+            dom = _basis_dom(selected = selected) if stage == "package" else _editor_dom(errors = scenario == "invalid")
+            pathname = "/p-anzeigentypauswahl/216/123/draft" if stage == "package" else "/p-anzeige-aufgeben-schritt2.html"
+            if scenario == "paid" and stage == "package":
+                dom["children"][0]["children"][0]["children"][2]["text"] = "9,99 €"
+            result = _run_dom_script(script, dom, pathname = pathname)
+            clicked.extend(result["clicks"])
+            if "Nächster Schritt" in result["clicks"] and scenario != "invalid":
+                stage = "package"
+            if "Basis Paket" in result["clicks"]:
+                selected = True
+            if "Anzeige aufgeben" in result["clicks"]:
+                if scenario == "submit-timeout":
+                    raise TimeoutError("response lost after final click")
+                if scenario == "submit-response-lost":
+                    return None
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            for _attempt in range(3):
+                result = await condition()
+                if result:
+                    return result
+            raise TimeoutError("fixture condition was not met")
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            if scenario in {"invalid", "paid"}:
+                with pytest.raises(AdFormValidationError):
+                    await publishing_submission._click_submit_button(test_bot, package_selection = "BASIS")
+                assert "Anzeige aufgeben" not in clicked
+                assert "Basis Paket" not in clicked
+            elif scenario in {"submit-timeout", "submit-response-lost"}:
+                with pytest.raises(PublishSubmissionUncertainError):
+                    await publishing_submission._click_submit_button(test_bot, package_selection = "BASIS")
+                assert clicked.count("Anzeige aufgeben") == 1
+            else:
+                await publishing_submission._click_submit_button(test_bot, package_selection = "BASIS")
+                assert clicked.count("Basis Paket") == 1
+                assert clicked.count("Anzeige aufgeben") == 1
+        assert "Plus Paket" not in clicked
+        assert clicked.count("Nächster Schritt") <= 1
+
+
+class TestFinalAttributeGuard:
+    """The guard must run after the last title render and before any submit step."""
+
+    @pytest.mark.asyncio
+    async def test_final_title_guard_submit_order(self, test_bot:KleinanzeigenBot) -> None:
+        order:list[str] = []
+
+        async def set_title(*_:object) -> None:
+            order.append("title")
+
+        async def guard(*_:object) -> None:
+            order.append("guard")
+
+        async def submit(*_:object, **_kwargs:object) -> None:
+            order.append("submit")
+            raise AdFormValidationError("fixture stops before live submission")
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = set_title),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = ""),
+            patch("kleinanzeigen_bot.publishing_form.verify_text_special_attributes", new_callable = AsyncMock, side_effect = guard),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock, side_effect = submit),
+            pytest.raises(AdFormValidationError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+            )
+        assert order == ["title", "guard", "submit"]
+
+    @pytest.mark.asyncio
+    async def test_guard_failure_prevents_submit(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.verify_text_special_attributes", new_callable = AsyncMock,
+                  side_effect = AdFormValidationError("text input lost its value")),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock) as submit,
+            pytest.raises(AdFormValidationError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+            )
+        submit.assert_not_awaited()
+
+
+class TestEncodedTitleRecovery:
+    """API encoding may differ while old/new IDs still determine uniqueness."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("title", "online_title"), [
+        ("Matiz HU 10/2027", "Matiz HU 10&#x2F;2027"),
+        ("Suit & undergarment", "Suit &amp; undergarment"),
+        ("Literal &amp; text", "Literal &amp; text"),
+    ])
+    async def test_recovers_new_id_from_equivalent_title(self, test_bot:KleinanzeigenBot, title:str, online_title:str) -> None:
+        with patch(
+            "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads", new_callable = AsyncMock,
+            return_value = [{"id": 10, "title": online_title}, {"id": 11, "title": online_title}],
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot, root_url = test_bot.root_url, title = title, known_published_ad_ids = frozenset({10}),
+            )
+        assert result == 11
+
+    @pytest.mark.asyncio
+    async def test_equivalent_title_ambiguity_does_not_choose_an_id(self, test_bot:KleinanzeigenBot) -> None:
+        with patch(
+            "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads", new_callable = AsyncMock,
+            return_value = [{"id": 11, "title": "Matiz HU 10/2027"}, {"id": 12, "title": "Matiz HU 10&#x2F;2027"}],
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot, root_url = test_bot.root_url, title = "Matiz HU 10/2027", known_published_ad_ids = frozenset({10}),
+            )
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_unreferenced_status_error_is_scoped_to_one_invalid_field(test_bot:KleinanzeigenBot) -> None:
+    """An adjacent React error is read without collecting other page statuses."""
+    dom = _editor_dom(errors = True)
+    field_container = dom["children"][0]["children"][1]
+    del field_container["children"][1]["attrs"]["aria-describedby"]
+    field_container["children"][2]["attrs"].pop("id")
+    dom["children"][0]["children"].append({"tag": "p", "text": "Unrelated main status", "attrs": {"role": "status"}})
+    with patch.object(
+        test_bot, "web_execute", new_callable = AsyncMock,
+        side_effect = lambda script: _run_dom_script(script, dom)["result"],
+    ):
+        result = await publishing_submission._get_form_validation_errors(test_bot)
+    assert result == ["Kilometerstand: Bitte gib einen Wert ein."]
+
+
+class TestConfigurablePackageSelection:
+    """Package choices propagate to the submit boundary without changing legacy forms."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("package_selection", [None, "BASIS", "MANUAL"])
+    async def test_submission_passes_the_configured_package_selection(
+        self, test_bot:KleinanzeigenBot, package_selection:Literal["BASIS", "MANUAL"] | None,
+    ) -> None:
+        selection_kwargs:dict[str, Any] = {} if package_selection is None else {"package_selection": package_selection}
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = ""),
+            patch("kleinanzeigen_bot.publishing_form.verify_text_special_attributes", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock,
+                  side_effect = AdFormValidationError("fixture stops before submission")) as submit,
+            pytest.raises(AdFormValidationError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+                **selection_kwargs,
+            )
+        submit.assert_awaited_once_with(test_bot, package_selection = package_selection or "MANUAL")
+
+    @pytest.mark.asyncio
+    async def test_omitted_selection_never_chooses_or_publishes_a_package(self, test_bot:KleinanzeigenBot) -> None:
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            result = _run_dom_script(script, _basis_dom(selected = False), pathname = "/p-anzeigentypauswahl/216/123/draft")
+            clicked.extend(result["clicks"])
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            return await condition()
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock, return_value = "") as manual_input,
+            pytest.raises(PublishSubmissionUncertainError),
+        ):
+            await publishing_submission._click_submit_button(test_bot)
+        assert clicked == []
+        manual_input.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_manual_selection_keeps_the_legacy_submit_flow(self, test_bot:KleinanzeigenBot) -> None:
+        dom = {"tag": "body", "children": [{"tag": "button", "text": "Anzeige aufgeben"}]}
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            result = _run_dom_script(script, dom, pathname = "/p-anzeige-aufgeben-schritt2.html")
+            clicked.extend(result["clicks"])
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            return await condition()
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock) as manual_input,
+        ):
+            await publishing_submission._click_submit_button(test_bot, package_selection = "MANUAL")
+        assert clicked == ["Anzeige aufgeben"]
+        manual_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("initial_stage", ["editor", "package"])
+    @pytest.mark.parametrize("outcome", ["completed", "still-package", "still-editor", "eof", "input-error", "page-timeout"])
+    async def test_manual_package_selection_never_clicks_a_package_or_final_submit(
+        self, test_bot:KleinanzeigenBot, initial_stage:str, outcome:str,
+    ) -> None:
+        stage = initial_stage
+        input_seen = False
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            nonlocal stage
+            if input_seen and outcome == "page-timeout":
+                raise TimeoutError("manual completion state unavailable")
+            if stage == "package":
+                dom = _basis_dom(selected = False)
+                pathname = "/p-anzeigentypauswahl/216/123/draft"
+            elif stage == "editor":
+                dom = _editor_dom()
+                pathname = "/p-anzeige-aufgeben-schritt2.html"
+            else:
+                dom = {"tag": "body", "children": []}
+                pathname = "/p-anzeige-aufgeben-bestaetigung.html"
+            result = _run_dom_script(script, dom, pathname = pathname)
+            clicked.extend(result["clicks"])
+            if "Nächster Schritt" in result["clicks"]:
+                stage = "package"
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            for _attempt in range(3):
+                result = await condition()
+                if result:
+                    return result
+            raise TimeoutError("fixture condition was not met")
+
+        async def manual_completion(*_:object) -> str:
+            nonlocal stage, input_seen
+            assert stage == "package"
+            assert "Basis Paket" not in clicked
+            assert "Anzeige aufgeben" not in clicked
+            input_seen = True
+            if outcome == "eof":
+                raise EOFError("interactive input unavailable")
+            if outcome == "input-error":
+                raise OSError("interactive input unavailable")
+            stage = {"still-package": "package", "still-editor": "editor"}.get(outcome, "done")
+            return ""
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock,
+                  side_effect = manual_completion) as manual_input,
+        ):
+            if outcome == "completed":
+                await publishing_submission._click_submit_button(test_bot, package_selection = "MANUAL")
+            else:
+                with pytest.raises(PublishSubmissionUncertainError):
+                    await publishing_submission._click_submit_button(test_bot, package_selection = "MANUAL")
+        assert clicked == (["Nächster Schritt"] if initial_stage == "editor" else [])
+        manual_input.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_incomplete_manual_submission_prevents_draft_id_recovery(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = ""),
+            patch("kleinanzeigen_bot.publishing_form.verify_text_special_attributes", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock,
+                  side_effect = PublishSubmissionUncertainError("manual submission was not confirmed")),
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock) as redirect,
+            patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_published_ads", new_callable = AsyncMock) as published,
+            pytest.raises(PublishSubmissionUncertainError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+                package_selection = "MANUAL", known_published_ad_ids = frozenset({100}),
+            )
+        redirect.assert_not_awaited()
+        published.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("result", [None, 0, "false"])
+    async def test_manual_completion_requires_an_explicit_non_editor_state(
+        self, test_bot:KleinanzeigenBot, result:object,
+    ) -> None:
+        with (
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = result),
+            pytest.raises(PublishSubmissionUncertainError),
+        ):
+            await publishing_submission._wait_for_manual_package_submission(test_bot)
+
+    @pytest.mark.asyncio
+    async def test_manual_completion_browser_disconnect_is_uncertain(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock,
+                         side_effect = ProtocolException(MagicMock(), "connection lost", 0)),
+            pytest.raises(PublishSubmissionUncertainError),
+        ):
+            await publishing_submission._wait_for_manual_package_submission(test_bot)
