@@ -54,5 +54,4 @@ async def web(browser_session:WebScrapingMixin) -> WebScrapingMixin:
     # (also creates the tab on first use)
     await browser_session.web_open("about:blank", reload_if_already_open = True)
     await browser_session.page.send(cdp.emulation.clear_device_metrics_override())
-    browser_session._viewport_width_warning_emitted = False
     return browser_session
