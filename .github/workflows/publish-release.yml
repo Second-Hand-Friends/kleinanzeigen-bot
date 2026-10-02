@@ -27,10 +27,9 @@ jobs:
       contents: write
 
     steps:
-    - name: "Show: GitHub context"
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: printf '%s\n' "$GITHUB_CONTEXT"
+    - name: "Show: GitHub event"
+      # Read from disk to avoid Linux's per-environment-variable size limit.
+      run: python -m json.tool "$GITHUB_EVENT_PATH"
 
 
     - name: "Show: environment variables"

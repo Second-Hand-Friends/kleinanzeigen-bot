@@ -37,8 +37,9 @@ from kleinanzeigen_bot.publishing_form import (
     set_shipping_options,
     set_special_attributes,
     upload_images,
+    verify_text_special_attributes,
 )
-from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
+from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, CategoryResolutionError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -3889,3 +3890,248 @@ class TestConditionFallbackToGenericHandler:
             pytest.raises(TimeoutError, match = r"Failed to set attribute 'groesse_s'"),
         ):
             await set_special_attributes(test_bot, ad_cfg)
+
+
+class TestTextSpecialAttributeVerification:
+    """Protect configured input values from later form re-renders."""
+
+    @staticmethod
+    def _input_element(*, input_type:str = "number", element_id:str | None = "attributes.quantity") -> MagicMock:
+        element = MagicMock(spec = Element)
+        element.local_name = "input"
+        element.attrs = {"id": element_id, "name": "attributeMap[quantity]", "type": input_type, "role": None}
+        element.apply = AsyncMock()
+        return element
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("input_type", "expected"), [("number", "48127"), ("text", "Code A7"), ("", "Identifier X")])
+    async def test_repairs_values_lost_during_form_filling(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], input_type:str, expected:str,
+    ) -> None:
+        """Native repair must restore numeric and text values before submission."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": expected}})
+        element = self._input_element(input_type = input_type)
+        element.apply.side_effect = ["", expected]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", expected)
+        assert element.apply.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_already_correct_value_is_verified_without_repair(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """Correct values remain unchanged while still participating in final verification."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.return_value = "48127"
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_not_awaited()
+        assert element.apply.await_count == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("local_name", "input_type", "role"),
+        [("select", "", None), ("input", "hidden", None), ("input", "checkbox", None),
+         ("input", "radio", None), ("button", "", "combobox"), ("input", "text", "combobox"),
+         ("input", "number", "combobox"), ("textarea", "", None), ("input", "email", None)],
+    )
+    async def test_does_not_touch_other_control_types(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], local_name:str, input_type:str, role:str | None,
+    ) -> None:
+        """The value guard must leave selections and other specialized controls alone."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element(input_type = input_type)
+        element.local_name = local_name
+        element.attrs["role"] = role
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_not_awaited()
+        element.apply.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_named_input_without_id_uses_native_element_repair(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """An ID-less input must still be repaired with safely quoted text."""
+        expected = 'Code "quoted" \\ variant'
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": expected}})
+        element = self._input_element(input_type = "text", element_id = None)
+        element.apply.side_effect = ["", None, expected]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_not_awaited()
+        assert element.apply.await_count == 3
+        assert json.dumps(expected) in element.apply.await_args_list[1].args[0]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("readback", ["", "4812", None])
+    async def test_nonpersisting_repair_stops_with_validation_error(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], readback:str | None,
+    ) -> None:
+        """Failed or detached-field repairs must never silently allow publication."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.side_effect = ["", readback]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", "48127")
+
+    @pytest.mark.asyncio
+    async def test_later_repair_cannot_clear_an_earlier_correct_input(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """Final verification must include values that did not need an initial repair."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"first_s": "48127", "second_s": "2011"}})
+        first = self._input_element(element_id = "attributes.first")
+        second = self._input_element(element_id = "attributes.second")
+        values = {"attributes.first": "48127", "attributes.second": ""}
+
+        async def read_first(_script:str) -> str:
+            return values["attributes.first"]
+
+        async def read_second(_script:str) -> str:
+            return values["attributes.second"]
+
+        async def repair(element_id:str, value:str) -> None:
+            values[element_id] = value
+            if element_id == "attributes.second":
+                values["attributes.first"] = ""
+
+        first.apply.side_effect = read_first
+        second.apply.side_effect = read_second
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = [first, second, first, second]),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = repair) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.second", "2011")
+        assert first.apply.await_count == 2
+        assert not values["attributes.first"]
+
+    @pytest.mark.asyncio
+    async def test_missing_configured_attribute_stops_with_validation_error(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """A configured field that disappears must stop publication deterministically."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = TimeoutError("field disappeared")),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reresolves_inputs_replaced_by_a_repair(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """Final verification must read the current element after a React remount."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        replaced = self._input_element()
+        replaced.apply.return_value = ""
+        current = self._input_element()
+        current.apply.return_value = "48127"
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = [replaced, current]),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", "48127")
+        replaced.apply.assert_awaited_once()
+        current.apply.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_detached_input_can_be_repaired_and_verified(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """A detached first read can recover when the live input accepts native repair."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.side_effect = [None, "48127"]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", "48127")
+
+    @pytest.mark.asyncio
+    async def test_unavailable_optional_condition_does_not_block_verification(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any],
+    ) -> None:
+        """Category-specific condition controls retain their optional behavior."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"condition_s": "good"}})
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = AssertionError("no condition candidates")),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("phase", ["initial", "final"])
+    async def test_unreadable_input_stops_with_validation_error(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], phase:str,
+    ) -> None:
+        """A timeout in either live read must become a deterministic validation failure."""
+        ad_cfg = Ad.model_validate(base_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        reads:list[str | TimeoutError] = [TimeoutError("input unreadable")]
+        if phase == "final":
+            reads.insert(0, "48127")
+        element.apply.side_effect = reads
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()

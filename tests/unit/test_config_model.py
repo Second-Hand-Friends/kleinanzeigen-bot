@@ -4,7 +4,7 @@
 import pytest
 
 from kleinanzeigen_bot.model import config_model
-from kleinanzeigen_bot.model.config_model import DEFAULT_DOWNLOAD_DIR, AdDefaults, Config, TimeoutConfig
+from kleinanzeigen_bot.model.config_model import DEFAULT_DOWNLOAD_DIR, AdDefaults, Config, PublishingConfig, TimeoutConfig
 
 
 @pytest.mark.parametrize("field", ["prefix", "suffix"])
@@ -72,6 +72,31 @@ def test_browser_config_allows_unsupported_flag_warning_to_be_shown() -> None:
 def test_publishing_local_path_renaming_defaults_to_off() -> None:
     config = Config.model_validate({"login": {"username": "dummy", "password": "dummy"}})  # noqa: S106
     assert config.publishing.local_path_renaming.mode == "OFF"
+
+
+@pytest.mark.parametrize("publishing", [None, {}])
+def test_publishing_package_selection_defaults_to_manual_when_omitted(publishing:dict[str, object] | None) -> None:
+    config_data:dict[str, object] = {"login": {"username": "dummy", "password": "dummy"}}  # noqa: S106
+    if publishing is not None:
+        config_data["publishing"] = publishing
+    config = Config.model_validate(config_data)
+    assert config.publishing.package_selection == "MANUAL"
+
+
+@pytest.mark.parametrize("selection", ["BASIS", "MANUAL"])
+def test_publishing_package_selection_roundtrip(selection:str) -> None:
+    config = PublishingConfig.model_validate({"package_selection": selection})
+    restored = PublishingConfig.model_validate_json(config.model_dump_json())
+    assert restored.package_selection == selection
+    assert restored.delete_old_ads == "AFTER_PUBLISH"
+    assert restored.delete_old_ads_by_title is True
+    assert restored.local_path_renaming.mode == "OFF"
+
+
+@pytest.mark.parametrize("selection", ["PLUS", "basis", "", None])
+def test_publishing_package_selection_rejects_invalid_choice(selection:str | None) -> None:
+    with pytest.raises(ValueError, match = "package_selection"):
+        PublishingConfig.model_validate({"package_selection": selection})
 
 
 def test_publishing_local_path_renaming_accepts_template_match() -> None:

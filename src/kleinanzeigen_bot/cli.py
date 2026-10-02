@@ -162,6 +162,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               status   - Zeigt Anzeigenstatus und APR-Vorschau an
+              list     - Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -226,6 +227,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           create-config - creates a new default configuration file if one does not exist
           diagnose - diagnoses browser connection issues and shows troubleshooting information
           status   - shows ad status and APR preview details
+          list     - lists current online ads with ID, title, state, and expiry date
           --
           help     - displays this help (default command)
           version  - displays the application version

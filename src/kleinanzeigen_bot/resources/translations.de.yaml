@@ -240,6 +240,18 @@ kleinanzeigen_bot/publishing_workflow.py:
 #################################################
 kleinanzeigen_bot/published_ads.py:
 #################################################
+  _published_ad_state_label:
+    "active": "aktiv"
+    "reserved": "reserviert"
+    "inactive": "inaktiv"
+
+  render_published_ads:
+    "No online ads found.": "Keine Online-Anzeigen gefunden."
+    "ID": "ID"
+    "title": "Titel"
+    "status": "Status"
+    "expires": "Ablaufdatum"
+
   fetch_published_ads:
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
     "Pagination request failed on page %s: %s": "Seitenabfrage auf Seite %s fehlgeschlagen: %s"
@@ -375,6 +387,10 @@ kleinanzeigen_bot/publishing_form.py:
     "Attribute field '%s' seems to be a text input...": "Attributfeld '%s' scheint ein Texteingabefeld zu sein..."
     "Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...": "Attributfeld '%s' scheint eine Combobox zu sein (d.h. Texteingabefeld mit Dropdown-Filter)..."
 
+  verify_text_special_attributes:
+    "Could not verify text attribute '%s' before submission.": "Texteingabe für Attribut '%s' konnte vor dem Absenden nicht geprüft werden."
+    "Text attribute '%s' did not retain the configured value.": "Attribut '%s' hat den konfigurierten Wert nicht beibehalten."
+
 #################################################
 kleinanzeigen_bot/publishing_persistence.py:
 #################################################
@@ -402,6 +418,18 @@ kleinanzeigen_bot/publishing_submission.py:
 
   _click_submit_button:
     "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
+    "Could not continue to package selection; the ad was not published": "Die Paketauswahl konnte nicht geöffnet werden; die Anzeige wurde nicht veröffentlicht"
+
+  _submit_free_basis_package:
+    "The free Basis package could not be verified; the ad was not published": "Das kostenlose Basis-Paket konnte nicht bestätigt werden; die Anzeige wurde nicht veröffentlicht"
+    "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
+
+  _wait_for_manual_package_submission:
+    "Manual package publication was not confirmed; check your listings before retrying": "Die manuelle Veröffentlichung wurde nicht bestätigt; bitte vor einem erneuten Versuch die Anzeigen prüfen"
+    "Choose a package and finish publishing in the browser, then press Enter to continue...": "Ein Paket auswählen und die Anzeige im Browser veröffentlichen, anschließend Enter drücken..."
+
+  _wait_for_package:
+    "Ad form validation failed: %s": "Validierung des Anzeigenformulars fehlgeschlagen: %s"
 
   _handle_post_submit_prompts:
     "############################################": "############################################"
