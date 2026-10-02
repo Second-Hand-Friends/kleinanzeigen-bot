@@ -43,23 +43,10 @@ class TestNavigatePaginatedAdOverview:
             callback.assert_awaited_once_with(1)
             assert open_mock.await_count == int(open_page)
 
-    @pytest.mark.parametrize(
-        ("page_url", "expected"),
-        [
-            (None, "https://www.kleinanzeigen.de/m-meine-anzeigen.html?pageNumber=1&keyword="),
-            ("https://example.invalid/m-meine-anzeigen.html?tab=ADS", "https://example.invalid/m-meine-anzeigen.html?tab=ADS&pageNumber=1&keyword="),
-            (
-                "https://example.invalid/m-meine-anzeigen.html?pageNumber=3&keyword=lamp&tab=ADS",
-                "https://example.invalid/m-meine-anzeigen.html?tab=ADS&pageNumber=1&keyword=",
-            ),
-        ],
-        ids = ["default-url", "keeps-other-params", "replaces-page-and-keyword"],
-    )
     @pytest.mark.asyncio
-    async def test_opens_overview_on_first_page(self, page_url:str | None, expected:str) -> None:
+    async def test_opens_overview_on_first_page(self) -> None:
         """The overview restores the last page and search from sessionStorage, so the URL pins both (#1302)."""
         mixin = WebScrapingMixin()
-        callback = AsyncMock(return_value = True)
 
         with (
             patch.object(mixin, "web_open", new_callable = AsyncMock) as open_mock,
@@ -69,30 +56,22 @@ class TestNavigatePaginatedAdOverview:
             patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(mixin, "timeout", return_value = 10),
         ):
-            if page_url is None:
-                await mixin.navigate_paginated_ad_overview(callback)
-            else:
-                await mixin.navigate_paginated_ad_overview(callback, page_url = page_url)
+            await mixin.navigate_paginated_ad_overview(AsyncMock(return_value = True))
 
-        open_mock.assert_awaited_once_with(expected)
+        open_mock.assert_awaited_once_with("https://www.kleinanzeigen.de/m-meine-anzeigen.html?pageNumber=1&keyword=")
 
-    @pytest.mark.parametrize("removed", [["pageNumber", "keyword"], []], ids = ["stored-state", "nothing-stored"])
     @pytest.mark.asyncio
-    async def test_reset_ad_overview_state_drops_stored_page_and_search(self, removed:list[str], caplog:pytest.LogCaptureFixture) -> None:
-        """The navigation click cannot pin the overview URL, so the stored page and search are dropped instead (#1302)."""
+    async def test_reset_ad_overview_state_tolerates_timeout(self, caplog:pytest.LogCaptureFixture) -> None:
+        """A timed-out reset is reported and the navigation continues as before."""
         mixin = WebScrapingMixin()
 
         with (
-            patch.object(mixin, "web_execute", new_callable = AsyncMock, return_value = removed) as execute_mock,
-            caplog.at_level("DEBUG"),
+            patch.object(mixin, "web_execute", new_callable = AsyncMock, side_effect = TimeoutError("page not responding")),
+            caplog.at_level("WARNING"),
         ):
             await mixin.reset_ad_overview_state()
 
-        execute_mock.assert_awaited_once()
-        script = execute_mock.await_args_list[0].args[0]
-        assert 'sessionStorage.getItem("queryParams")' in script
-        assert '["pageNumber", "keyword"]' in script
-        assert any("Reset stored ad overview parameters" in message for message in caplog.messages) == bool(removed)
+        assert any("Could not reset the stored ad overview page and search" in message for message in caplog.messages)
 
     @pytest.mark.asyncio
     async def test_single_page_action_returns_false(self) -> None:

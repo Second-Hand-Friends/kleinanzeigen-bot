@@ -988,6 +988,9 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
   web_select_button_combobox:
     "Option '%(value)s' not found in button combobox '%(id)s'": "Option '%(value)s' nicht in Button-Combobox '%(id)s' gefunden"
 
+  reset_ad_overview_state:
+    "Could not reset the stored ad overview page and search: %s": "Gespeicherte Seite und Suche der Anzeigenübersicht konnten nicht zurückgesetzt werden: %s"
+
   web_select_combobox:
     "Combobox selected '%(actual)s' instead of '%(expected)s'": "Combobox hat '%(actual)s' statt '%(expected)s' ausgewählt"
     "Combobox fallback verified: '%s' confirmed.": "Combobox-Fallback bestätigt: '%s' verifiziert."

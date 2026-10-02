@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable, Coroutine, Iterable, Sequence
 from gettext import gettext as _
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final, cast, overload
-from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
+from urllib.parse import urlparse
 
 import nodriver, psutil  # isort: skip
 from nodriver.cdp import browser as cdp_browser, input_ as cdp_input  # isort: skip
@@ -18,6 +18,7 @@ from nodriver.core.connection import ProtocolException
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
 
+from kleinanzeigen_bot import ad_overview
 from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import HumanizationConfig, TimeoutConfig
 
@@ -270,20 +271,6 @@ def _filter_viewport_sizes(sizes:Sequence[str], avail_w:int, avail_h:int) -> lis
         if w <= avail_w and h <= avail_h:
             fitting.append(size)
     return fitting
-
-
-# The ad overview restores these UI-stored query parameters from ``sessionStorage`` unless the URL
-# sets them, so a plain URL can open on a later page or with a stale search filter (issue #1302).
-# ``sort`` needs no pinning: the page adds a default ``sort`` to every URL lacking one.
-_AD_OVERVIEW_UNFILTERED_FIRST_PAGE:Final[dict[str, str]] = {"pageNumber": "1", "keyword": ""}
-
-
-def _ad_overview_first_page_url(page_url:str) -> str:
-    """Return ``page_url`` pinned to the first, unfiltered overview page; other parameters are kept."""
-    parts = urlsplit(page_url)
-    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values = True) if key not in _AD_OVERVIEW_UNFILTERED_FIRST_PAGE]
-    query.extend(_AD_OVERVIEW_UNFILTERED_FIRST_PAGE.items())
-    return urlunsplit(parts._replace(query = urlencode(query)))
 
 
 def _is_headless_browser_arg(arg:str) -> bool:
@@ -1767,7 +1754,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         """
         if open_page:
             try:
-                await self.web_open(_ad_overview_first_page_url(page_url))
+                await self.web_open(ad_overview.first_page_url(page_url))
             except TimeoutError:
                 LOG.warning("Failed to open ad overview page at %s: timeout", page_url)
                 return False
@@ -2137,22 +2124,27 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         The overview restores these parameters from ``sessionStorage`` (``queryParams``) when its
         URL lacks them (issue #1302), and a navigation click cannot set them in the URL. Must run
-        on the overview's origin; a missing or unreadable entry is left untouched.
+        on the overview's origin; a missing or unreadable entry is left untouched. Best effort: on a
+        timeout the navigation continues as before, with whatever state the page has stored.
         """
-        removed = await self.web_execute(f"""
-            (() => {{
-                try {{
-                    const stored = JSON.parse(sessionStorage.getItem("queryParams") || "null");
-                    if (!stored || typeof stored !== "object") return [];
-                    const removed = {json.dumps(list(_AD_OVERVIEW_UNFILTERED_FIRST_PAGE))}.filter(key => key in stored);
-                    removed.forEach(key => delete stored[key]);
-                    if (removed.length) sessionStorage.setItem("queryParams", JSON.stringify(stored));
-                    return removed;
-                }} catch (e) {{
-                    return [];
-                }}
-            }})()
-        """)
+        try:
+            removed = await self.web_execute(f"""
+                (() => {{
+                    try {{
+                        const stored = JSON.parse(sessionStorage.getItem("queryParams") || "null");
+                        if (!stored || typeof stored !== "object") return [];
+                        const removed = {json.dumps(list(ad_overview.UNFILTERED_FIRST_PAGE_PARAMS))}.filter(key => key in stored);
+                        removed.forEach(key => delete stored[key]);
+                        if (removed.length) sessionStorage.setItem("queryParams", JSON.stringify(stored));
+                        return removed;
+                    }} catch (e) {{
+                        return [];
+                    }}
+                }})()
+            """)
+        except TimeoutError as ex:
+            LOG.warning("Could not reset the stored ad overview page and search: %s", ex)
+            return
         if removed:
             LOG.debug("Reset stored ad overview parameters: %s", removed)
 

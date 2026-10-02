@@ -8,6 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -32,9 +33,10 @@ class Overview:
         self.succeeded:list[int] = []
 
     async def open(self, url:str) -> None:
-        assert url.startswith("https://example.invalid/m-meine-anzeigen.html")
-        if "pageNumber=1" in url:
-            self.page = 0
+        parts = urlsplit(url)
+        assert f"{parts.scheme}://{parts.netloc}{parts.path}" == "https://example.invalid/m-meine-anzeigen.html"
+        if page_number := parse_qs(parts.query).get("pageNumber"):
+            self.page = int(page_number[0]) - 1
         self.visited.append(self.page)
 
     async def next_page(self) -> None:
