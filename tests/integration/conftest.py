@@ -50,7 +50,9 @@ async def browser_session() -> AsyncIterator[WebScrapingMixin]:
 @pytest_asyncio.fixture(loop_scope = "session")
 async def web(browser_session:WebScrapingMixin) -> WebScrapingMixin:
     """Hand each test the shared session on a blank page with the default viewport."""
-    await browser_session.web_open("about:blank")  # also creates the tab on first use
+    # reload: a previous test may have written its own document into about:blank
+    # (also creates the tab on first use)
+    await browser_session.web_open("about:blank", reload_if_already_open = True)
     await browser_session.page.send(cdp.emulation.clear_device_metrics_override())
     browser_session._viewport_width_warning_emitted = False
     return browser_session
