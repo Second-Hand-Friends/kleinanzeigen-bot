@@ -2132,6 +2132,30 @@ class WebScrapingMixin:  # noqa: PLR0904
         else:
             LOG.debug("Consent banner not present; continuing without dismissal")
 
+    async def reset_ad_overview_state(self) -> None:
+        """Drop the ad overview's stored page and search before reaching it through site navigation.
+
+        The overview restores these parameters from ``sessionStorage`` (``queryParams``) when its
+        URL lacks them (issue #1302), and a navigation click cannot set them in the URL. Must run
+        on the overview's origin; a missing or unreadable entry is left untouched.
+        """
+        removed = await self.web_execute(f"""
+            (() => {{
+                try {{
+                    const stored = JSON.parse(sessionStorage.getItem("queryParams") || "null");
+                    if (!stored || typeof stored !== "object") return [];
+                    const removed = {json.dumps(list(_AD_OVERVIEW_UNFILTERED_FIRST_PAGE))}.filter(key => key in stored);
+                    removed.forEach(key => delete stored[key]);
+                    if (removed.length) sessionStorage.setItem("queryParams", JSON.stringify(stored));
+                    return removed;
+                }} catch (e) {{
+                    return [];
+                }}
+            }})()
+        """)
+        if removed:
+            LOG.debug("Reset stored ad overview parameters: %s", removed)
+
     async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
         """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
 

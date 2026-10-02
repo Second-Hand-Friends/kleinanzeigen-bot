@@ -55,6 +55,8 @@ async def open_ad_for_edit(web:WebScrapingMixin, *, root_url:str, ad_id:int | No
     """Reach the edit form through site navigation, preserving its session context."""
     await web.web_open(root_url, reload_if_already_open = True)
     await web.dismiss_consent_banner()
+    # otherwise the overview reopens on the page and search left by the previous ad
+    await web.reset_ad_overview_state()
     await web.web_click(By.ID, "nav-menu-item-my-ads")
     await web.web_click(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]')
 

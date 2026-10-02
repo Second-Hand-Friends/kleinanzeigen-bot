@@ -1391,10 +1391,19 @@ async def test_open_ad_for_edit_uses_overview_clicks(test_bot:KleinanzeigenBot, 
                 return True
         return False
 
+    steps:list[str] = []
+
+    async def reset() -> None:
+        steps.append("reset")
+
+    async def click(*_args:Any, **_kwargs:Any) -> None:
+        steps.append("click")
+
     with (
         patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_mock,
         patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
-        patch.object(test_bot, "web_click", new_callable = AsyncMock) as click_mock,
+        patch.object(test_bot, "reset_ad_overview_state", side_effect = reset),
+        patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = click) as click_mock,
         patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
         patch.object(test_bot, "navigate_paginated_ad_overview", new_callable = AsyncMock, side_effect = navigate),
     ):
@@ -1405,6 +1414,8 @@ async def test_open_ad_for_edit_uses_overview_clicks(test_bot:KleinanzeigenBot, 
             await open_ad_for_edit(test_bot, root_url = test_bot.root_url, ad_id = 12345, max_pages = 11)
 
     open_mock.assert_awaited_once_with(test_bot.root_url, reload_if_already_open = True)
+    # the stored overview page and search must be gone before the navigation click opens it (#1302)
+    assert steps == ["reset", "click", "click"]
     assert click_mock.await_args_list == [
         call(By.ID, "nav-menu-item-my-ads"),
         call(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]'),

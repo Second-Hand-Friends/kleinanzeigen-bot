@@ -76,6 +76,24 @@ class TestNavigatePaginatedAdOverview:
 
         open_mock.assert_awaited_once_with(expected)
 
+    @pytest.mark.parametrize("removed", [["pageNumber", "keyword"], []], ids = ["stored-state", "nothing-stored"])
+    @pytest.mark.asyncio
+    async def test_reset_ad_overview_state_drops_stored_page_and_search(self, removed:list[str], caplog:pytest.LogCaptureFixture) -> None:
+        """The navigation click cannot pin the overview URL, so the stored page and search are dropped instead (#1302)."""
+        mixin = WebScrapingMixin()
+
+        with (
+            patch.object(mixin, "web_execute", new_callable = AsyncMock, return_value = removed) as execute_mock,
+            caplog.at_level("DEBUG"),
+        ):
+            await mixin.reset_ad_overview_state()
+
+        execute_mock.assert_awaited_once()
+        script = execute_mock.await_args_list[0].args[0]
+        assert 'sessionStorage.getItem("queryParams")' in script
+        assert '["pageNumber", "keyword"]' in script
+        assert any("Reset stored ad overview parameters" in message for message in caplog.messages) == bool(removed)
+
     @pytest.mark.asyncio
     async def test_single_page_action_returns_false(self) -> None:
         """Test pagination on single page where action returns False."""
