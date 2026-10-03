@@ -55,12 +55,11 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock,
                          return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}),
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -80,12 +79,11 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock,
                          return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}),
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -109,7 +107,7 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock) as mock_web_execute,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
         ):
@@ -124,7 +122,7 @@ class TestKleinanzeigenBotAdDeletion:
         assert result == DeleteResult(deleted = False, attempted = False)
         assert ad_cfg.id is None  # Preserved — no deletion attempted
         mock_web_open.assert_not_called()
-        mock_web_find.assert_not_called()
+        mock_web_execute.assert_not_called()
         mock_web_sleep.assert_not_called()
         mock_request.assert_not_called()
 
@@ -140,11 +138,10 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"statusCode": 404, "statusMessage": "Not Found", "content": "{}"}),
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -189,12 +186,11 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock,
                          return_value = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}) as mock_request,
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -222,7 +218,7 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_web_open,
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_web_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock) as mock_web_execute,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
             patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
         ):
@@ -237,7 +233,7 @@ class TestKleinanzeigenBotAdDeletion:
         assert result == DeleteResult(deleted = False, attempted = False)
         assert ad_cfg.id is None
         mock_web_open.assert_not_called()
-        mock_web_find.assert_not_called()
+        mock_web_execute.assert_not_called()
         mock_web_sleep.assert_not_called()
         mock_request.assert_not_called()
 
@@ -256,11 +252,10 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ok_response) as mock_request,
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -285,11 +280,10 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = ok_response) as mock_request,
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
             result = await delete_flow.delete_ad(
                 web = test_bot, root_url = test_bot.root_url,
                 ad_cfg = ad_cfg,
@@ -311,21 +305,42 @@ class TestKleinanzeigenBotAdDeletion:
 
         with (
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as mock_web_sleep,
             patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = TimeoutError("request timed out")),
+            pytest.raises(TimeoutError, match = "request timed out"),
         ):
-            mock_find.return_value.attrs = {"content": "some-token"}
-            with pytest.raises(TimeoutError, match = "request timed out"):
-                await delete_flow.delete_ad(
-                    web = test_bot, root_url = test_bot.root_url,
-                    ad_cfg = ad_cfg,
-                    published_ads_list = published_ads,
-                    delete_old_ads_by_title = False,
-                )
+            await delete_flow.delete_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_cfg = ad_cfg,
+                published_ads_list = published_ads,
+                delete_old_ads_by_title = False,
+            )
 
         assert ad_cfg.id == 12345  # Preserved — exception prevented clearing
         mock_web_sleep.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_delete_ad_without_csrf_token_sends_no_request(self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any]) -> None:
+        """When the manage-ads page exposes no CSRF token, no delete request is sent and the id is preserved."""
+        ad_cfg = Ad.model_validate(minimal_ad_config | {"id": 12345})
+
+        with (
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            pytest.raises(AssertionError, match = "Expected CSRF Token not found"),
+        ):
+            await delete_flow.delete_ad(
+                web = test_bot, root_url = test_bot.root_url,
+                ad_cfg = ad_cfg,
+                published_ads_list = [],
+                delete_old_ads_by_title = False,
+            )
+
+        mock_request.assert_not_called()
+        assert ad_cfg.id == 12345
 
 
 class TestDeleteAdsAfterDeletePolicy:

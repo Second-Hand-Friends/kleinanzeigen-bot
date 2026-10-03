@@ -2422,9 +2422,6 @@ class TestShippingOptionsDialog:
             return None
 
         # Create mock elements
-        csrf_token_elem = MagicMock()
-        csrf_token_elem.attrs = {"content": "csrf-token-123"}
-
         shipping_form_elem = MagicMock()
         shipping_form_elem.attrs = {}
 
@@ -2477,8 +2474,6 @@ class TestShippingOptionsDialog:
             # Mock web_find to simulate element detection
             async def mock_find_side_effect(selector_type:By, selector_value:str, **_:Any) -> Element | None:
                 """Async mock side effect for web_find calls."""
-                if selector_value == "meta[name=_csrf]":
-                    return csrf_token_elem
                 if selector_value == "myftr-shppngcrt-frm":
                     return shipping_form_elem
                 # Category link via By.TEXT
