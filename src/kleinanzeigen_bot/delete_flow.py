@@ -14,7 +14,7 @@ from .utils import dicts as _dicts
 from .utils import loggers as _loggers
 from .utils.i18n import pluralize
 from .utils.misc import ensure
-from .utils.web_scraping_mixin import By, WebScrapingMixin
+from .utils.web_scraping_mixin import WebScrapingMixin
 
 
 class DeleteResult(NamedTuple):
@@ -31,6 +31,25 @@ class DeleteResult(NamedTuple):
 
 
 LOG:_loggers.Logger = _loggers.get_logger(__name__)
+
+# The classic manage-ads page exposes the CSRF token as <meta name="_csrf">; the redesigned (Astro)
+# page only carries it inside the JSON "data-initialprops" attribute (e.g. #consentBanner) as
+# webContext.csrfToken. Both hold the same session token.
+_CSRF_LOOKUP_JS:Final = """
+(() => {
+    const meta = document.querySelector('meta[name="_csrf"]')?.getAttribute('content');
+    if (meta && meta.trim()) return meta;
+    for (const el of document.querySelectorAll('[data-initialprops]')) {
+        try {
+            const token = JSON.parse(el.getAttribute('data-initialprops'))?.webContext?.csrfToken;
+            if (typeof token === 'string' && token.trim()) return token;
+        } catch (e) {
+            // ignore elements with malformed props
+        }
+    }
+    return null;
+})()
+"""
 
 
 async def delete_ads(
@@ -138,9 +157,8 @@ async def delete_ad(
 
     # Phase B: Open manage-ads page, fetch CSRF token, execute deletions
     await web.web_open(f"{root_url}/m-meine-anzeigen.html")
-    csrf_token_elem = await web.web_find(By.CSS_SELECTOR, "meta[name=_csrf]")
-    csrf_token = csrf_token_elem.attrs.get("content")
-    ensure(csrf_token is not None and isinstance(csrf_token, str) and csrf_token.strip(), _("Expected CSRF Token not found in HTML content!"))
+    csrf_token = await web.web_execute(_CSRF_LOOKUP_JS)
+    ensure(isinstance(csrf_token, str) and csrf_token.strip(), _("Expected CSRF Token not found in HTML content!"))
 
     HTTP_OK:Final = 200
     deleted = False
