@@ -9,7 +9,7 @@ import fnmatch
 import json
 import logging
 import os
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -950,7 +950,7 @@ class TestPublishAdPostSubmitUncertainty:
         redirect_recovery_side_effect:BaseException | None = None,
         mock_redirect_recovery:bool = True,
         include_success_mocks:bool = False,
-    ) -> Iterator[None]:
+    ) -> Generator[None, None, None]:
         """Mock all post-submit publish_ad dependencies for confirmation fallback tests.
 
         Parameters

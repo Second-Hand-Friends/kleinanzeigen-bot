@@ -6,7 +6,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -941,7 +941,7 @@ class TestImageUploadProcessedMarkerFallback:
         file_input:MagicMock,
         find_all_side_effect:Callable[..., Awaitable[list[MagicMock]]],
         await_side_effect:Callable[..., Awaitable[Any]],
-    ) -> Iterator[None]:
+    ) -> Generator[None, None, None]:
         async def find_all_once_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
             return await find_all_side_effect(selector_type, selector_value, **__)
 
