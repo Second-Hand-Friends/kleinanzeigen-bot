@@ -700,7 +700,7 @@ jobs:
       env:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         PR_URL: ${{github.event.pull_request.html_url}}
-      run: gh pr merge --auto --rebase "$PR_URL"
+      run: gh pr merge --auto --squash "$PR_URL"
 
 
   ###########################################################
@@ -720,4 +720,4 @@ jobs:
       env:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
         PR_URL: ${{github.event.pull_request.html_url}}
-      run: gh pr merge --auto --rebase "$PR_URL"
+      run: gh pr merge --auto --squash "$PR_URL"
