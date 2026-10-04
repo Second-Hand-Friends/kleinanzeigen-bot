@@ -93,6 +93,9 @@ async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str
     Clicks through the category picker to select the configured category path,
     or verifies the auto-detected category when none is specified.
     """
+    if category:
+        # Stray slashes (e.g. "161/176/") would otherwise yield an empty "cat_" ID that never appears.
+        category = "/".join(segment for segment in category.split("/") if segment)
     if category and not category.split("/", 1)[0].isdigit():
         raise CategoryResolutionError(
             _("Unknown category alias '%s'. Use a category name from categories.yaml or a numeric category path.") % category

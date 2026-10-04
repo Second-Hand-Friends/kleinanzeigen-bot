@@ -642,11 +642,19 @@ class TestCategoryProbeBehavior:
         mock_probe.assert_any_await(By.ID, "ad-category-path")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("category", ["80/87", "161/172/cd_player"])
-    async def test_set_category_selects_path_without_reloading_form(self, test_bot:KleinanzeigenBot, category:str) -> None:
+    @pytest.mark.parametrize(
+        ("category", "segments"),
+        [
+            ("80/87", ["80", "87"]),
+            ("161/172/cd_player", ["161", "172", "cd_player"]),
+            # stray slashes must not produce an empty "cat_" ID (#1314)
+            ("161/176/", ["161", "176"]),
+            ("/80//87", ["80", "87"]),
+        ],
+    )
+    async def test_set_category_selects_path_without_reloading_form(self, test_bot:KleinanzeigenBot, category:str, segments:list[str]) -> None:
         """Category selection retains the edit session and selects every path level."""
         selected:list[str] = []
-        segments = category.split("/")
         category_link = MagicMock()
         category_link.click = AsyncMock()
         continue_button = MagicMock()
