@@ -605,7 +605,7 @@ class TestCategoryProbeBehavior:
     """Tests for category marker probing without retry backoff."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("category", ["Haus & Garten > Möbel & Wohnen > Regale", "unknown"])
+    @pytest.mark.parametrize("category", ["Haus & Garten > Möbel & Wohnen > Regale", "unknown", "/"])
     async def test_unknown_category_alias_fails_before_browser_navigation(self, test_bot:KleinanzeigenBot, category:str) -> None:
         """Unresolved aliases fail without retrying a nonexistent DOM ID."""
         with (
