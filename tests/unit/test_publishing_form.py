@@ -6,7 +6,7 @@
 import asyncio
 import json
 import logging
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
@@ -605,7 +605,7 @@ class TestCategoryProbeBehavior:
     """Tests for category marker probing without retry backoff."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("category", ["Haus & Garten > Möbel & Wohnen > Regale", "unknown"])
+    @pytest.mark.parametrize("category", ["Haus & Garten > Möbel & Wohnen > Regale", "unknown", "/"])
     async def test_unknown_category_alias_fails_before_browser_navigation(self, test_bot:KleinanzeigenBot, category:str) -> None:
         """Unresolved aliases fail without retrying a nonexistent DOM ID."""
         with (
@@ -642,11 +642,19 @@ class TestCategoryProbeBehavior:
         mock_probe.assert_any_await(By.ID, "ad-category-path")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("category", ["80/87", "161/172/cd_player"])
-    async def test_set_category_selects_path_without_reloading_form(self, test_bot:KleinanzeigenBot, category:str) -> None:
+    @pytest.mark.parametrize(
+        ("category", "segments"),
+        [
+            ("80/87", ["80", "87"]),
+            ("161/172/cd_player", ["161", "172", "cd_player"]),
+            # stray slashes must not produce an empty "cat_" ID (#1314)
+            ("161/176/", ["161", "176"]),
+            ("/80//87", ["80", "87"]),
+        ],
+    )
+    async def test_set_category_selects_path_without_reloading_form(self, test_bot:KleinanzeigenBot, category:str, segments:list[str]) -> None:
         """Category selection retains the edit session and selects every path level."""
         selected:list[str] = []
-        segments = category.split("/")
         category_link = MagicMock()
         category_link.click = AsyncMock()
         continue_button = MagicMock()
@@ -933,7 +941,7 @@ class TestImageUploadProcessedMarkerFallback:
         file_input:MagicMock,
         find_all_side_effect:Callable[..., Awaitable[list[MagicMock]]],
         await_side_effect:Callable[..., Awaitable[Any]],
-    ) -> Iterator[None]:
+    ) -> Generator[None, None, None]:
         async def find_all_once_side_effect(selector_type:By, selector_value:str, *_:Any, **__:Any) -> list[MagicMock]:
             return await find_all_side_effect(selector_type, selector_value, **__)
 
