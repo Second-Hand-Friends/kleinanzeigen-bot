@@ -206,8 +206,12 @@ kleinanzeigen_bot/publishing_workflow.py:
     "DONE: updated %s (%s failed)": "FERTIG: %s aktualisiert (%s fehlgeschlagen)"
     "DONE: updated %s": "FERTIG: %s aktualisiert"
 
-  publish_ads:
+  _report_required_action:
+    ? "Manual package selection required for '%s': %s. Run in an interactive terminal or explicitly configure publishing.package_selection: BASIS."
+    : "Manuelle Paketauswahl für '%s' erforderlich: %s. In einem interaktiven Terminal ausführen oder publishing.package_selection: BASIS ausdrücklich konfigurieren."
     "Form rejected for '%s': %s. Correct the ad configuration before retrying.": "Formular für '%s' abgelehnt: %s. Vor einem erneuten Versuch die Anzeigenkonfiguration korrigieren."
+
+  publish_ads:
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     ? "Skipping '%s' because strict published-ad fetch failed before publish. Retry by re-running the publish after transient API issues have resolved."
@@ -224,7 +228,6 @@ kleinanzeigen_bot/publishing_workflow.py:
     "Category resolution failed for '%s': %s. Skipping ad (configuration error, no retry).": "Kategorieauflösung fehlgeschlagen für '%s': %s. Anzeige wird übersprungen (Konfigurationsfehler, kein erneuter Versuch)."
 
   update_ads:
-    "Form rejected for '%s': %s. Correct the ad configuration before retrying.": "Formular für '%s' abgelehnt: %s. Vor einem erneuten Versuch die Anzeigenkonfiguration korrigieren."
     "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' von [%s]..."
     "Skipping because ad is reserved": "Überspringen, da Anzeige reserviert ist"
     " -> SKIPPED: ad '%s' (ID: %s) not found in published ads": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) nicht in veröffentlichten Anzeigen gefunden"
@@ -396,19 +399,33 @@ kleinanzeigen_bot/publishing_persistence.py:
 #################################################
 kleinanzeigen_bot/publishing_submission.py:
 #################################################
-  _click_final_submit_button:
-    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
-    "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
-
-  _find_submit_button:
-    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
-
   _try_recover_ad_id_from_published_ads:
     "Published-ad ID recovery skipped because the pre-submit list was incomplete": "Wiederherstellung der Anzeigen-ID übersprungen, weil die Liste vor dem Absenden unvollständig war"
     "Published-ad ID recovery was ambiguous for '%s'; refusing candidate IDs: %s": "Wiederherstellung der Anzeigen-ID für '%s' war mehrdeutig; mögliche IDs werden abgelehnt: %s"
 
-  _click_submit_button:
+  _find_submit_button:
+    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
+
+  _click_final_submit_button:
+    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
     "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
+
+  _click_submit_button:
+    "Could not continue to package selection; the ad was not published": "Die Paketauswahl konnte nicht geöffnet werden; die Anzeige wurde nicht veröffentlicht"
+    "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
+
+  _submit_free_basis_package:
+    "The free Basis package could not be verified; the ad was not published": "Das kostenlose Basis-Paket konnte nicht bestätigt werden; die Anzeige wurde nicht veröffentlicht"
+    "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
+
+  _wait_for_manual_package_submission:
+    ? "Manual package selection requires an interactive terminal; configure publishing.package_selection: BASIS for automatic free-package publication"
+    : "Die manuelle Paketauswahl benötigt ein interaktives Terminal; für die automatische Veröffentlichung mit dem kostenlosen Paket publishing.package_selection: BASIS konfigurieren"
+    "Manual package publication was not confirmed; check your listings before retrying": "Die manuelle Veröffentlichung wurde nicht bestätigt; bitte vor einem erneuten Versuch die Anzeigen prüfen"
+    "Choose a package and finish publishing in the browser, then press Enter to continue...": "Ein Paket auswählen und die Anzeige im Browser veröffentlichen, anschließend Enter drücken..."
+
+  _wait_for_package:
+    "Ad form validation failed: %s": "Validierung des Anzeigenformulars fehlgeschlagen: %s"
 
   _handle_post_submit_prompts:
     "############################################": "############################################"

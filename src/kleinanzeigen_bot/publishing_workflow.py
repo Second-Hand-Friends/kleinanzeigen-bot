@@ -32,7 +32,13 @@ from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import Config
 from .published_ads import PublishedAd, PublishedAdsFetchIncompleteError, ad_matches_id
 from .utils import loggers as _loggers
-from .utils.exceptions import AdBatchError, AdFormValidationError, CategoryResolutionError, PublishSubmissionUncertainError
+from .utils.exceptions import (
+    AdBatchError,
+    AdFormValidationError,
+    CategoryResolutionError,
+    ManualPackageSelectionRequiredError,
+    PublishSubmissionUncertainError,
+)
 from .utils.i18n import pluralize
 from .utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
@@ -202,6 +208,7 @@ async def publish_ad(
         web, ad_file, ad_cfg, mode,
         captcha_config = config.captcha,
         root_url = root_url,
+        package_selection = config.publishing.package_selection,
         known_published_ad_ids = known_published_ad_ids,
     )
 
@@ -298,6 +305,18 @@ def _report_batch_result(mode:AdUpdateStrategy, succeeded:int, failed:int) -> No
         if mode == AdUpdateStrategy.MODIFY:
             raise AdBatchError(_("Failed to update %s") % pluralize("ad", failed))
         raise AdBatchError(_("Failed to publish %s") % pluralize("ad", failed))
+
+
+def _report_required_action(ad_title:str, exc:AdFormValidationError | ManualPackageSelectionRequiredError) -> None:
+    """Explain the corrective action for a deterministic failure before final submission."""
+    if isinstance(exc, ManualPackageSelectionRequiredError):
+        LOG.error(
+            "Manual package selection required for '%s': %s. Run in an interactive terminal "
+            "or explicitly configure publishing.package_selection: BASIS.",
+            ad_title, exc,
+        )
+    else:
+        LOG.error("Form rejected for '%s': %s. Correct the ad configuration before retrying.", ad_title, exc)
 
 
 async def publish_ads(
@@ -401,10 +420,10 @@ async def publish_ads(
                 )
                 failed_count += 1
                 break
-            except AdFormValidationError as ex:
+            except (AdFormValidationError, ManualPackageSelectionRequiredError) as ex:
                 if capture_diagnostics:
                     await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                LOG.error("Form rejected for '%s': %s. Correct the ad configuration before retrying.", ad_cfg.title, ex)
+                _report_required_action(ad_cfg.title, ex)
                 failed_count += 1
                 break
             except PublishSubmissionUncertainError as ex:
@@ -551,10 +570,10 @@ async def update_ads(
                 break
             except asyncio.CancelledError:
                 raise
-            except AdFormValidationError as ex:
+            except (AdFormValidationError, ManualPackageSelectionRequiredError) as ex:
                 if capture_diagnostics:
                     await capture_diagnostics(ad_cfg, ad_cfg_orig, ad_file, attempt, ex)
-                LOG.error("Form rejected for '%s': %s. Correct the ad configuration before retrying.", ad_cfg.title, ex)
+                _report_required_action(ad_cfg.title, ex)
                 failed_count += 1
                 break
             except PublishSubmissionUncertainError as ex:
