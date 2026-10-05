@@ -91,3 +91,87 @@ async def test_visible_field_errors_are_labelled_without_reading_values(web:WebS
     # A confirmation/dashboard page has no ad form, even if other errors exist.
     await web.web_execute("document.querySelector('form').remove()")
     assert await publishing_submission._get_form_validation_errors(web) == []
+
+
+@pytest.mark.parametrize("layout", ["editor-container", "shared-app-root"])
+async def test_formless_editor_errors_exclude_unrelated_application_controls(
+    web:WebScrapingMixin, layout:str,
+) -> None:
+    """Use synthetic React-like markup, never captured account HTML."""
+    title = '<div><label for="ad-title">Title</label><input id="ad-title" value="Synthetic listing"></div>'
+    fields = """
+        <div><label for="ad-description">Description</label><textarea id="ad-description">Synthetic description</textarea></div>
+        <div><label for="autos.km">Mileage</label>
+            <input id="autos.km" name="attributeMap[autos.km]" aria-invalid="true" aria-describedby="km-status">
+            <p id="km-status" role="status">Enter mileage.</p></div>
+        <div><label for="autos.brand">Brand</label>
+            <input type="hidden" name="attributeMap[autos.brand]">
+            <button id="autos.brand" role="combobox">Choose brand</button>
+            <div><p id="attribute-error">Choose a brand.</p></div></div>
+    """
+    unrelated = """
+        <section><label for="newsletter-email">Newsletter</label>
+            <input id="newsletter-email" type="email" required aria-invalid="true" aria-errormessage="newsletter-error">
+            <p id="newsletter-error" role="alert">Invalid newsletter email.</p></section>
+        <div role="alert" id="notification-error">An unrelated application notification.</div>
+        <header><input id="global-search" required></header>
+    """
+    editor = f'<section id="editor">{title}{fields}</section>{unrelated}' if layout == "editor-container" else f"{title}{unrelated}{fields}"
+    html = f'<!doctype html><html lang="en"><body><div id="application-root">{editor}</div></body></html>'
+    await web.web_execute(f"""(() => {{
+        document.open(); document.write({json.dumps(html)}); document.close();
+    }})()""")
+    assert await web.web_execute("document.querySelector('form, main, [role=main]') === null") is True
+    assert await web.web_execute("document.getElementById('newsletter-email').validity.valid") is False
+    assert await publishing_submission._get_form_validation_errors(web) == ["Mileage: Enter mileage.", "Brand: Choose a brand."]
+
+    await web.web_execute("""(() => {
+        document.getElementById('autos.km').removeAttribute('aria-invalid');
+        document.getElementById('attribute-error').remove();
+    })()""")
+    assert await publishing_submission._get_form_validation_errors(web) == []
+    # An unrelated invalid input persists after correcting all ad fields.
+    assert await web.web_execute("document.getElementById('newsletter-email').validity.valid") is False
+
+
+async def test_native_form_summary_stays_scoped_to_its_form(web:WebScrapingMixin) -> None:
+    """An explicit form rejection summary must terminate confirmation polling."""
+    html = """<!doctype html><html><body>
+        <form><input id="ad-title" value="Synthetic listing">
+            <div id="ad-form-error">Bitte korrigiere die Anzeige.</div></form>
+        <div id="notification-error" role="alert">Unrelated application error.</div>
+    </body></html>"""
+    await web.web_execute(f"""(() => {{
+        document.open(); document.write({json.dumps(html)}); document.close();
+    }})()""")
+    assert await publishing_submission._get_form_validation_errors(web) == ["Bitte korrigiere die Anzeige."]
+    await web.web_execute("document.getElementById('ad-form-error').remove()")
+    assert await publishing_submission._get_form_validation_errors(web) == []
+
+
+@pytest.mark.parametrize(("backing_key", "button_id"), [
+    ("autos.marke_s+autos.model_s", "autos.marke_s"),
+    ("autos.marke_s+autos.model_s", "vehicle-brand-control"),
+    ("autos.marke_s", "vehicle-brand-control"),
+])
+async def test_compound_attribute_combobox_remains_an_ad_field(
+    web:WebScrapingMixin, backing_key:str, button_id:str,
+) -> None:
+    """Associate a field-local backing input, without adopting sidebar controls."""
+    html = f"""<!doctype html><html><body><div id="application-root">
+        <input id="ad-title" value="Synthetic listing">
+        <section><input type="hidden" name="attributeMap[{backing_key}]">
+            <label for="{button_id}">Marke</label>
+            <button id="{button_id}" role="combobox" aria-invalid="true" aria-describedby="marke-message">Choose brand</button>
+            <p id="marke-message" role="status">Bitte waehle eine Marke.</p></section>
+        <aside><label for="foreign-control">Foreign sidebar control</label>
+            <button id="foreign-control" role="combobox" aria-invalid="true" aria-describedby="foreign-error">Unrelated selection</button>
+            <p id="foreign-error" role="status">Unrelated sidebar error.</p></aside>
+        <div id="notification-error" role="alert">Unrelated application notification.</div>
+    </div></body></html>"""
+    await web.web_execute(f"""(() => {{
+        document.open(); document.write({json.dumps(html)}); document.close();
+    }})()""")
+    assert await publishing_submission._get_form_validation_errors(web) == ["Marke: Bitte waehle eine Marke."]
+    await web.web_execute(f"document.getElementById({json.dumps(button_id)}).removeAttribute('aria-invalid')")
+    assert await publishing_submission._get_form_validation_errors(web) == []

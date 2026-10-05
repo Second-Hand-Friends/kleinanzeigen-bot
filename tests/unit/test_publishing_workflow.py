@@ -961,6 +961,13 @@ class TestPublishAdPostSubmitUncertainty:
             include_success_mocks: If True, also mock dicts.save_dict (for success-path tests).
         """
         test_bot.page = mock_page
+        scripted_responses = iter(web_execute_side_effect) if web_execute_side_effect is not None else None
+
+        def execute(script:str) -> Any:
+            """Keep final-click responses separate from confirmation and referrer values."""
+            if "const action =" in script and "const labels =" in script:
+                return "submit" if 'const action = "inspect"' in script else True
+            return next(scripted_responses) if scripted_responses is not None else None
 
         common_patches:list[Any] = [
             patch("kleinanzeigen_bot.publishing_workflow.open_ad_for_edit", new_callable = AsyncMock),
@@ -975,7 +982,7 @@ class TestPublishAdPostSubmitUncertainty:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = web_execute_side_effect),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
@@ -1242,6 +1249,9 @@ class TestAutoPriceReductionDispatch:
         mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
 
         async def mock_web_execute_price_reduction(script:str) -> Any:
+            """Return explicit button acknowledgement and stable confirmation data."""
+            if "const action =" in script and "const labels =" in script:
+                return "submit" if 'const action = "inspect"' in script else True
             if "window.location.href" in script:
                 return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
             return mock_response

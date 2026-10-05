@@ -396,12 +396,19 @@ kleinanzeigen_bot/publishing_persistence.py:
 #################################################
 kleinanzeigen_bot/publishing_submission.py:
 #################################################
+  _click_final_submit_button:
+    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
+    "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
+
+  _find_submit_button:
+    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
+
   _try_recover_ad_id_from_published_ads:
     "Published-ad ID recovery skipped because the pre-submit list was incomplete": "Wiederherstellung der Anzeigen-ID übersprungen, weil die Liste vor dem Absenden unvollständig war"
     "Published-ad ID recovery was ambiguous for '%s'; refusing candidate IDs: %s": "Wiederherstellung der Anzeigen-ID für '%s' war mehrdeutig; mögliche IDs werden abgelehnt: %s"
 
   _click_submit_button:
-    "Could not find submit button": "Absenden-Button konnte nicht gefunden werden"
+    "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
 
   _handle_post_submit_prompts:
     "############################################": "############################################"
