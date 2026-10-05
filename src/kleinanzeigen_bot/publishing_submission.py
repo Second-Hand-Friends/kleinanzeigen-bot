@@ -8,6 +8,7 @@ submit click, confirmation polling, and fallback recovery when the
 confirmation page redirects too fast to inspect the URL directly.
 """
 
+import html
 import re
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -73,7 +74,8 @@ async def _try_recover_ad_id_from_published_ads(
 
         candidates:set[int] = set()
         for published_ad in current_ads:
-            if published_ad.get("title") != title:
+            raw_title = published_ad.get("title")
+            if raw_title != title and (not isinstance(raw_title, str) or html.unescape(raw_title) != title):
                 continue
             raw_id = published_ad.get("id")
             if raw_id is None:
