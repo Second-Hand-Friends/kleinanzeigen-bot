@@ -19,6 +19,7 @@ import signal
 import sys
 import textwrap
 from dataclasses import dataclass
+from gettext import gettext as _
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -139,8 +140,15 @@ def _help_executable() -> str:
 
 
 def help_text(*, executable:str | None = None, language:str | None = None) -> str:
+    """Render CLI help in the requested language without changing the current locale."""
     exe = executable if executable is not None else _help_executable()
-    lang = language if language is not None else get_current_locale().language
+    current_locale = get_current_locale()
+    lang = language if language is not None else current_locale.language
+    try:
+        set_current_locale(Locale(lang))
+        list_description = _("lists current online ads with ID, title, state, and expiry date")
+    finally:
+        set_current_locale(current_locale)
     if lang == "de":
         return textwrap.dedent(
             f"""\
@@ -162,6 +170,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               create-config - Erstellt eine neue Standard-Konfigurationsdatei, falls noch nicht vorhanden
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               status   - Zeigt Anzeigenstatus und APR-Vorschau an
+              list     - {list_description}
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -226,6 +235,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           create-config - creates a new default configuration file if one does not exist
           diagnose - diagnoses browser connection issues and shows troubleshooting information
           status   - shows ad status and APR preview details
+          list     - {list_description}
           --
           help     - displays this help (default command)
           version  - displays the application version

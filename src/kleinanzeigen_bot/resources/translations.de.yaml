@@ -30,6 +30,9 @@ kleinanzeigen_bot/captcha_flow.py:
 #################################################
 kleinanzeigen_bot/cli.py:
 #################################################
+  help_text:
+    "lists current online ads with ID, title, state, and expiry date": "Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an"
+
   parse_args:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
     "Unknown command: %s": "Unbekannter Befehl: %s"
@@ -240,6 +243,18 @@ kleinanzeigen_bot/publishing_workflow.py:
 #################################################
 kleinanzeigen_bot/published_ads.py:
 #################################################
+  _published_ad_state_label:
+    "active": "aktiv"
+    "reserved": "reserviert"
+    "inactive": "inaktiv"
+
+  render_published_ads:
+    "No online ads found.": "Keine Online-Anzeigen gefunden."
+    "ID": "ID"
+    "title": "Titel"
+    "status": "Status"
+    "expires": "Ablaufdatum"
+
   fetch_published_ads:
     "Stopping pagination after %s pages to avoid infinite loop": "Stoppe die Seitenaufschaltung nach %s Seiten, um eine Endlosschleife zu vermeiden"
     "Pagination request failed on page %s: %s": "Seitenabfrage auf Seite %s fehlgeschlagen: %s"

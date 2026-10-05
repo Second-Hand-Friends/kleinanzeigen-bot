@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: © Jens Bergmann and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
-"""Published ads fetching with API pagination."""
+"""Published ads fetching with API pagination and online list display."""
 
 import json
 from gettext import gettext as _
@@ -14,6 +14,39 @@ from .utils.web_scraping_mixin import WebScrapingMixin
 
 type PublishedAd = dict[str, Any]
 """A raw published ad entry from the Kleinanzeigen manage-ads JSON API."""
+
+
+def _published_ad_state_label(state:Any) -> str:
+    """Translate known account states and preserve unknown or missing API values."""
+    match state:
+        case "active":
+            return _("active")
+        case "paused":
+            return _("reserved")
+        case "inactive":
+            return _("inactive")
+    return str(state) if state is not None else "-"
+
+
+def render_published_ads(ads:list[PublishedAd]) -> str:
+    """Render current account ads while preserving unknown states and server dates."""
+    if not ads:
+        return _("No online ads found.")
+
+    id_label = _("ID")
+    title_label = _("title")
+    status_label = _("status")
+    expiry_label = _("expires")
+    blocks = [
+        "\n".join([
+            f"{id_label}: {ad['id']}",
+            f"  {title_label}: {ad.get('title') or '-'}",
+            f"  {status_label}: {_published_ad_state_label(ad.get('state'))}",
+            f"  {expiry_label}: {ad.get('endDate') or '-'}",
+        ])
+        for ad in ads
+    ]
+    return "\n\n".join(blocks)
 
 
 def ad_matches_id(ad:PublishedAd, target_id:int | None) -> bool:
