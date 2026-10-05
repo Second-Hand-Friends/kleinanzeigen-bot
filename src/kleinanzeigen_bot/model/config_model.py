@@ -282,6 +282,15 @@ class LocalPathRenamingConfig(ContextualModel):
 
 
 class PublishingConfig(ContextualModel):
+    package_selection:Literal["BASIS", "MANUAL"] = Field(
+        default = "MANUAL",
+        description = (
+            "how to handle a recognized package-selection step during publishing. "
+            "MANUAL (default when omitted) waits for the user to choose a package and publish in the browser. "
+            "Explicitly configure BASIS to automatically select the verified free Basis package and submit the ad"
+        ),
+        examples = ["MANUAL", "BASIS"],
+    )
     delete_old_ads:Literal["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"] | None = Field(
         default = "AFTER_PUBLISH", description = "when to delete old versions of republished ads", examples = ["BEFORE_PUBLISH", "AFTER_PUBLISH", "NEVER"]
     )

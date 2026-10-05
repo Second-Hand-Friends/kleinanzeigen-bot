@@ -164,6 +164,12 @@ download:
 # ################################################################################
 publishing:
 
+  # how to handle a recognized package-selection step during publishing. MANUAL (default when omitted) waits for the user to choose a package and publish in the browser. Explicitly configure BASIS to automatically select the verified free Basis package and submit the ad
+  # Examples (choose one):
+  #   • MANUAL
+  #   • BASIS
+  package_selection: MANUAL
+
   # when to delete old versions of republished ads
   # Examples (choose one):
   #   • BEFORE_PUBLISH

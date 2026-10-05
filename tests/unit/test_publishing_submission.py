@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for publishing submission functionality."""
 
+import sys
 from collections.abc import Awaitable, Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,7 +14,7 @@ from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
-from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, ManualPackageSelectionRequiredError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
 
@@ -786,3 +787,23 @@ class TestEncodedTitleRecovery:
                 test_bot, root_url = test_bot.root_url, title = "Matiz HU 10/2027", known_published_ad_ids = frozenset({10}),
             )
         assert result is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stdin_missing", [False, True])
+async def test_manual_preflight_requires_interactive_input_before_prompt(
+    test_bot:KleinanzeigenBot, monkeypatch:pytest.MonkeyPatch, stdin_missing:bool,
+) -> None:
+    """A known unattended run has not yet attempted publication or human input."""
+    if stdin_missing:
+        monkeypatch.setattr(sys, "stdin", None)
+    else:
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    with (
+        patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock) as manual_input,
+        patch.object(test_bot, "web_execute", new_callable = AsyncMock) as execute,
+        pytest.raises(ManualPackageSelectionRequiredError, match = "publishing.package_selection: BASIS"),
+    ):
+        await publishing_submission._wait_for_manual_package_submission(test_bot)
+    manual_input.assert_not_awaited()
+    execute.assert_not_awaited()
