@@ -8,6 +8,7 @@ submit click, confirmation polling, and fallback recovery when the
 confirmation page redirects too fast to inspect the URL directly.
 """
 
+import json
 import re
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -168,11 +169,50 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     """Read visible field errors from the ad form without collecting field values."""
     result = await web.web_execute(r"""
     (() => {
-        const form = document.getElementById('ad-title')?.closest('form');
-        if (!form) return [];
         const visible = element => element && element.getClientRects().length > 0
             && getComputedStyle(element).visibility !== 'hidden';
+        const title = document.getElementById('ad-title');
+        if (!visible(title)) return [];
         const text = element => (element?.innerText || '').replace(/\s+/g, ' ').trim();
+        const nativeForm = title.closest('form');
+        const controls = [...document.querySelectorAll('input, select, textarea, button')];
+        const attributeInputs = controls.filter(element =>
+            /^attributeMap\[.+\]$/.test(element.getAttribute('name') || ''));
+        const attributeIds = new Set(attributeInputs.flatMap(element =>
+            element.getAttribute('name').slice(13, -1).split('+')));
+        const adControls = controls.filter(element => element.id.startsWith('ad-') || attributeIds.has(element.id)
+            || attributeInputs.includes(element));
+        // Compound backing names can drive one visible combobox whose ID is
+        // independent of the attribute key. Associate only a single field-local
+        // control; stop before a shared editor/app container with other fields.
+        for (const backing of attributeInputs) {
+            for (let scope = backing.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
+                const localControls = [...scope.querySelectorAll('input, select, textarea, button[role="combobox"]')].filter(visible);
+                if (!localControls.length) continue;
+                if (localControls.length === 1 && localControls[0].getAttribute('role') === 'combobox'
+                    && !adControls.includes(localControls[0])) adControls.push(localControls[0]);
+                break;
+            }
+        }
+        let form = nativeForm || title.parentElement;
+        // React has no form/main boundary. Find the smallest common editor
+        // container; never treat every input in its application root as an ad.
+        while (!nativeForm && form && !adControls.every(element => form.contains(element))) form = form.parentElement;
+        if (!form) return [];
+        const fields = [...form.querySelectorAll('input, select, textarea, button')].filter(element =>
+            nativeForm || adControls.includes(element));
+        const belongsToField = element => {
+            for (let scope = element.parentElement; scope && scope !== form; scope = scope.parentElement) {
+                const localControls = [...scope.querySelectorAll('input, select, textarea, button')];
+                if (!localControls.length) continue;
+                if (localControls.some(control => !fields.includes(control))) return false;
+                const labelledIds = new Set(localControls.filter(control => visible(control) && control.id).map(control => control.id));
+                // Hidden attribute backing inputs and their one labelled button
+                // share a field, whereas an editor-wide notification does not.
+                return labelledIds.size === 1;
+            }
+            return false;
+        };
         const labels = [...form.querySelectorAll('label')];
         const labelFor = element => {
             let scope = element;
@@ -197,7 +237,7 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
             const label = labelFor(element);
             errors.add(label ? `${label}: ${message}` : message);
         };
-        for (const field of form.querySelectorAll('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid')) {
+        for (const field of fields.filter(element => element.matches('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid'))) {
             if (!visible(field)) continue;
             const errorReferences = field.getAttribute('aria-errormessage');
             const references = errorReferences
@@ -205,14 +245,31 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
             const messages = references.trim().split(/\s+/).map(id => document.getElementById(id))
                 .filter(element => element && form.contains(element) && visible(element))
                 // Descriptions can be hints; the live brand control marks its error text-critical.
-                .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], .text-critical'))
+                .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], [role="status"], .text-critical'))
                 .map(element => { reportedElements.add(element); return text(element); }).filter(Boolean);
+            if (!messages.length && !field.validationMessage && field.getAttribute('aria-invalid') === 'true') {
+                // Some React fields expose an adjacent status without an ARIA
+                // reference. Only inspect a container holding this one input.
+                for (let scope = field.parentElement; scope && scope !== form; scope = scope.parentElement) {
+                    const controls = [...scope.querySelectorAll('input, select, textarea, button')].filter(visible);
+                    if (controls.length !== 1) break;
+                    const statuses = [...scope.querySelectorAll('[role="status"], [role="alert"]')].filter(visible);
+                    if (statuses.length) {
+                        for (const status of statuses) {
+                            reportedElements.add(status);
+                            if (text(status)) messages.push(text(status));
+                        }
+                        break;
+                    }
+                }
+            }
             add(field, messages.join(' ') || field.validationMessage);
         }
         // The redesigned category controls reuse id="attribute-error" and do not
-        // consistently mark their inputs aria-invalid. Read every visible error.
+        // consistently mark their inputs aria-invalid. A native form also owns
+        // its explicit error summary; React errors need a field association.
         for (const error of form.querySelectorAll('[id$="-error"]')) {
-            if (visible(error) && !reportedElements.has(error)) add(error, text(error));
+            if (visible(error) && !reportedElements.has(error) && (nativeForm || belongsToField(error))) add(error, text(error));
         }
         return [...errors];
     })()
@@ -220,42 +277,55 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     return [error for error in result if isinstance(error, str) and error.strip()] if isinstance(result, list) else []
 
 
-async def _click_submit_button(web:WebScrapingMixin) -> None:
-    """Find and click the submit button across page variants.
+_SUBMIT_BUTTON_SCRIPT:Final[str] = r"""
+(() => {
+    const action = ACTION;
+    const visible = element => element.getClientRects().length > 0
+        && getComputedStyle(element).visibility !== 'hidden' && !element.disabled;
+    const labels = LABELS;
+    const buttons = [...document.querySelectorAll('button')].filter(visible);
+    const submit = buttons.find(button => labels.some(label => button.textContent.trim().includes(label)));
+    if (submit) {
+        if (action === 'inspect') return 'submit';
+        if (action !== 'submit') return false;
+        submit.click();
+        return true;
+    }
+    return false;
+})()
+""".replace("LABELS", json.dumps(_SUBMIT_LABELS))
 
-    Uses JS to locate the <button> element (not a child span/div) containing
-    the label text, ensuring the click reaches the actual button.  Wrapped in
-    ``web_await`` to retry because React may not have re-rendered the submit
-    button after a deferred title update or captcha solve.
-    """
 
-    async def _find_and_click() -> bool:
-        """Attempt to find and click a submit button for any known label."""
-        for label in _SUBMIT_LABELS:
-            clicked = await web.web_execute(f"""
-            (() => {{
-                const buttons = document.querySelectorAll('button');
-                for (const btn of buttons) {{
-                    if (btn.textContent.trim().includes('{label}')) {{
-                        btn.click();
-                        return true;
-                    }}
-                }}
-                return false;
-            }})()
-            """)
-            if clicked:
-                return True
-        return False
+async def _find_submit_button(web:WebScrapingMixin) -> object:
+    """Wait for a submit control without performing any click inside polling."""
+    async def _inspect() -> object:
+        """Read the available submit action without clicking any control."""
+        return await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("inspect")))
 
+    return await web.web_await(_inspect, timeout_error_message = str(_("Could not find submit button")))
+
+
+async def _click_final_submit_button(web:WebScrapingMixin) -> None:
+    """Attempt one final click, treating a lost response as an uncertain publish."""
     try:
-        await web.web_await(
-            _find_and_click,
-            timeout_error_message = str(_("Could not find submit button")),
-        )
-    except TimeoutError:
-        raise TimeoutError(_("Could not find submit button")) from None
-    await web.web_sleep()
+        submitted = await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("submit")))
+    except (TimeoutError, ProtocolException) as ex:
+        raise PublishSubmissionUncertainError(_("submission may have succeeded before failure")) from ex
+    if submitted is False:
+        # The script explicitly found no button and performed no click.
+        raise TimeoutError(_("Could not find submit button"))
+    if submitted is not True:
+        raise PublishSubmissionUncertainError(_("submission may have succeeded before failure"))
+
+
+async def _click_submit_button(web:WebScrapingMixin) -> None:
+    """Discover the submit control, then attempt one final click outside polling."""
+    await _find_submit_button(web)
+    await _click_final_submit_button(web)
+    try:
+        await web.web_sleep()
+    except (TimeoutError, ProtocolException) as ex:
+        raise PublishSubmissionUncertainError(_("submission may have succeeded before failure")) from ex
 
 
 async def _handle_post_submit_prompts(web:WebScrapingMixin, *, has_images:bool) -> None:
