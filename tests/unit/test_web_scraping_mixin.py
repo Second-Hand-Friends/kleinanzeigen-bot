@@ -2454,6 +2454,11 @@ class TestWebScrapingBrowserConfiguration:
 class TestWebScrapingDiagnostics:
     """Test the diagnose_browser_issues method."""
 
+    @pytest.fixture(autouse = True)
+    def _mock_diagnostic_processes(self, monkeypatch:pytest.MonkeyPatch) -> None:
+        """Isolate diagnostics from host processes; process-specific tests provide their own mocks."""
+        monkeypatch.setattr(psutil, "process_iter", Mock(return_value = []))
+
     @pytest.fixture
     def scraper_with_config(self) -> WebScrapingMixin:
         """Create a WebScrapingMixin instance with browser config."""
