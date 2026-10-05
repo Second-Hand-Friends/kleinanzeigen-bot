@@ -15,7 +15,7 @@ from typing import Final
 
 from nodriver.core.connection import ProtocolException
 
-from . import captcha_flow, published_ads
+from . import captcha_flow, published_ads, publishing_form
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import CaptchaConfig
 from .utils import loggers as _loggers
@@ -332,6 +332,7 @@ async def submit_and_confirm_ad(
     #############################
     LOG.debug("Setting title '%s' (deferred to prevent React re-render clearing it)", ad_cfg.title)
     await web.web_set_input_value("ad-title", ad_cfg.title)
+    await publishing_form.verify_text_special_attributes(web, ad_cfg)
 
     #############################
     # submit

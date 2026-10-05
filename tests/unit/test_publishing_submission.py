@@ -734,3 +734,56 @@ class TestPublishedAdsRecovery:
             )
 
         redirect_recover_mock.assert_not_awaited()
+
+
+class TestFinalAttributeGuard:
+    """The guard must run after the last title render and before any submit step."""
+
+    @pytest.mark.asyncio
+    async def test_final_title_guard_submit_order(self, test_bot:KleinanzeigenBot) -> None:
+        """Verify text attributes after the last title update and before submission."""
+        order:list[str] = []
+
+        async def set_title(*_:object) -> None:
+            """Record the final title update in the simulated submission sequence."""
+            order.append("title")
+
+        async def guard(*_:object) -> None:
+            """Record attribute verification in the simulated submission sequence."""
+            order.append("guard")
+
+        async def submit(*_:object, **_kwargs:object) -> None:
+            """Record submission and stop the fixture before any publication occurs."""
+            order.append("submit")
+            raise AdFormValidationError("fixture stops before live submission")
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = set_title),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = ""),
+            patch("kleinanzeigen_bot.publishing_form.verify_text_special_attributes", new_callable = AsyncMock, side_effect = guard),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock, side_effect = submit),
+            pytest.raises(AdFormValidationError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+            )
+        assert order == ["title", "guard", "submit"]
+
+    @pytest.mark.asyncio
+    async def test_guard_failure_prevents_submit(self, test_bot:KleinanzeigenBot) -> None:
+        """Prevent the submit action when final attribute verification fails."""
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form.verify_text_special_attributes", new_callable = AsyncMock,
+                  side_effect = AdFormValidationError("text input lost its value")),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock) as submit,
+            pytest.raises(AdFormValidationError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+            )
+        submit.assert_not_awaited()

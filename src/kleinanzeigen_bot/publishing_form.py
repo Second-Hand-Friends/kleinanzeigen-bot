@@ -7,6 +7,7 @@
 import json
 import re
 from collections.abc import Sequence
+from decimal import Decimal
 from gettext import gettext as _
 from typing import Any, Final, cast
 
@@ -29,7 +30,7 @@ from .model.ad_model import (
 )
 from .model.config_model import AdDefaults
 from .utils import loggers as _loggers
-from .utils.exceptions import CategoryResolutionError
+from .utils.exceptions import AdFormValidationError, CategoryResolutionError
 from .utils.i18n import pluralize
 from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
@@ -1423,6 +1424,102 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
             LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
         LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
+
+
+async def _read_text_input_value(element:Element) -> str | None:
+    """Read the live value, rejecting a detached input instead of its cached attributes."""
+    value = await element.apply("(elem) => elem.isConnected ? String(elem.value) : null")
+    return value if isinstance(value, str) else None
+
+
+async def _restore_text_attribute_input(web:WebScrapingMixin, element:Element, value:str) -> None:
+    """Restore a configured value through the native setter and framework events."""
+    element_id = cast(str | None, element.attrs.get("id"))
+    if element_id:
+        await web.web_set_input_value(element_id, value)
+    else:
+        js_value = json.dumps(value)
+        await element.apply(f"""
+            (elem) => {{
+                if (!elem.isConnected) return false;
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+                setter.call(elem, {js_value});
+                elem.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                elem.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                return true;
+            }}
+        """)
+    await web.web_sleep()
+
+
+def _text_attribute_value_matches(element:Element, key:str, actual:str | None, expected:str) -> bool:
+    """Compare numeric values without changing the meaning of text identifiers."""
+    if actual is None:
+        return False
+    if actual == expected:
+        return True
+    normalized_key = re.sub(r"_[a-z]+$", "", key).rsplit(".", maxsplit = 1)[-1]
+    element_type = str(cast(Any, element.attrs.get("type")) or "").lower()
+    if normalized_key == "km" and element_type != "number":
+        # Mileage is an integer. The car editor may display German thousands
+        # separators even though the configured value contains plain digits.
+        integer_pattern = r"(?:[0-9]+|[0-9]{1,3}(?:\.[0-9]{3})+|[0-9]{1,3}(?:[ \u00a0\u202f][0-9]{3})+)"
+        if re.fullmatch(integer_pattern, actual) and re.fullmatch(integer_pattern, expected):
+            return int(re.sub(r"[. \u00a0\u202f]", "", actual)) == int(re.sub(r"[. \u00a0\u202f]", "", expected))
+    elif element_type == "number":
+        # Number inputs use a decimal point, not a grouping separator. Keep
+        # arbitrary text inputs and decimal commas out of numeric coercion.
+        decimal_pattern = r"[+-]?(?:[0-9]+(?:\.[0-9]+)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
+        if re.fullmatch(decimal_pattern, actual) and re.fullmatch(decimal_pattern, expected):
+            return Decimal(actual) == Decimal(expected)
+    return False
+
+
+async def verify_text_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
+    """Restore lost car text/number attributes and verify their live values again.
+
+    Later form changes can lose an input value without the earlier setter failing.
+    Re-resolve inputs on the final pass so a repair cannot hide another lost value.
+    Other categories and specialized controls keep their existing behavior.
+    Browser failures before submission remain retryable; a concrete value that
+    does not persist after repair is a deterministic form validation failure.
+    """
+    if "216" not in ad_cfg.category.split("/"):
+        return
+
+    configured_inputs:list[tuple[str, str]] = []
+    for key, value in (ad_cfg.special_attributes or {}).items():
+        normalized_key = re.sub(r"_[a-z]+$", "", key).rsplit(".", maxsplit = 1)[-1]
+        # The condition handler owns its dialog/select controls and already
+        # tolerates categories without a condition field. Do not look it up again.
+        if normalized_key == "condition":
+            continue
+        attribute_xpath = _build_special_attribute_xpath(normalized_key, key)
+        try:
+            element = await _resolve_special_attribute_element(web, attribute_xpath, key)
+            element_type = str(cast(Any, element.attrs.get("type")) or "").lower()
+            element_role = str(cast(Any, element.attrs.get("role")) or "").lower()
+            if element.local_name != "input" or element_type not in {"", "text", "number"} or element_role == "combobox":
+                continue
+            expected_value = str(value)
+            configured_inputs.append((key, expected_value))
+            if not _text_attribute_value_matches(element, key, await _read_text_input_value(element), expected_value):
+                await _restore_text_attribute_input(web, element, expected_value)
+        except AssertionError as ex:
+            raise TimeoutError(_("Could not verify text attribute '%s' before submission.") % key) from ex
+
+    for key, expected_value in configured_inputs:
+        normalized_key = re.sub(r"_[a-z]+$", "", key).rsplit(".", maxsplit = 1)[-1]
+        attribute_xpath = _build_special_attribute_xpath(normalized_key, key)
+        try:
+            element = await _resolve_special_attribute_element(web, attribute_xpath, key)
+            actual_value = await _read_text_input_value(element)
+        except AssertionError as ex:
+            raise TimeoutError(_("Could not verify text attribute '%s' before submission.") % key) from ex
+        if actual_value is None:
+            raise TimeoutError(_("Could not verify text attribute '%s' before submission.") % key)
+        if not _text_attribute_value_matches(element, key, actual_value, expected_value):
+            raise AdFormValidationError(_("Text attribute '%s' did not retain the configured value.") % key)
 
 
 async def fill_ad_form(

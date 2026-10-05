@@ -13,6 +13,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import LOG
 from kleinanzeigen_bot.app import KleinanzeigenBot
@@ -37,8 +38,9 @@ from kleinanzeigen_bot.publishing_form import (
     set_shipping_options,
     set_special_attributes,
     upload_images,
+    verify_text_special_attributes,
 )
-from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
+from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, CategoryResolutionError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -3892,3 +3894,397 @@ class TestConditionFallbackToGenericHandler:
             pytest.raises(TimeoutError, match = r"Failed to set attribute 'groesse_s'"),
         ):
             await set_special_attributes(test_bot, ad_cfg)
+
+
+class TestTextSpecialAttributeVerification:
+    """Protect configured input values from later form re-renders."""
+
+    @pytest.fixture
+    def vehicle_ad_config(self, base_ad_config:dict[str, Any]) -> dict[str, Any]:
+        """Apply the guard only to a car category, as in the affected editor."""
+        return base_ad_config | {"category": "210/216/sonstige_autos"}
+
+    @staticmethod
+    def _input_element(*, input_type:str = "number", element_id:str | None = "attributes.quantity") -> MagicMock:
+        """Build a typed fake input with the field attributes needed for verification."""
+        element = MagicMock(spec = Element)
+        element.local_name = "input"
+        element.attrs = {"id": element_id, "name": "attributeMap[quantity]", "type": input_type, "role": None}
+        element.apply = AsyncMock()
+        return element
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("input_type", "expected"), [("number", "48127"), ("text", "Code A7"), ("", "Identifier X")])
+    async def test_repairs_values_lost_during_form_filling(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], input_type:str, expected:str,
+    ) -> None:
+        """Native repair must restore numeric and text values before submission."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": expected}})
+        element = self._input_element(input_type = input_type)
+        element.apply.side_effect = ["", expected]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", expected)
+        assert element.apply.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_already_correct_value_is_verified_without_repair(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """Correct values remain unchanged while still participating in final verification."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.return_value = "48127"
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_not_awaited()
+        assert element.apply.await_count == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("local_name", "input_type", "role"),
+        [("select", "", None), ("input", "hidden", None), ("input", "checkbox", None),
+         ("input", "radio", None), ("button", "", "combobox"), ("input", "text", "combobox"),
+         ("input", "number", "combobox"), ("textarea", "", None), ("input", "email", None)],
+    )
+    async def test_does_not_touch_other_control_types(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], local_name:str, input_type:str, role:str | None,
+    ) -> None:
+        """The value guard must leave selections and other specialized controls alone."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element(input_type = input_type)
+        element.local_name = local_name
+        element.attrs["role"] = role
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_not_awaited()
+        element.apply.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_named_input_without_id_uses_native_element_repair(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """An ID-less input must still be repaired with safely quoted text."""
+        expected = 'Code "quoted" \\ variant'
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": expected}})
+        element = self._input_element(input_type = "text", element_id = None)
+        element.apply.side_effect = ["", None, expected]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_not_awaited()
+        assert element.apply.await_count == 3
+        assert json.dumps(expected) in element.apply.await_args_list[1].args[0]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("readback", ["", "4812"])
+    async def test_nonpersisting_repair_stops_with_validation_error(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], readback:str | None,
+    ) -> None:
+        """A concrete value that does not persist must never allow publication."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.side_effect = ["", readback]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", "48127")
+
+    @pytest.mark.asyncio
+    async def test_later_repair_cannot_clear_an_earlier_correct_input(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """Final verification must include values that did not need an initial repair."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"first_s": "48127", "second_s": "2011"}})
+        first = self._input_element(element_id = "attributes.first")
+        second = self._input_element(element_id = "attributes.second")
+        values = {"attributes.first": "48127", "attributes.second": ""}
+
+        async def read_first(_script:str) -> str:
+            """Read the first simulated field after any preceding repair."""
+            return values["attributes.first"]
+
+        async def read_second(_script:str) -> str:
+            """Read the second simulated field after any preceding repair."""
+            return values["attributes.second"]
+
+        async def repair(element_id:str, value:str) -> None:
+            """Repair a field and simulate a rerender clearing the previously correct first field."""
+            values[element_id] = value
+            if element_id == "attributes.second":
+                values["attributes.first"] = ""
+
+        first.apply.side_effect = read_first
+        second.apply.side_effect = read_second
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = [first, second, first, second]),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = repair) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.second", "2011")
+        assert first.apply.await_count == 2
+        assert not values["attributes.first"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("failure", [TimeoutError("field disappeared"), AssertionError("no candidates")])
+    async def test_missing_configured_attribute_remains_retryable(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], failure:Exception,
+    ) -> None:
+        """A missing required field must stop submission while permitting a retry."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = failure),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            pytest.raises(TimeoutError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reresolves_inputs_replaced_by_a_repair(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """Final verification must read the current element after a React remount."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        replaced = self._input_element()
+        replaced.apply.return_value = ""
+        current = self._input_element()
+        current.apply.return_value = "48127"
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = [replaced, current]),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", "48127")
+        replaced.apply.assert_awaited_once()
+        current.apply.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_detached_input_can_be_repaired_and_verified(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """A detached first read can recover when the live input accepts native repair."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.side_effect = [None, "48127"]
+
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+        native_setter.assert_awaited_once_with("attributes.quantity", "48127")
+
+    @pytest.mark.asyncio
+    async def test_unavailable_optional_condition_does_not_block_verification(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """Category-specific condition controls retain their optional behavior."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"condition_s": "good"}})
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock,
+                  side_effect = AssertionError("condition lookup should be skipped")) as resolver,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()
+        resolver.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("phase", ["initial", "final", "repair"])
+    @pytest.mark.parametrize("failure_type", [TimeoutError, ProtocolException])
+    async def test_browser_failure_before_submission_remains_retryable(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], phase:str, failure_type:type[Exception],
+    ) -> None:
+        """Transient browser failures must not be reported as rejected ad values."""
+        failure = failure_type("browser connection lost")
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.side_effect = [failure] if phase == "initial" else (["48127", failure] if phase == "final" else [""])
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock, side_effect = failure) as native_setter,
+            pytest.raises(failure_type) as error,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        assert error.value is failure
+        if phase != "repair":
+            native_setter.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", ["160", "210/223/sonstige_autoteile", "210/1216/other"])
+    async def test_other_categories_do_not_resolve_or_change_attributes(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], category:str,
+    ) -> None:
+        """The car workaround must not add DOM lookups or repairs to other ads."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"category": category, "special_attributes": {"condition_s": "good", "quantity_s": "7"}})
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock) as find_all,
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        find_all.assert_not_awaited()
+        native_setter.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("displayed", ["150.000", "150 000", "150\u00a0000", "150\u202f000"])
+    async def test_formatted_mileage_is_equal_without_repair(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], displayed:str,
+    ) -> None:
+        """The vehicle editor's integer grouping separators must not cause rejection."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"autos.km_s": "150000"}})
+        element = self._input_element(input_type = "text")
+        element.apply.return_value = displayed
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()
+        assert element.apply.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_lost_mileage_can_be_restored_with_formatted_readback(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """A successful repair may be reformatted by the vehicle editor."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"autos.km_s": "150000"}})
+        element = self._input_element(input_type = "text")
+        element.apply.side_effect = ["", "150.000"]
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_awaited_once_with("attributes.quantity", "150000")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("expected", "displayed"), [
+        ("2", "2.0"), ("100", "1e2"), ("0.5", ".5"), (".5", "0.5"), ("-0.5", "-.5"), ("50", ".5e2"),
+    ])
+    async def test_number_input_compares_decimal_values(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], expected:str, displayed:str,
+    ) -> None:
+        """HTML number inputs can represent the same decimal value differently."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": expected}})
+        element = self._input_element()
+        element.apply.return_value = displayed
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("key", "input_type", "expected", "displayed"),
+        [
+            ("serial_s", "text", "150000", "150.000"),
+            ("serial_s", "text", "00123", "123"),
+            ("serial_s", "text", "Code A7", "CodeA7"),
+            ("autos.km_s", "text", "150000", "150,000"),
+            ("autos.km_s", "text", "150000", "150000 km"),
+            ("autos.km_s", "text", "150000", "150.000,0"),
+            ("quantity_s", "number", "1.5", "15"),
+            ("quantity_s", "number", "1.5", "1,5"),
+            ("quantity_s", "number", "150000", "150.000"),
+            ("autos.km_s", "number", "150000", "150.000"),
+            ("quantity_s", "number", "0.5", "NaN"),
+            ("quantity_s", "number", "0.5", "Infinity"),
+            ("quantity_s", "number", "0.5", "-Infinity"),
+            # Real number inputs sanitize configured nonfinite values to empty.
+            ("quantity_s", "number", "NaN", ""),
+            ("quantity_s", "number", "Infinity", ""),
+            ("quantity_s", "number", "-Infinity", ""),
+        ],
+    )
+    async def test_text_and_decimal_meaning_is_not_removed(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], key:str, input_type:str, expected:str, displayed:str,
+    ) -> None:
+        """Numeric coercion must not hide identifiers, units, or changed decimal values."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {key: expected}})
+        element = self._input_element(input_type = input_type)
+        element.apply.return_value = displayed
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as native_setter,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(AdFormValidationError),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        native_setter.assert_awaited_once_with("attributes.quantity", expected)
+
+    @pytest.mark.asyncio
+    async def test_detached_final_input_remains_retryable(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any],
+    ) -> None:
+        """A detached node cannot prove deterministic rejection of the configured value."""
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.side_effect = ["48127", None]
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, return_value = element),
+            pytest.raises(TimeoutError, match = "Could not verify text attribute"),
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("phase", ["initial", "final"])
+    @pytest.mark.parametrize("failure_type", [TimeoutError, ProtocolException])
+    async def test_resolver_browser_failure_remains_retryable(
+        self, test_bot:KleinanzeigenBot, vehicle_ad_config:dict[str, Any], phase:str, failure_type:type[Exception],
+    ) -> None:
+        """Connection and lookup failures preserve their original exception identity."""
+        failure = failure_type("browser connection lost")
+        ad_cfg = Ad.model_validate(vehicle_ad_config | {"special_attributes": {"quantity_s": "48127"}})
+        element = self._input_element()
+        element.apply.return_value = "48127"
+        resolutions = [failure] if phase == "initial" else [element, failure]
+        with (
+            patch("kleinanzeigen_bot.publishing_form._resolve_special_attribute_element", new_callable = AsyncMock, side_effect = resolutions),
+            pytest.raises(failure_type) as error,
+        ):
+            await verify_text_special_attributes(test_bot, ad_cfg)
+        assert error.value is failure
