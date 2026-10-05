@@ -263,6 +263,10 @@ kleinanzeigen_bot/published_ads.py:
 #################################################
 kleinanzeigen_bot/publishing_form.py:
 #################################################
+  verify_text_special_attributes:
+    "Could not verify text attribute '%s' before submission.": "Texteingabe für Attribut '%s' konnte vor dem Absenden nicht geprüft werden."
+    "Text attribute '%s' did not retain the configured value.": "Attribut '%s' hat den konfigurierten Wert nicht beibehalten."
+
   _open_shipping_size_selection:
     "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
 
