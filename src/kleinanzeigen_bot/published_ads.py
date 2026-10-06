@@ -22,6 +22,7 @@ def _published_ad_state_label(state:Any) -> str:
         case "active":
             return _("active")
         case "paused":
+            # The API reports a reserved ad as "paused" (see reserve_flow.STATE_RESERVED).
             return _("reserved")
         case "inactive":
             return _("inactive")
