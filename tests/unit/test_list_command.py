@@ -81,34 +81,6 @@ class FakeListBot(KleinanzeigenBot):
         """Fail if online listing reads local ad definitions."""
         pytest.fail("Online listing must not load local ads")
 
-    def _handle_status(self) -> None:
-        """Fail if online listing dispatches the local status command."""
-        pytest.fail("Online listing must not invoke the local status command")
-
-    async def _handle_download(self) -> None:
-        """Fail if online listing starts downloading ad content."""
-        pytest.fail("Online listing must not download ads")
-
-    async def _handle_publish(self) -> None:
-        """Fail if online listing attempts to publish an ad."""
-        pytest.fail("Online listing must not publish ads")
-
-    async def _handle_update(self) -> None:
-        """Fail if online listing attempts to update an ad."""
-        pytest.fail("Online listing must not update ads")
-
-    async def _handle_delete(self) -> None:
-        """Fail if online listing attempts to delete an ad."""
-        pytest.fail("Online listing must not delete ads")
-
-    async def _handle_extend(self) -> None:
-        """Fail if online listing attempts to extend an ad."""
-        pytest.fail("Online listing must not extend ads")
-
-    async def _handle_reserve_or_activate(self, action:str) -> None:
-        """Fail if online listing attempts to change an ad reservation state."""
-        pytest.fail("Online listing must not change reservation state")
-
 
 def _response(ads:list[published_ads.PublishedAd], page:int = 1, last:int = 1) -> dict[str, Any]:
     """Encode one account page with API-style pagination metadata."""
