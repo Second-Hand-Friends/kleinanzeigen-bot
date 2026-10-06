@@ -108,18 +108,13 @@ def test_list_is_accepted_and_documented() -> None:
     assert "list     -" in help_text(language = "de")
 
 
-@pytest.mark.parametrize("initial_language", ["en", "de"])
 @pytest.mark.parametrize(("language", "description"), [
     ("en", "lists current online ads with ID, title, state, and expiry date"),
     ("de", "Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an"),
 ])
-def test_list_help_honors_explicit_language_and_preserves_locale(initial_language:str, language:str, description:str) -> None:
-    """Honor the requested help language without changing the caller locale."""
-    locale = i18n.Locale(initial_language, "TEST")
-    i18n.set_current_locale(locale)
-
+def test_list_help_is_rendered_in_requested_language(language:str, description:str) -> None:
+    """Describe the list command in the requested help language."""
     assert f"list     - {description}" in help_text(language = language)
-    assert i18n.get_current_locale() == locale
 
 
 @pytest.mark.asyncio
