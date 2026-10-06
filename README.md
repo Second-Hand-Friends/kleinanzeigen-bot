@@ -28,6 +28,7 @@
 ### Key Features
 
 - **Automated Publishing**: Publish new listings from YAML/JSON configuration files
+- **Vehicle Package Selection**: Configure `publishing.package_selection: BASIS` to automatically select the verified free Basis package and submit the listing. Without this explicit setting, the default `MANUAL` leaves package selection and publication to you in the browser.
 - **Smart Republishing**: Automatically republish listings at configurable intervals to keep them at the top of search results
 - **Bulk Management**: Update or delete multiple listings at once
 - **Download Listings**: Download existing listings from your profile to local configuration files

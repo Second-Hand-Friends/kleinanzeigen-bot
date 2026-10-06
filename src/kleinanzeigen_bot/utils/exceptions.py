@@ -16,6 +16,10 @@ class CaptchaEncountered(KleinanzeigenBotError):
         self.restart_delay = restart_delay
 
 
+class ManualPackageSelectionRequiredError(KleinanzeigenBotError):
+    """Package selection requires an interactive session before the final submission."""
+
+
 class PublishSubmissionUncertainError(KleinanzeigenBotError):
     """Raised when publish submission may have reached the server state boundary."""
 

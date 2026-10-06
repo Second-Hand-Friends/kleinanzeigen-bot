@@ -12,7 +12,7 @@ import os
 from collections.abc import Generator, Iterator
 from contextlib import ExitStack, contextmanager
 from pathlib import Path, PureWindowsPath
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
@@ -26,7 +26,13 @@ from kleinanzeigen_bot.model.config_model import (
 )
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError, open_ad_for_edit
-from kleinanzeigen_bot.utils.exceptions import AdBatchError, AdFormValidationError, CategoryResolutionError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import (
+    AdBatchError,
+    AdFormValidationError,
+    CategoryResolutionError,
+    ManualPackageSelectionRequiredError,
+    PublishSubmissionUncertainError,
+)
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 from tests.conftest import build_published_ads, build_update_ad
 
@@ -63,13 +69,20 @@ class TestBatchValidationFailures:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("operation", ["publish", "update"])
-    async def test_continues_after_rejection_and_reports_failed_batch(
-        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], operation:str, caplog:pytest.LogCaptureFixture,
+    @pytest.mark.parametrize(("failure", "expected_message"), [
+        (AdFormValidationError("Art: Bitte gib einen Wert ein."), "Correct the ad configuration before retrying."),
+        (
+            ManualPackageSelectionRequiredError("manual package selection needs a terminal"),
+            "Run in an interactive terminal or explicitly configure publishing.package_selection: BASIS.",
+        ),
+    ], ids = ["form-validation", "manual-package-selection"])
+    async def test_continues_after_nonretryable_failure_and_reports_failed_batch(
+        self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], operation:str,
+        failure:AdFormValidationError | ManualPackageSelectionRequiredError, expected_message:str, caplog:pytest.LogCaptureFixture,
     ) -> None:
-        """Reject invalid ads once, process the next ad, then fail the overall run."""
+        """Reject an ad once, process the next ad, and report the required corrective action."""
         rejected = build_update_ad(base_ad_config, 101, "Invalid Ad")
         good = build_update_ad(base_ad_config, 102, "Valid Test Ad")
-        failure = AdFormValidationError("Art: Bitte gib einen Wert ein.")
         test_bot.keep_old_ads = True
         with (
             patch(
@@ -89,8 +102,10 @@ class TestBatchValidationFailures:
         diagnostics.assert_awaited_once()
         assert diagnostics.await_args is not None
         assert diagnostics.await_args.args[-1] is failure
-        assert "Art: Bitte gib einen Wert ein." in caplog.text
-        assert "Correct the ad configuration before retrying." in caplog.text
+        assert str(failure) in caplog.text
+        assert expected_message in caplog.text
+        assert "Manual recovery required" not in caplog.text
+        assert "reached submit boundary" not in caplog.text
         assert "1 ad (1 failed)" in caplog.text
 
 
@@ -961,6 +976,13 @@ class TestPublishAdPostSubmitUncertainty:
             include_success_mocks: If True, also mock dicts.save_dict (for success-path tests).
         """
         test_bot.page = mock_page
+        scripted_responses = iter(web_execute_side_effect) if web_execute_side_effect is not None else None
+
+        def execute(script:str) -> Any:
+            """Keep final-click responses separate from confirmation and referrer values."""
+            if "const action =" in script and "const labels =" in script:
+                return "submit" if 'const action = "inspect"' in script else True
+            return next(scripted_responses) if scripted_responses is not None else None
 
         common_patches:list[Any] = [
             patch("kleinanzeigen_bot.publishing_workflow.open_ad_for_edit", new_callable = AsyncMock),
@@ -975,7 +997,7 @@ class TestPublishAdPostSubmitUncertainty:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = web_execute_side_effect),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
             patch.object(test_bot, "web_find", new_callable = AsyncMock),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
@@ -1242,6 +1264,9 @@ class TestAutoPriceReductionDispatch:
         mock_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
 
         async def mock_web_execute_price_reduction(script:str) -> Any:
+            """Return explicit button acknowledgement and stable confirmation data."""
+            if "const action =" in script and "const labels =" in script:
+                return "submit" if 'const action = "inspect"' in script else True
             if "window.location.href" in script:
                 return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
             return mock_response
@@ -1421,3 +1446,32 @@ async def test_open_ad_for_edit_uses_overview_clicks(test_bot:KleinanzeigenBot, 
         call(By.CSS_SELECTOR, '#nav-sub-menu a[href="/m-meine-anzeigen.html"]'),
     ]
     assert edit_link.click.await_count == (0 if found_page is None else 1)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("package_selection", ["BASIS", "MANUAL"])
+async def test_publish_ad_passes_configured_package_selection(
+    test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any], package_selection:Literal["BASIS", "MANUAL"], tmp_path:Path,
+) -> None:
+    """The publishing config reaches the submission boundary for new ads."""
+    test_bot.config.publishing.package_selection = package_selection
+    ad_cfg = Ad.model_validate(base_ad_config | {"id": None})
+    ad_cfg_orig = ad_cfg.model_dump()
+    ad_file = str(tmp_path / "ad.yaml")
+    with (
+        patch.object(test_bot, "web_open", new_callable = AsyncMock),
+        patch.object(test_bot, "dismiss_consent_banner", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.price_reduction.apply_auto_price_reduction"),
+        patch("kleinanzeigen_bot.publishing_form.fill_ad_form", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.publishing_submission.submit_and_confirm_ad", new_callable = AsyncMock,
+              return_value = 12345) as submit,
+        patch("kleinanzeigen_bot.publishing_persistence.persist_published_ad"),
+    ):
+        await test_bot.publish_ad(
+            ad_file, ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.REPLACE,
+        )
+    submit.assert_awaited_once_with(
+        test_bot, ad_file, ad_cfg, AdUpdateStrategy.REPLACE,
+        captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+        known_published_ad_ids = None, package_selection = package_selection,
+    )
