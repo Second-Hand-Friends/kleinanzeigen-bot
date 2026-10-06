@@ -117,10 +117,9 @@ jobs:
 
 
     steps:
-    - name: "Show: GitHub context"
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: printf '%s' "$GITHUB_CONTEXT" | python -m json.tool
+    - name: "Show: GitHub event"
+      # Read from disk to avoid Linux's per-environment-variable size limit.
+      run: python -m json.tool "$GITHUB_EVENT_PATH"
 
 
     - name: "Show: environment variables"
@@ -140,12 +139,25 @@ jobs:
       if: startsWith(matrix.os, 'ubuntu')
       run: |
         if ! hash chromium &>/dev/null; then
-          sudo apt-get install -y --no-install-recommends \
-            -o Dpkg::Progress-Fancy=0 \
-            -o Dpkg::Use-Pty=0 \
-            -o Acquire::Progress-Fancy=0 \
-            -o APT::Color=0 \
-            chromium
+          # Ubuntu's package may download Chromium through Snap; retry the whole installation on transient failures.
+          for attempt in 1 2 3; do
+            if sudo apt-get install -y --no-install-recommends \
+              -o Dpkg::Progress-Fancy=0 \
+              -o Dpkg::Use-Pty=0 \
+              -o Acquire::Progress-Fancy=0 \
+              -o APT::Color=0 \
+              chromium; then
+              break
+            else
+              install_status=$?
+            fi
+            if [[ "$attempt" == 3 ]]; then
+              echo "::error::Chromium installation failed after 3 attempts."
+              exit "$install_status"
+            fi
+            echo "::warning::Chromium installation failed (attempt ${attempt}/3); retrying in 10 seconds."
+            sleep 10
+          done
         fi
 
 
@@ -503,10 +515,9 @@ jobs:
     concurrency: publish-${{ github.ref_name }}-release # https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#jobsjob_idconcurrency
 
     steps:
-    - name: "Show: GitHub context"
-      env:
-        GITHUB_CONTEXT: ${{ toJSON(github) }}
-      run: printf '%s\n' "$GITHUB_CONTEXT"
+    - name: "Show: GitHub event"
+      # Read from disk to avoid Linux's per-environment-variable size limit.
+      run: python -m json.tool "$GITHUB_EVENT_PATH"
 
 
     - name: "Show: environment variables"

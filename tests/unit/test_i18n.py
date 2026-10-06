@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+import os
+from types import SimpleNamespace
+
 import pytest
 from _pytest.monkeypatch import MonkeyPatch  # pylint: disable=import-private-name
 
@@ -8,7 +11,7 @@ from kleinanzeigen_bot.utils import i18n
 
 
 @pytest.mark.parametrize(("lang", "expected"), [
-    (None, ("en", "US", "UTF-8")),  # Test with no LANG variable (should default to ("en", "US", "UTF-8"))
+    (None, ("en", "US", "UTF-8")),  # No LANG: use the mocked English Windows UI language or the POSIX default.
     ("fr", ("fr", None, "UTF-8")),  # Test with just a language code
     ("fr_CA", ("fr", "CA", "UTF-8")),  # Test with language + region, no encoding
     ("pt_BR.iso8859-1", ("pt", "BR", "ISO8859-1")),  # Test with language + region + encoding
@@ -23,9 +26,23 @@ def test_detect_locale(monkeypatch:MonkeyPatch, lang:str | None, expected:i18n.L
     else:
         monkeypatch.setenv("LANG", lang)
 
+    # Keep the no-LANG case independent of the host's Windows UI language.
+    kernel32 = SimpleNamespace(GetUserDefaultUILanguage = lambda: 0x0409)
+    monkeypatch.setattr(i18n, "ctypes", SimpleNamespace(windll = SimpleNamespace(kernel32 = kernel32)))
+
     # Call the function and compare the result to the expected output.
     result = i18n._detect_locale()  # pylint: disable=protected-access
     assert result == expected, f"For LANG={lang}, expected {expected} but got {result}"
+
+
+def test_detect_locale_uses_windows_ui_language_without_lang(monkeypatch:MonkeyPatch) -> None:
+    """Detect German Windows UI language without depending on the test host."""
+    # Replace module bindings without changing os.name for pytest or pathlib.
+    monkeypatch.setattr(i18n, "os", SimpleNamespace(name = "nt", environ = {}, path = os.path))
+    kernel32 = SimpleNamespace(GetUserDefaultUILanguage = lambda: 0x0407)
+    monkeypatch.setattr(i18n, "ctypes", SimpleNamespace(windll = SimpleNamespace(kernel32 = kernel32)))
+
+    assert i18n._detect_locale() == i18n.Locale("de", "DE", "UTF-8")  # pylint: disable=protected-access
 
 
 @pytest.mark.parametrize(("lang", "noun", "count", "prefix_with_count", "expected"), [

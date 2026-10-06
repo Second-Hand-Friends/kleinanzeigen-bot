@@ -202,6 +202,7 @@ async def publish_ad(
         web, ad_file, ad_cfg, mode,
         captcha_config = config.captcha,
         root_url = root_url,
+        package_selection = config.publishing.package_selection,
         known_published_ad_ids = known_published_ad_ids,
     )
 
