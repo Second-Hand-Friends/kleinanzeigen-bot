@@ -734,3 +734,36 @@ class TestPublishedAdsRecovery:
             )
 
         redirect_recover_mock.assert_not_awaited()
+
+
+class TestEncodedTitleRecovery:
+    """API encoding may differ while old/new IDs still determine uniqueness."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("title", "online_title"), [
+        ("Matiz HU 10/2027", "Matiz HU 10&#x2F;2027"),
+        ("Suit & undergarment", "Suit &amp; undergarment"),
+        ("Literal &amp; text", "Literal &amp; text"),
+    ])
+    async def test_recovers_new_id_from_equivalent_title(self, test_bot:KleinanzeigenBot, title:str, online_title:str) -> None:
+        """Recover the unique new ad when online titles encode equivalent HTML entities."""
+        with patch(
+            "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads", new_callable = AsyncMock,
+            return_value = [{"id": 10, "title": online_title}, {"id": 11, "title": online_title}],
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot, root_url = test_bot.root_url, title = title, known_published_ad_ids = frozenset({10}),
+            )
+        assert result == 11
+
+    @pytest.mark.asyncio
+    async def test_equivalent_title_ambiguity_does_not_choose_an_id(self, test_bot:KleinanzeigenBot) -> None:
+        """Refuse recovery when equivalent decoded titles match multiple new ads."""
+        with patch(
+            "kleinanzeigen_bot.publishing_submission.published_ads.fetch_published_ads", new_callable = AsyncMock,
+            return_value = [{"id": 11, "title": "Matiz HU 10/2027"}, {"id": 12, "title": "Matiz HU 10&#x2F;2027"}],
+        ):
+            result = await publishing_submission._try_recover_ad_id_from_published_ads(
+                test_bot, root_url = test_bot.root_url, title = "Matiz HU 10/2027", known_published_ad_ids = frozenset({10}),
+            )
+        assert result is None
