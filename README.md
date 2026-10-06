@@ -31,6 +31,7 @@
 - **Smart Republishing**: Automatically republish listings at configurable intervals to keep them at the top of search results
 - **Bulk Management**: Update or delete multiple listings at once
 - **Download Listings**: Download existing listings from your profile to local configuration files
+- **List Online Listings**: View current account listings with IDs, status, and expiry dates
 - **Extend Listings**: Extend ads close to expiry to keep watchers/savers and preserve the monthly ad quota
 - **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
 - **Flexible Configuration**: Configure defaults once, override per listing as needed
@@ -219,6 +220,7 @@ Commands:
   create-config - creates a new default configuration file if one does not exist
   diagnose - diagnoses browser connection issues and shows troubleshooting information
   status   - shows ad status and APR preview details
+  list     - lists current online ads with ID, title, state, and expiry date
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -262,6 +264,12 @@ Options:
   -v, --verbose     - enables verbose output - only useful when troubleshooting issues
 ```
 <!-- readme-usage:generated:end -->
+
+`kleinanzeigen-bot list` logs in and reads your current online listings, showing
+each listing's ID, title, status, and expiry date when available. It does not
+download listings or change them. In a source checkout, use `pdm run app list`.
+This differs from `status`, which describes only local ad files. If the online
+list cannot be fetched completely, `list` fails instead of showing a partial list.
 
 `publish` and `update` process the remaining ads when an individual ad fails, then
 exit with status `1` if any ads failed. Visible form-validation errors include the
