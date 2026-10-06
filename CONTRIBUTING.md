@@ -339,6 +339,6 @@ See the [LICENSE.txt](LICENSE.txt) file for our project's licensing. All source 
 - For every user-facing message, a **German translation** must be added to `src/kleinanzeigen_bot/resources/translations.de.yaml`.
 - Log messages are auto-translated by `TranslatingLogger`; do not wrap `LOG.*`/`logger.*` message strings with `_()`.
 - Non-log user-facing strings (e.g., `print`, `ainput`, exceptions, validation messages) should use `_()`.
-- Use the translation system for all output—**never hardcode German or other languages** in the code.
+- Use the translation system for all output—**never hardcode German or other languages** in the code. The one exception is the CLI help text (`help_text()` in `cli.py`), which keeps a complete English and a complete German text block; add new commands and options to both blocks instead of using `_()`.
 - If you add or change a user-facing message, update the translation file and ensure that translation completeness tests pass (`tests/unit/test_translations.py`).
 - Review the translation guidelines and patterns in the codebase for correct usage.

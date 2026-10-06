@@ -30,9 +30,6 @@ kleinanzeigen_bot/captcha_flow.py:
 #################################################
 kleinanzeigen_bot/cli.py:
 #################################################
-  help_text:
-    "lists current online ads with ID, title, state, and expiry date": "Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an"
-
   parse_args:
     "Use --help to display available options.": "Mit --help können die verfügbaren Optionen angezeigt werden."
     "Unknown command: %s": "Unbekannter Befehl: %s"
