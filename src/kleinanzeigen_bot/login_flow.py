@@ -924,6 +924,7 @@ async def has_logged_in_marker(web:WebScrapingMixin, *, username:str) -> bool:
         else:
             raise
 
+    LOG.debug("Login marker not found. Page layout: %s", await web.page_layout_summary())
     return False
 
 

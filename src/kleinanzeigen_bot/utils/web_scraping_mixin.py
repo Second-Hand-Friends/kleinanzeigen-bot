@@ -1369,6 +1369,25 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         return result
 
+    async def page_layout_summary(self) -> dict[str, Any]:
+        """Return layout hints of the current page for troubleshooting; never raises.
+
+        ``astro_islands > 0`` identifies the redesigned (Astro) layout, ``category_ids`` lists the
+        category links currently offered, ``inner_width`` reveals hidden ``md:block`` headers.
+        """
+        try:
+            result = await self.web_execute("""(() => ({
+                astro_islands: document.querySelectorAll('astro-island').length,
+                logged_in_marker: !!document.querySelector('[data-testid="logged-in-user"]'),
+                category_ids: [...document.querySelectorAll('[id^="cat_"]')].map(e => e.id).slice(0, 30),
+                category_picker: !!document.getElementById('ad-category-picker'),
+                inner_width: window.innerWidth,
+                ready_state: document.readyState,
+            }))()""")
+        except Exception as ex:  # noqa: BLE001 diagnostics must never break the workflow
+            return {"unavailable": str(ex)}
+        return {"url": self.page.url, **result} if isinstance(result, dict) else {"url": self.page.url, "raw": result}
+
     async def web_set_input_value(self, element_id:str, value:str) -> None:
         """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""
         await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent

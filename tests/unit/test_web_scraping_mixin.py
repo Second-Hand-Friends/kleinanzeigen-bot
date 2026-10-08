@@ -1077,6 +1077,14 @@ class TestWebScrapingSessionManagement:
     """Test session management edge cases in WebScrapingMixin."""
 
     @pytest.mark.asyncio
+    async def test_page_layout_summary_reports_layout_and_never_raises(self, web_scraper:WebScrapingMixin) -> None:
+        cast(Any, web_scraper).web_execute = AsyncMock(return_value = {"astro_islands": 4})
+        assert await web_scraper.page_layout_summary() == {"url": "https://example.com", "astro_islands": 4}
+
+        cast(Any, web_scraper).web_execute = AsyncMock(side_effect = RuntimeError("boom"))
+        assert await web_scraper.page_layout_summary() == {"unavailable": "boom"}
+
+    @pytest.mark.asyncio
     async def test_close_browser_session_cleans_up_resources(self) -> None:
         """Ensure browser and page references are cleared and child processes are killed."""
         scraper = WebScrapingMixin()
