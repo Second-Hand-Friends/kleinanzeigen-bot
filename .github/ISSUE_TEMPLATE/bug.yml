@@ -79,7 +79,7 @@ body:
       description: |
         Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
 
-        For publish problems, also set `diagnostics.capture_on.publish: true` in your `config.yaml`, rerun, and attach the generated `publish_error_*.json` (it contains no HTML dump) from the diagnostics folder. See [diagnostics](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/docs/CONFIGURATION.md#diagnostics).
+        For publish problems, also set `diagnostics.capture_on.publish: true` in your `config.yaml`, rerun, and attach the generated `publish_error_*.json` from the diagnostics folder. ⚠️ It contains your full ad config (title, description, contact name/address/phone), so review and redact it before posting. Do not attach the HTML dump or log copy without checking them for personal data (e.g. your account email). See [diagnostics](https://github.com/Second-Hand-Friends/kleinanzeigen-bot/blob/main/docs/CONFIGURATION.md#diagnostics).
     validations:
       required: false
 
