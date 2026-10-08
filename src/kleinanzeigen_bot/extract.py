@@ -773,6 +773,7 @@ class AdExtractor(WebScrapingMixin):
                 return null;
             })()""")
             if not raw or not isinstance(raw, str):
+                LOG.debug("No Astro island with ad data found on %s", self.page.url)
                 return {}
             # getAttribute() returns an HTML-decoded value. Parse it directly
             # first so entity-like content inside JSON strings is preserved.

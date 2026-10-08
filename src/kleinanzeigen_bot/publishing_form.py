@@ -103,6 +103,7 @@ async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str
 
     # click on something to trigger automatic category detection
     await web.web_click(By.ID, "ad-description")
+    LOG.debug("Category form layout before selection: %s", await web.page_layout_summary())
 
     is_category_auto_selected = False
     category_path_elem = await web.web_probe(By.ID, "ad-category-path")
@@ -129,6 +130,7 @@ async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str
             try:
                 await web.web_click(By.ID, f"cat_{segment}")
             except TimeoutError:
+                LOG.warning("Category element 'cat_%s' not found. Page layout: %s", segment, await web.page_layout_summary())
                 if await web.web_probe(By.ID, "ad-category-picker", timeout = web.timeout("quick_dom")) is None:
                     raise
                 await resolve_category_suggestions(web, category)

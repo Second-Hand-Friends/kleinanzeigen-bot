@@ -481,6 +481,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             "timestamp": _misc.now().isoformat(timespec = "seconds"),
             "attempt": attempt,
             "page_url": getattr(page, "url", None),
+            "page_layout": await self.page_layout_summary(),
             "exception": {
                 "type": exc.__class__.__name__,
                 "message": str(exc),
