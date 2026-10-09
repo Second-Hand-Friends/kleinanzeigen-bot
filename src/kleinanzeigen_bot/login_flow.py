@@ -36,7 +36,7 @@ _STALE_NODE_PROTOCOL_ERROR_MESSAGE:Final[str] = "could not find node with given 
 
 _LOGIN_DETECTION_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CLASS_NAME, "mr-medium"),
-    (By.ID, "user-email"),
+    (By.ID, "title"),
 ]
 _LOGGED_OUT_CTA_SELECTORS:Final[list[tuple["By", str]]] = [
     (By.CSS_SELECTOR, 'a[href*="einloggen"]'),
