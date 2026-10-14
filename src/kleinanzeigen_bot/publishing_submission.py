@@ -260,6 +260,12 @@ async def _click_submit_button(web:WebScrapingMixin) -> None:
     await web.web_sleep()
 
 
+_UPSELL_SKIP_LABEL_SELECTORS:Final[tuple[tuple[By, str], ...]] = (
+    (By.TEXT, "Ohne Top-Anzeige weiter"),
+    (By.TEXT, "Ohne Hochschieben weiter"),
+)
+
+
 async def _handle_post_submit_prompts(web:WebScrapingMixin, *, has_images:bool) -> None:
     """Dismiss optional prompts before waiting for publication confirmation."""
     quick_dom = web.timeout("quick_dom")
@@ -270,7 +276,14 @@ async def _handle_post_submit_prompts(web:WebScrapingMixin, *, has_images:bool) 
     upsell_dialog_text = await web.web_probe(By.TEXT, "Effektiver verkaufen", timeout = quick_dom)
     if upsell_dialog_text is not None:
         LOG.info("Dismissing upsell dialog...")
-        dismiss_btn = await web.web_find(By.TEXT, "Ohne Hochschieben weiter", timeout = quick_dom)
+        # The skip label depends on the offered feature: "Ohne Top-Anzeige weiter"
+        # (TOP_AD) or "Ohne Hochschieben weiter" (BUMP_UP). Both are current.
+        dismiss_btn, _matched_index = await web.web_find_first_available(
+            _UPSELL_SKIP_LABEL_SELECTORS,
+            timeout = quick_dom,
+            key = "quick_dom",
+            description = "upsell_dialog(skip)",
+        )
         await dismiss_btn.click()
         await web.web_sleep(500)  # let the dialog close animation finish
 
