@@ -9,6 +9,7 @@ confirmation page redirects too fast to inspect the URL directly.
 """
 
 import html
+import json
 import re
 import urllib.parse as urllib_parse
 from gettext import gettext as _
@@ -170,6 +171,8 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     """Read visible field errors from the ad form without collecting field values."""
     result = await web.web_execute(r"""
     (() => {
+        // The live editor (generic and vehicle categories) wraps #ad-title and all
+        // controls in one native <form>; without it there is nothing to inspect.
         const form = document.getElementById('ad-title')?.closest('form');
         if (!form) return [];
         const visible = element => element && element.getClientRects().length > 0
@@ -207,8 +210,24 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
             const messages = references.trim().split(/\s+/).map(id => document.getElementById(id))
                 .filter(element => element && form.contains(element) && visible(element))
                 // Descriptions can be hints; the live brand control marks its error text-critical.
-                .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], .text-critical'))
+                .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], [role="status"], .text-critical'))
                 .map(element => { reportedElements.add(element); return text(element); }).filter(Boolean);
+            if (!messages.length && !field.validationMessage && field.getAttribute('aria-invalid') === 'true') {
+                // Some fields expose an adjacent status without an ARIA reference.
+                // Only inspect a container holding this one input.
+                for (let scope = field.parentElement; scope && scope !== form; scope = scope.parentElement) {
+                    const controls = [...scope.querySelectorAll('input, select, textarea, button')].filter(visible);
+                    if (controls.length !== 1) break;
+                    const statuses = [...scope.querySelectorAll('[role="status"], [role="alert"]')].filter(visible);
+                    if (statuses.some(status => text(status))) {
+                        for (const status of statuses) {
+                            reportedElements.add(status);
+                            if (text(status)) messages.push(text(status));
+                        }
+                        break;
+                    }
+                }
+            }
             add(field, messages.join(' ') || field.validationMessage);
         }
         // The redesigned category controls reuse id="attribute-error" and do not
@@ -222,42 +241,64 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     return [error for error in result if isinstance(error, str) and error.strip()] if isinstance(result, list) else []
 
 
-async def _click_submit_button(web:WebScrapingMixin) -> None:
-    """Find and click the submit button across page variants.
+_SUBMIT_BUTTON_SCRIPT:Final[str] = r"""
+(() => {
+    const action = ACTION;
+    const visible = element => element.getClientRects().length > 0
+        && getComputedStyle(element).visibility !== 'hidden' && !element.matches(':disabled');
+    const labels = LABELS;
+    // The editor's action buttons live in the native form around #ad-title.
+    const scope = document.getElementById('ad-title')?.closest('form') || document;
+    const buttons = [...scope.querySelectorAll('button')].filter(visible);
+    // Labels in priority order: a secondary save button earlier in the DOM must not win.
+    let submit = null;
+    for (const label of labels) {
+        submit = buttons.find(button => button.textContent.trim().includes(label));
+        if (submit) break;
+    }
+    if (submit) {
+        if (action === 'inspect') return 'submit';
+        if (action !== 'submit') return false;
+        submit.click();
+        return true;
+    }
+    return false;
+})()
+""".replace("LABELS", json.dumps(_SUBMIT_LABELS))
 
-    Uses JS to locate the <button> element (not a child span/div) containing
-    the label text, ensuring the click reaches the actual button.  Wrapped in
-    ``web_await`` to retry because React may not have re-rendered the submit
-    button after a deferred title update or captcha solve.
-    """
 
-    async def _find_and_click() -> bool:
-        """Attempt to find and click a submit button for any known label."""
-        for label in _SUBMIT_LABELS:
-            clicked = await web.web_execute(f"""
-            (() => {{
-                const buttons = document.querySelectorAll('button');
-                for (const btn of buttons) {{
-                    if (btn.textContent.trim().includes('{label}')) {{
-                        btn.click();
-                        return true;
-                    }}
-                }}
-                return false;
-            }})()
-            """)
-            if clicked:
-                return True
-        return False
+async def _find_submit_button(web:WebScrapingMixin) -> object:
+    """Wait for a submit control without performing any click inside polling."""
+    async def _inspect() -> object:
+        """Read the available submit action without clicking any control."""
+        return await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("inspect")))
 
+    return await web.web_await(_inspect, timeout_error_message = str(_("Could not find submit button")))
+
+
+async def _click_final_submit_button(web:WebScrapingMixin) -> None:
+    """Attempt one final click, treating a lost response as an uncertain publish."""
     try:
-        await web.web_await(
-            _find_and_click,
-            timeout_error_message = str(_("Could not find submit button")),
-        )
-    except TimeoutError:
-        raise TimeoutError(_("Could not find submit button")) from None
-    await web.web_sleep()
+        submitted = await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("submit")))
+    except (TimeoutError, ProtocolException) as ex:
+        raise PublishSubmissionUncertainError(_("submission may have succeeded before failure")) from ex
+    if submitted is False:
+        # The script explicitly found no button and performed no click.
+        raise TimeoutError(_("Could not find submit button"))
+    if submitted is not True:
+        # The script only returns booleans; any other value means the page context
+        # changed mid-call, so a click may already have happened.
+        raise PublishSubmissionUncertainError(_("submission may have succeeded before failure"))
+
+
+async def _click_submit_button(web:WebScrapingMixin) -> None:
+    """Discover the submit control, then attempt one final click outside polling."""
+    await _find_submit_button(web)
+    await _click_final_submit_button(web)
+    try:
+        await web.web_sleep()
+    except (TimeoutError, ProtocolException) as ex:
+        raise PublishSubmissionUncertainError(_("submission may have succeeded before failure")) from ex
 
 
 _UPSELL_SKIP_LABEL_SELECTORS:Final[tuple[tuple[By, str], ...]] = (

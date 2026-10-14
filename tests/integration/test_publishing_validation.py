@@ -91,3 +91,18 @@ async def test_visible_field_errors_are_labelled_without_reading_values(web:WebS
     # A confirmation/dashboard page has no ad form, even if other errors exist.
     await web.web_execute("document.querySelector('form').remove()")
     assert await publishing_submission._get_form_validation_errors(web) == []
+
+
+async def test_native_form_summary_stays_scoped_to_its_form(web:WebScrapingMixin) -> None:
+    """An explicit form rejection summary must terminate confirmation polling."""
+    html = """<!doctype html><html><body>
+        <form><input id="ad-title" value="Synthetic listing">
+            <div id="ad-form-error">Bitte korrigiere die Anzeige.</div></form>
+        <div id="notification-error" role="alert">Unrelated application error.</div>
+    </body></html>"""
+    await web.web_execute(f"""(() => {{
+        document.open(); document.write({json.dumps(html)}); document.close();
+    }})()""")
+    assert await publishing_submission._get_form_validation_errors(web) == ["Bitte korrigiere die Anzeige."]
+    await web.web_execute("document.getElementById('ad-form-error').remove()")
+    assert await publishing_submission._get_form_validation_errors(web) == []

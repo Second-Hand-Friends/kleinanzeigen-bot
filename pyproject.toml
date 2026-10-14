@@ -69,6 +69,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "jsonschema>=4.26.0",
     "actionlint-py>=1.7.12.24",
+    "nodejs-wheel-binaries>=24.19.0",  # runs page scripts in Node.js for integration tests
 ]
 
 [project.urls]

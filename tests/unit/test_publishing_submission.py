@@ -39,6 +39,20 @@ def _make_min_ad() -> Ad:
     })
 
 
+def _confirmation_execute(url:str) -> Callable[[str], Awaitable[Any]]:
+    """Return a successful final click and the requested confirmation URL."""
+    async def execute(script:str) -> Any:
+        """Simulate submit discovery, the final click, and publication URL reads."""
+        if "const action =" in script and "const labels =" in script:
+            return "submit" if 'const action = "inspect"' in script else True
+        if "window.location.href" in script:
+            return url
+        if "document.referrer" in script:
+            return ""
+        return None
+    return execute
+
+
 def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
     """Return browser-script behavior for the redesigned ID-less success page."""
 
@@ -214,7 +228,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
         ):
@@ -254,7 +268,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [upsell_element, None, None, None]),
             patch.object(test_bot, "_web_find_once", side_effect = find_once),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
@@ -286,7 +300,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, no_image_element, None]),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
         ):
@@ -313,7 +327,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None, payment_element]),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock) as mock_scroll,
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock) as mock_ainput,
         ):
@@ -339,7 +353,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [True, TimeoutError("timed out")]),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute("https://example.invalid/edit")),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = 99999),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
@@ -364,7 +378,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = [True, TimeoutError("timed out")]),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute("https://example.invalid/edit")),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = None),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
@@ -555,7 +569,7 @@ class TestPublishedAdsRecovery:
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", True, f"{test_bot.root_url}/done"],
+                side_effect = ["", "submit", True, f"{test_bot.root_url}/done"],
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
@@ -594,7 +608,7 @@ class TestPublishedAdsRecovery:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", True, f"{test_bot.root_url}/done"]),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", "submit", True, f"{test_bot.root_url}/done"]),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
                 new_callable = AsyncMock,
@@ -630,7 +644,7 @@ class TestPublishedAdsRecovery:
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", True, f"{test_bot.root_url}/done", f"{test_bot.root_url}/done"],
+                side_effect = ["", "submit", True, f"{test_bot.root_url}/done", f"{test_bot.root_url}/done"],
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
@@ -670,7 +684,7 @@ class TestPublishedAdsRecovery:
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", True, f"{test_bot.root_url}/done"]),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", "submit", True, f"{test_bot.root_url}/done"]),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
                 new_callable = AsyncMock,
