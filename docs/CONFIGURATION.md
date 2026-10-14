@@ -271,9 +271,42 @@ Publishing configuration.
 
 ```yaml
 publishing:
+  package_selection: "MANUAL"     # one of: MANUAL (default when omitted), BASIS
   delete_old_ads: "AFTER_PUBLISH"  # one of: AFTER_PUBLISH, BEFORE_PUBLISH, NEVER
   delete_old_ads_by_title: true   # match by title before publish or for ID-less deletes; ambiguous matches are skipped
 ```
+
+`package_selection` applies when Kleinanzeigen presents a recognized package-selection
+step, such as the vehicle publishing flow:
+
+- `MANUAL` (default when omitted): Leave package selection and final publication to
+  you in the browser. Finish publishing in the browser, then press Enter in the
+  terminal so the bot can verify publication. This requires a visible browser
+  window and an interactive terminal. The bot does not choose or submit a package
+  in this mode.
+- `BASIS` (explicit opt-in): Select the Basis package, verify that it is free and
+  selected, then submit the listing. If the free package cannot be verified,
+  publication stops without selecting a paid package.
+
+To enable automatic free Basis selection, set this explicitly in your configuration:
+
+```yaml
+publishing:
+  package_selection: "BASIS"
+```
+
+The equivalent JSON configuration fragment is:
+
+```json
+{
+  "publishing": {
+    "package_selection": "BASIS"
+  }
+}
+```
+
+Publishing flows without a package-selection step continue normally. Paid packages
+are never selected automatically.
 
 ### captcha
 
