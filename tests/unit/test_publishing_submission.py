@@ -823,6 +823,13 @@ class Element {
         return selector.split(',').some(raw => {
             let part = raw.trim();
             if (part === '*') return true;
+            if (part === ':disabled') {
+                // Native semantics: own flag, or inherited from a disabled ancestor fieldset.
+                for (let element = this; element; element = element.parentElement) {
+                    if (element.disabled || (element.tagName === 'FIELDSET' && element.getAttribute('disabled') !== null)) return true;
+                }
+                return false;
+            }
             if (part.startsWith('.')) return (this.attrs.class || '').split(' ').includes(part.slice(1));
             if (part.includes(':invalid')) {
                 if (!this.invalid) return false;
@@ -875,8 +882,8 @@ def _run_dom_script(script:str, dom:dict[str, Any], *, pathname:str = "/p-anzeig
     return cast(dict[str, Any], json.loads(completed.stdout))
 
 
-def _editor_dom(*, container:str = "main", errors:bool = False) -> dict[str, Any]:
-    """Build an editor with React aria-invalid status errors and no native error."""
+def _editor_dom(*, container:str = "form", errors:bool = False) -> dict[str, Any]:
+    """Build an editor with aria-invalid status errors and no native error (live editor: one native form)."""
     return {"tag": "body", "children": [
         {"tag": container, "children": [
             {"tag": "input", "attrs": {"id": "ad-title"}},
@@ -894,18 +901,27 @@ def _editor_dom(*, container:str = "main", errors:bool = False) -> dict[str, Any
 
 
 class TestReactFormValidation:
-    """Read referenced status errors with and without a native form container."""
+    """Read referenced status errors inside the editor's native form."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("container", ["form", "main", "div"])
-    async def test_reports_referenced_react_errors_without_native_invalid_state(self, test_bot:KleinanzeigenBot, container:str) -> None:
+    async def test_reports_referenced_react_errors_without_native_invalid_state(self, test_bot:KleinanzeigenBot) -> None:
         """Report field-associated React errors even when native validity passes."""
+        with patch.object(
+            test_bot, "web_execute", new_callable = AsyncMock,
+            side_effect = lambda script: _run_dom_script(script, _editor_dom(errors = True))["result"],
+        ):
+            result = await publishing_submission._get_form_validation_errors(test_bot)
+        assert result == ["Kilometerstand: Bitte gib einen Wert ein."]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("container", ["main", "div"])
+    async def test_without_native_form_reports_nothing(self, test_bot:KleinanzeigenBot, container:str) -> None:
+        """Without a form around #ad-title there is no editor boundary, so nothing is guessed."""
         with patch.object(
             test_bot, "web_execute", new_callable = AsyncMock,
             side_effect = lambda script: _run_dom_script(script, _editor_dom(container = container, errors = True))["result"],
         ):
-            result = await publishing_submission._get_form_validation_errors(test_bot)
-        assert result == ["Kilometerstand: Bitte gib einen Wert ein."]
+            assert await publishing_submission._get_form_validation_errors(test_bot) == []
 
     @pytest.mark.asyncio
     async def test_ignores_status_hints_and_unrelated_page_errors(self, test_bot:KleinanzeigenBot) -> None:
@@ -934,26 +950,15 @@ class TestReactFormValidation:
             assert await publishing_submission._get_form_validation_errors(test_bot) == ["Bitte korrigiere die Anzeige."]
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("backing_key", "button_id"), [
-        ("autos.marke_s+autos.model_s", "autos.marke_s"),
-        ("autos.marke_s+autos.model_s", "vehicle-brand-control"),
-        ("autos.marke_s", "vehicle-brand-control"),
-    ])
-    async def test_attribute_backing_associates_its_local_combobox_error(
-        self, test_bot:KleinanzeigenBot, backing_key:str, button_id:str,
-    ) -> None:
-        """Compound names and arbitrary button IDs still identify one ad field."""
-        dom = {"tag": "body", "children": [{"children": [
+    async def test_combobox_status_error_uses_its_label(self, test_bot:KleinanzeigenBot) -> None:
+        """A redesigned combobox reports its referenced status error under its label."""
+        dom = {"tag": "body", "children": [{"tag": "form", "children": [
             {"tag": "input", "attrs": {"id": "ad-title"}},
             {"children": [
-                {"tag": "input", "hidden": True, "attrs": {"type": "hidden", "name": f"attributeMap[{backing_key}]"}},
-                {"tag": "label", "text": "Marke", "attrs": {"for": button_id}},
-                {"tag": "button", "attrs": {"id": button_id, "role": "combobox", "aria-invalid": "true", "aria-describedby": "marke-message"}},
+                {"tag": "input", "hidden": True, "attrs": {"type": "hidden", "name": "attributeMap[autos.marke_s]"}},
+                {"tag": "label", "text": "Marke", "attrs": {"for": "autos.marke_s"}},
+                {"tag": "button", "attrs": {"id": "autos.marke_s", "role": "combobox", "aria-invalid": "true", "aria-describedby": "marke-message"}},
                 {"tag": "p", "text": "Bitte waehle eine Marke.", "attrs": {"id": "marke-message", "role": "status"}},
-            ]},
-            {"children": [
-                {"tag": "button", "attrs": {"id": "foreign-control", "role": "combobox", "aria-invalid": "true", "aria-describedby": "foreign-error"}},
-                {"tag": "p", "text": "Unrelated field error.", "attrs": {"id": "foreign-error", "role": "status"}},
             ]},
         ]}]}
         with patch.object(
@@ -1023,6 +1028,78 @@ class TestSingleFinalSubmit:
                     await publishing_submission._click_submit_button(test_bot)
         assert discovery_attempts == 2
         assert clicked == [label]
+
+    @pytest.mark.asyncio
+    async def test_submit_label_priority_beats_dom_order(self, test_bot:KleinanzeigenBot) -> None:
+        """A secondary save button earlier in the DOM must not be clicked instead of the real submit."""
+        dom = {"tag": "body", "children": [{"tag": "button", "text": "Anzeige speichern"}, {"tag": "button", "text": "Anzeige aufgeben"}]}
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            result = _run_dom_script(script, dom, pathname = "/p-anzeige-aufgeben-schritt2.html")
+            clicked.extend(result["clicks"])
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            return await condition()
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await publishing_submission._click_submit_button(test_bot)
+        assert clicked == ["Anzeige aufgeben"]
+
+    @pytest.mark.asyncio
+    async def test_submit_search_stays_inside_the_editor_form(self, test_bot:KleinanzeigenBot) -> None:
+        """A higher-priority label outside the editor form (e.g. a header) must not be clicked."""
+        dom = {"tag": "body", "children": [
+            {"tag": "header", "children": [{"tag": "button", "text": "Anzeige aufgeben"}]},
+            {"tag": "form", "children": [{"tag": "input", "attrs": {"id": "ad-title"}}, {"tag": "button", "text": "Anzeige speichern"}]},
+        ]}
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            result = _run_dom_script(script, dom, pathname = "/p-anzeige-bearbeiten.html")
+            clicked.extend(result["clicks"])
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            return await condition()
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await publishing_submission._click_submit_button(test_bot)
+        assert clicked == ["Anzeige speichern"]
+
+    @pytest.mark.asyncio
+    async def test_button_disabled_by_fieldset_is_not_clicked(self, test_bot:KleinanzeigenBot) -> None:
+        """A submit button inside <fieldset disabled> cannot be clicked, so it must not count as submitted."""
+        dom = {"tag": "body", "children": [
+            {"tag": "fieldset", "attrs": {"disabled": ""}, "children": [{"tag": "button", "text": "Anzeige aufgeben"}]},
+        ]}
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            result = _run_dom_script(script, dom, pathname = "/p-anzeige-aufgeben-schritt2.html")
+            clicked.extend(result["clicks"])
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            return await condition()
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError),
+        ):
+            await publishing_submission._click_submit_button(test_bot)
+        assert clicked == []
 
 
 @pytest.mark.asyncio

@@ -171,50 +171,13 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     """Read visible field errors from the ad form without collecting field values."""
     result = await web.web_execute(r"""
     (() => {
+        // The live editor (generic and vehicle categories) wraps #ad-title and all
+        // controls in one native <form>; without it there is nothing to inspect.
+        const form = document.getElementById('ad-title')?.closest('form');
+        if (!form) return [];
         const visible = element => element && element.getClientRects().length > 0
             && getComputedStyle(element).visibility !== 'hidden';
-        const title = document.getElementById('ad-title');
-        if (!visible(title)) return [];
         const text = element => (element?.innerText || '').replace(/\s+/g, ' ').trim();
-        const nativeForm = title.closest('form');
-        const controls = [...document.querySelectorAll('input, select, textarea, button')];
-        const attributeInputs = controls.filter(element =>
-            /^attributeMap\[.+\]$/.test(element.getAttribute('name') || ''));
-        const attributeIds = new Set(attributeInputs.flatMap(element =>
-            element.getAttribute('name').slice(13, -1).split('+')));
-        const adControls = controls.filter(element => element.id.startsWith('ad-') || attributeIds.has(element.id)
-            || attributeInputs.includes(element));
-        // Compound backing names can drive one visible combobox whose ID is
-        // independent of the attribute key. Associate only a single field-local
-        // control; stop before a shared editor/app container with other fields.
-        for (const backing of attributeInputs) {
-            for (let scope = backing.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
-                const localControls = [...scope.querySelectorAll('input, select, textarea, button[role="combobox"]')].filter(visible);
-                if (!localControls.length) continue;
-                if (localControls.length === 1 && localControls[0].getAttribute('role') === 'combobox'
-                    && !adControls.includes(localControls[0])) adControls.push(localControls[0]);
-                break;
-            }
-        }
-        let form = nativeForm || title.parentElement;
-        // React has no form/main boundary. Find the smallest common editor
-        // container; never treat every input in its application root as an ad.
-        while (!nativeForm && form && !adControls.every(element => form.contains(element))) form = form.parentElement;
-        if (!form) return [];
-        const fields = [...form.querySelectorAll('input, select, textarea, button')].filter(element =>
-            nativeForm || adControls.includes(element));
-        const belongsToField = element => {
-            for (let scope = element.parentElement; scope && scope !== form; scope = scope.parentElement) {
-                const localControls = [...scope.querySelectorAll('input, select, textarea, button')];
-                if (!localControls.length) continue;
-                if (localControls.some(control => !fields.includes(control))) return false;
-                const labelledIds = new Set(localControls.filter(control => visible(control) && control.id).map(control => control.id));
-                // Hidden attribute backing inputs and their one labelled button
-                // share a field, whereas an editor-wide notification does not.
-                return labelledIds.size === 1;
-            }
-            return false;
-        };
         const labels = [...form.querySelectorAll('label')];
         const labelFor = element => {
             let scope = element;
@@ -239,7 +202,7 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
             const label = labelFor(element);
             errors.add(label ? `${label}: ${message}` : message);
         };
-        for (const field of fields.filter(element => element.matches('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid'))) {
+        for (const field of form.querySelectorAll('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid')) {
             if (!visible(field)) continue;
             const errorReferences = field.getAttribute('aria-errormessage');
             const references = errorReferences
@@ -250,13 +213,13 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
                 .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], [role="status"], .text-critical'))
                 .map(element => { reportedElements.add(element); return text(element); }).filter(Boolean);
             if (!messages.length && !field.validationMessage && field.getAttribute('aria-invalid') === 'true') {
-                // Some React fields expose an adjacent status without an ARIA
-                // reference. Only inspect a container holding this one input.
+                // Some fields expose an adjacent status without an ARIA reference.
+                // Only inspect a container holding this one input.
                 for (let scope = field.parentElement; scope && scope !== form; scope = scope.parentElement) {
                     const controls = [...scope.querySelectorAll('input, select, textarea, button')].filter(visible);
                     if (controls.length !== 1) break;
                     const statuses = [...scope.querySelectorAll('[role="status"], [role="alert"]')].filter(visible);
-                    if (statuses.length) {
+                    if (statuses.some(status => text(status))) {
                         for (const status of statuses) {
                             reportedElements.add(status);
                             if (text(status)) messages.push(text(status));
@@ -268,10 +231,9 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
             add(field, messages.join(' ') || field.validationMessage);
         }
         // The redesigned category controls reuse id="attribute-error" and do not
-        // consistently mark their inputs aria-invalid. A native form also owns
-        // its explicit error summary; React errors need a field association.
+        // consistently mark their inputs aria-invalid. Read every visible error.
         for (const error of form.querySelectorAll('[id$="-error"]')) {
-            if (visible(error) && !reportedElements.has(error) && (nativeForm || belongsToField(error))) add(error, text(error));
+            if (visible(error) && !reportedElements.has(error)) add(error, text(error));
         }
         return [...errors];
     })()
@@ -283,10 +245,17 @@ _SUBMIT_BUTTON_SCRIPT:Final[str] = r"""
 (() => {
     const action = ACTION;
     const visible = element => element.getClientRects().length > 0
-        && getComputedStyle(element).visibility !== 'hidden' && !element.disabled;
+        && getComputedStyle(element).visibility !== 'hidden' && !element.matches(':disabled');
     const labels = LABELS;
-    const buttons = [...document.querySelectorAll('button')].filter(visible);
-    const submit = buttons.find(button => labels.some(label => button.textContent.trim().includes(label)));
+    // The editor's action buttons live in the native form around #ad-title.
+    const scope = document.getElementById('ad-title')?.closest('form') || document;
+    const buttons = [...scope.querySelectorAll('button')].filter(visible);
+    // Labels in priority order: a secondary save button earlier in the DOM must not win.
+    let submit = null;
+    for (const label of labels) {
+        submit = buttons.find(button => button.textContent.trim().includes(label));
+        if (submit) break;
+    }
     if (submit) {
         if (action === 'inspect') return 'submit';
         if (action !== 'submit') return false;
@@ -317,6 +286,8 @@ async def _click_final_submit_button(web:WebScrapingMixin) -> None:
         # The script explicitly found no button and performed no click.
         raise TimeoutError(_("Could not find submit button"))
     if submitted is not True:
+        # The script only returns booleans; any other value means the page context
+        # changed mid-call, so a click may already have happened.
         raise PublishSubmissionUncertainError(_("submission may have succeeded before failure"))
 
 
