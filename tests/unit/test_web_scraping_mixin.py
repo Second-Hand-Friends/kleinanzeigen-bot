@@ -421,6 +421,23 @@ class TestWebScrapingErrorHandling:
             await web_scraper.web_open("https://example.com", timeout = 0.1)
 
     @pytest.mark.asyncio
+    async def test_web_open_accepts_interactive_document(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
+        """A usable DOM should not wait for slow subresources to reach the load event."""
+        mock_page = TrulyAwaitableMockPage()
+        mock_browser.get.return_value = mock_page
+        mock_execute = AsyncMock(return_value = True)
+        web_scraper.page = None  # type: ignore[unused-ignore,reportAttributeAccessIssue]
+
+        with (
+            patch.object(web_scraper, "web_execute", mock_execute),
+            patch.object(web_scraper, "_resize_viewport_after_open", new_callable = AsyncMock),
+            patch.object(web_scraper, "_warn_if_viewport_too_narrow", new_callable = AsyncMock),
+        ):
+            await web_scraper.web_open("https://example.com", timeout = 1)
+
+        mock_execute.assert_awaited_once_with("document.readyState === 'interactive' || document.readyState === 'complete'")
+
+    @pytest.mark.asyncio
     async def test_web_open_bounds_hanging_navigation(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
         """The page-load budget should include browser.get, not only readiness polling."""
 
