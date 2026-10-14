@@ -263,9 +263,39 @@ class TestSubmitAndConfirmAd:
         # The dismiss button is located by text and clicked directly.
         dismiss_btn.click.assert_awaited_once()
         assert any(
-            call_args.args[:2] == (By.TEXT, "Ohne Hochschieben weiter")
+            call_args.args[:2] == (By.TEXT, "Ohne Top-Anzeige weiter")
             for call_args in mock_find.await_args_list
         )
+
+    @pytest.mark.asyncio
+    async def test_dismisses_legacy_upsell_label(self, test_bot:KleinanzeigenBot) -> None:
+        """Falls back to the legacy 'Ohne Hochschieben weiter' label when the new one is absent."""
+        ad = _make_min_ad()
+        captcha_config = test_bot.config.captcha
+        dismiss_btn = AsyncMock()
+        confirmation_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [AsyncMock(), None, None, None]),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = [TimeoutError("missing"), dismiss_btn]) as mock_find,
+            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
+            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
+        ):
+            result = await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
+                captcha_config = captcha_config,
+                root_url = test_bot.root_url,
+            )
+
+        assert result == 12345
+        dismiss_btn.click.assert_awaited_once()
+        assert [call_args.args[:2] for call_args in mock_find.await_args_list][-1] == (By.TEXT, "Ohne Hochschieben weiter")
 
     @pytest.mark.asyncio
     async def test_confirms_no_image_warning(self, test_bot:KleinanzeigenBot) -> None:

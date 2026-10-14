@@ -270,7 +270,12 @@ async def _handle_post_submit_prompts(web:WebScrapingMixin, *, has_images:bool) 
     upsell_dialog_text = await web.web_probe(By.TEXT, "Effektiver verkaufen", timeout = quick_dom)
     if upsell_dialog_text is not None:
         LOG.info("Dismissing upsell dialog...")
-        dismiss_btn = await web.web_find(By.TEXT, "Ohne Hochschieben weiter", timeout = quick_dom)
+        # The dismiss button label changed from "Ohne Hochschieben weiter" to
+        # "Ohne Top-Anzeige weiter"; accept both.
+        try:
+            dismiss_btn = await web.web_find(By.TEXT, "Ohne Top-Anzeige weiter", timeout = quick_dom)
+        except TimeoutError:
+            dismiss_btn = await web.web_find(By.TEXT, "Ohne Hochschieben weiter", timeout = quick_dom)
         await dismiss_btn.click()
         await web.web_sleep(500)  # let the dialog close animation finish
 
