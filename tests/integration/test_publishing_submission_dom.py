@@ -20,7 +20,7 @@ from nodriver.core.connection import ProtocolException
 from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
-from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, ManualPackageSelectionRequiredError, PublishSubmissionUncertainError
 
 pytestmark = pytest.mark.itest
 
@@ -391,8 +391,6 @@ def _basis_dom(*, selected:bool = True) -> dict[str, Any]:
     ]}]}
 
 
-
-
 class TestFreeBasisPackage:
     """The real package script must never choose a paid or unverified option."""
 
@@ -449,7 +447,6 @@ class TestFreeBasisPackage:
         )
         assert result["result"]["state"] == "waiting"
         assert result["clicks"] == []
-
 
 
 class TestStagedPackageSubmission:
@@ -564,7 +561,6 @@ class TestPreSubmitTransportFailures:
             await publishing_submission._click_submit_button(test_bot, package_selection = "BASIS")
         assert exc_info.value is failure
         assert "Anzeige aufgeben" not in clicked
-
 
 
 class TestConfigurablePackageSelection:
@@ -716,6 +712,31 @@ class TestConfigurablePackageSelection:
                     await publishing_submission._click_submit_button(test_bot, package_selection = "MANUAL")
         assert clicked == (["Nächster Schritt"] if initial_stage == "editor" else [])
         manual_input.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_manual_without_terminal_stops_before_next_step(
+        self, test_bot:KleinanzeigenBot, monkeypatch:pytest.MonkeyPatch,
+    ) -> None:
+        """Unattended MANUAL runs must not click "Nächster Schritt", which would leave an unfinished draft (#1341)."""
+        monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+        clicked:list[str] = []
+
+        async def execute(script:str) -> Any:
+            result = _run_dom_script(script, _editor_dom(), pathname = "/p-anzeige-aufgeben-schritt2.html")
+            clicked.extend(result["clicks"])
+            return result["result"]
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            return await condition()
+
+        with (
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(ManualPackageSelectionRequiredError),
+        ):
+            await publishing_submission._click_submit_button(test_bot, package_selection = "MANUAL")
+        assert clicked == []
 
     @pytest.mark.asyncio
     async def test_incomplete_manual_submission_prevents_draft_id_recovery(self, test_bot:KleinanzeigenBot) -> None:

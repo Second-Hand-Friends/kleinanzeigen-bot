@@ -442,9 +442,11 @@ kleinanzeigen_bot/publishing_submission.py:
     "The free Basis package could not be verified; the ad was not published": "Das kostenlose Basis-Paket konnte nicht bestätigt werden; die Anzeige wurde nicht veröffentlicht"
     "submission may have succeeded before failure": "Die Anzeige wurde möglicherweise bereits vor dem Fehler veröffentlicht"
 
-  _wait_for_manual_package_submission:
+  _require_interactive_terminal:
     ? "Manual package selection requires an interactive terminal; configure publishing.package_selection: BASIS for automatic free-package publication"
     : "Die manuelle Paketauswahl benötigt ein interaktives Terminal; für die automatische Veröffentlichung mit dem kostenlosen Paket publishing.package_selection: BASIS konfigurieren"
+
+  _wait_for_manual_package_submission:
     "Manual package publication was not confirmed; check your listings before retrying": "Die manuelle Veröffentlichung wurde nicht bestätigt; bitte vor einem erneuten Versuch die Anzeigen prüfen"
     "Choose a package and finish publishing in the browser, then press Enter to continue...": "Ein Paket auswählen und die Anzeige im Browser veröffentlichen, anschließend Enter drücken..."
 
