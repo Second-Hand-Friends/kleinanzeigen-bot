@@ -270,8 +270,12 @@ class TestAdExtractorPricing:
         web_text_mock = (
             AsyncMock(side_effect = web_text_result) if web_text_result is TimeoutError else AsyncMock(return_value = web_text_result)
         )
-        with patch.object(test_extractor, "web_text", web_text_mock):
+        web_probe_mock = AsyncMock(return_value = None if web_text_result is TimeoutError else MagicMock())
+        with patch.object(test_extractor, "web_text", web_text_mock), patch.object(test_extractor, "web_probe", web_probe_mock):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
+
+        if web_text_result is TimeoutError:
+            web_text_mock.assert_not_awaited()  # absent legacy element is decided by one quick probe (#1287)
 
         assert price == 120
         assert price_type == "NEGOTIABLE"
@@ -281,7 +285,10 @@ class TestAdExtractorPricing:
     async def test_extract_pricing_give_away_from_island_when_price_element_empty(self, test_extractor:extract_module.AdExtractor) -> None:
         """Give-away pricing ignores an incidental numeric island amount."""
         island_props:dict[str, Any] = {"price": [0, {"amount": [0, 0], "type": [0, "GIVE_AWAY"]}]}
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""):
+        with (
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+        ):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
 
         assert price is None
@@ -306,7 +313,10 @@ class TestAdExtractorPricing:
     ) -> None:
         """Malformed island pricing yields a model-compatible no-price fallback."""
         island_props:dict[str, Any] = {"price": [0, {"amount": [0, amount], "type": [0, price_type]}]}
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""):
+        with (
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+        ):
             price, extracted_price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
 
         assert price is None
@@ -331,6 +341,84 @@ class TestAdExtractorPricing:
         assert any(record.name == extract_module.__name__ and record.levelname == "WARNING" for record in caplog.records)
 
 
+@pytest.mark.unit
+class TestAdExtractorLegacyProbes:
+    """Legacy lookups on redesigned pages fail fast instead of waiting for the full timeout (#1287)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("has_island_fallback", "probe_result", "expect_probe", "expect_timeout"),
+        [
+            (False, None, False, False),
+            (True, None, True, True),
+            (True, "element", True, False),
+        ],
+        ids = ["no-island-fallback-no-probe", "fallback-and-absent-fails-fast", "fallback-and-present-continues"],
+    )
+    # pylint: disable=protected-access
+    async def test_fail_fast_if_legacy_absent(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        probe_result:str | None,
+        *,
+        has_island_fallback:bool,
+        expect_probe:bool,
+        expect_timeout:bool,
+    ) -> None:
+        web_probe_mock = AsyncMock(return_value = MagicMock() if probe_result else None)
+        with patch.object(test_extractor, "web_probe", web_probe_mock):
+            if expect_timeout:
+                with pytest.raises(TimeoutError):
+                    await test_extractor._fail_fast_if_legacy_absent(
+                        has_island_fallback = has_island_fallback, selector_type = By.ID, selector_value = "viewad-price",
+                    )
+            else:
+                await test_extractor._fail_fast_if_legacy_absent(
+                    has_island_fallback = has_island_fallback, selector_type = By.ID, selector_value = "viewad-price",
+                )
+
+        assert web_probe_mock.await_count == (1 if expect_probe else 0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "island_props",
+        [
+            {"shippingHeader": [0, "Nur Abholung"]},
+            {"price": [0, {"amount": [0, None], "type": [0, "FIXED"]}]},
+        ],
+        ids = ["no-island-price", "unusable-island-price"],
+    )
+    # pylint: disable=protected-access
+    async def test_redesigned_price_keeps_full_lookup_without_usable_island_price(
+        self, test_extractor:extract_module.AdExtractor, island_props:dict[str, Any]
+    ) -> None:
+        """Island data without a usable price must not skip the regular, retrying #viewad-price lookup."""
+        web_probe_mock = AsyncMock(return_value = None)
+        with (
+            patch.object(test_extractor, "web_probe", web_probe_mock),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "25 €"),
+        ):
+            price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
+
+        assert (price, price_type) == (25, "FIXED")
+        web_probe_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_redesigned_shipping_skips_full_legacy_lookup(self, test_extractor:extract_module.AdExtractor) -> None:
+        """A missing legacy shipping element on a redesigned page goes straight to the island data."""
+        island_props:dict[str, Any] = {"shippingHeader": [0, "Nur Abholung"]}
+        web_text_mock = AsyncMock(side_effect = AssertionError("full legacy lookup must not run"))
+        with (
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "web_text", web_text_mock),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+
+        assert (shipping_type, costs, options) == ("PICKUP", None, None)
+        web_text_mock.assert_not_awaited()
+
+
 class TestAdExtractorShipping:
     """Tests for shipping related functionality."""
 
@@ -352,6 +440,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = shipping_text),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
         ):
             if expected_cost:
@@ -389,6 +478,7 @@ class TestAdExtractorShipping:
                 side_effect = TimeoutError if dom_text is None else None,
                 return_value = dom_text,
             ),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None if dom_text is None else MagicMock()),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -414,6 +504,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -450,6 +541,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -468,6 +560,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -3986,6 +4079,7 @@ class TestAdExtractorAnonymousFallback:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
         island_props:dict[str, Any] = {
+            "formattedCreationDate": [0, "03.02.2025"],
             "localizedAttributes": [
                 1,
                 [
