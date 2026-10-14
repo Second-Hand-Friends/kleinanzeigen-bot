@@ -229,13 +229,21 @@ class TestSubmitAndConfirmAd:
         mock_set_title.assert_awaited_once_with("ad-title", "Test Ad Title")
 
     @pytest.mark.asyncio
-    async def test_dismisses_upsell_dialog(self, test_bot:KleinanzeigenBot) -> None:
-        """Upsell dialog is dismissed when present."""
+    @pytest.mark.parametrize("skip_label", ["Ohne Top-Anzeige weiter", "Ohne Hochschieben weiter"], ids = ["top-ad", "bump-up"])
+    async def test_dismisses_upsell_dialog(self, test_bot:KleinanzeigenBot, skip_label:str) -> None:
+        """Upsell dialog is dismissed with whichever skip label the offered feature (TOP_AD or BUMP_UP) shows."""
         ad = _make_min_ad()
         captcha_config = test_bot.config.captcha
         upsell_element = AsyncMock()
         dismiss_btn = AsyncMock()
         confirmation_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
+        looked_up:list[str] = []
+
+        async def find_once(selector_type:By, selector_value:str, *_args:Any, **_kwargs:Any) -> AsyncMock:
+            looked_up.append(selector_value)
+            if selector_type == By.TEXT and selector_value == skip_label:
+                return dismiss_btn
+            raise TimeoutError(selector_value)
 
         with (
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
@@ -244,7 +252,7 @@ class TestSubmitAndConfirmAd:
             # First probe detects the upsell dialog (By.TEXT); remaining probes
             # (imprint, no-image hint, payment form) return None.
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [upsell_element, None, None, None]),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = dismiss_btn) as mock_find,
+            patch.object(test_bot, "_web_find_once", side_effect = find_once),
             patch.object(test_bot, "web_await", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
@@ -260,42 +268,9 @@ class TestSubmitAndConfirmAd:
         assert result == 12345
         # Submit is now performed via web_execute (JS), not web_click.
         mock_click.assert_not_awaited()
-        # The dismiss button is located by text and clicked directly.
         dismiss_btn.click.assert_awaited_once()
-        assert any(
-            call_args.args[:2] == (By.TEXT, "Ohne Top-Anzeige weiter")
-            for call_args in mock_find.await_args_list
-        )
-
-    @pytest.mark.asyncio
-    async def test_dismisses_legacy_upsell_label(self, test_bot:KleinanzeigenBot) -> None:
-        """Falls back to the legacy 'Ohne Hochschieben weiter' label when the new one is absent."""
-        ad = _make_min_ad()
-        captcha_config = test_bot.config.captcha
-        dismiss_btn = AsyncMock()
-        confirmation_url = "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
-
-        with (
-            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
-            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [AsyncMock(), None, None, None]),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = [TimeoutError("missing"), dismiss_btn]) as mock_find,
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = confirmation_url),
-            patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
-        ):
-            result = await publishing_submission.submit_and_confirm_ad(
-                test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
-                captcha_config = captcha_config,
-                root_url = test_bot.root_url,
-            )
-
-        assert result == 12345
-        dismiss_btn.click.assert_awaited_once()
-        assert [call_args.args[:2] for call_args in mock_find.await_args_list][-1] == (By.TEXT, "Ohne Hochschieben weiter")
+        # Both labels are tried in one pass, without a retry round for the first one.
+        assert looked_up == ["Ohne Top-Anzeige weiter", "Ohne Hochschieben weiter"][: looked_up.index(skip_label) + 1]
 
     @pytest.mark.asyncio
     async def test_confirms_no_image_warning(self, test_bot:KleinanzeigenBot) -> None:
