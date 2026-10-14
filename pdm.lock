@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:1dc6cea99e4aa071663592cc853a367ea8da236e7c3ed63e032b5d43b76ed112"
+content_hash = "sha256:8ca5ce14bc1445509733acdb4a204d8a82609c710a126e17799005118e2eed65"
 
 [[metadata.targets]]
 requires_python = ">=3.12,<3.16"
@@ -1141,7 +1141,7 @@ files = [
 
 [[package]]
 name = "nodriver"
-version = "0.50.3"
+version = "0.50.6"
 requires_python = ">=3.9"
 summary = "[Docs here](https://ultrafunkamsterdam.github.io/nodriver)"
 groups = ["default"]
@@ -1151,8 +1151,8 @@ dependencies = [
     "websockets>=14",
 ]
 files = [
-    {file = "nodriver-0.50.3-py3-none-any.whl", hash = "sha256:a053533108c14c309a7613445e6c7fb460b6b165c144a062e1b2f39e4f7b396b"},
-    {file = "nodriver-0.50.3.tar.gz", hash = "sha256:24ca688d8646ef8ffad5c8ce65804e5e7671a779ad26a24d76f6465d5666c631"},
+    {file = "nodriver-0.50.6-py3-none-any.whl", hash = "sha256:cdedcb2f8a5d2bbe2014139d7c84cd16d693f2bb510e3dd5370ec080e12821c6"},
+    {file = "nodriver-0.50.6.tar.gz", hash = "sha256:ea3918af54c1417f1a4bca12a023c8d7dd75673486494190c90022ad36625f3b"},
 ]
 
 [[package]]

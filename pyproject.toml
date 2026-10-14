@@ -41,7 +41,7 @@ dependencies = [
   "certifi",
   "colorama",
   "jaraco.text", # required by pkg_resources during runtime
-  "nodriver==0.50.3",
+  "nodriver==0.50.6",
   "platformdirs>=2.1.0",
   "pydantic>=2.11.0",
   "ruamel.yaml",
