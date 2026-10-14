@@ -15,7 +15,7 @@ captcha mechanics (:mod:`captcha_flow`), submit/confirm/ad-id recovery
 
 import asyncio
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from gettext import gettext as _
 from typing import Any, Final
 
@@ -89,11 +89,16 @@ async def delete_old_ad_if_needed(  # noqa: SLF001 — accessed by bot seam via 
     keep_old_ads:bool,
     config:Config,
     root_url:str,
+    known_published_ad_ids:Collection[int] | None = None,
 ) -> None:
     """Delete an old ad before or after (re-)publishing, depending on config.
 
     Skips deletion when *keep_old_ads* is True or when the configured
     ``delete_old_ads`` timing does not match *timing*.
+
+    Also skips deletion when *known_published_ad_ids* (a complete snapshot of
+    the logged-in account's ads) does not contain the ad's ID, e.g. after the
+    ad file was moved to another account. The server rejects such deletes.
 
     In ``AFTER_PUBLISH`` mode, title-based deletion is always disabled to
     avoid accidentally removing the newly published ad.
@@ -101,6 +106,12 @@ async def delete_old_ad_if_needed(  # noqa: SLF001 — accessed by bot seam via 
     if keep_old_ads:
         return
     if config.publishing.delete_old_ads != timing:
+        return
+    if ad_cfg.id is not None and known_published_ad_ids is not None and ad_cfg.id not in known_published_ad_ids:
+        LOG.warning(
+            "Skipping deletion of old ad %s for '%s': it is not listed in this account's ads.",
+            ad_cfg.id, ad_cfg.title,
+        )
         return
     delete_old_ads_by_title = (
         config.publishing.delete_old_ads_by_title
@@ -160,6 +171,7 @@ async def publish_ad(
             keep_old_ads = keep_old_ads,
             config = config,
             root_url = root_url,
+            known_published_ad_ids = known_published_ad_ids,
         )
 
         # Apply auto price reduction in REPLACE mode (republish flow)
@@ -476,6 +488,7 @@ async def publish_ads(
                 keep_old_ads = keep_old_ads,
                 config = config,
                 root_url = root_url,
+                known_published_ad_ids = known_published_ad_ids,
             )
 
     _report_batch_result(AdUpdateStrategy.REPLACE, count - failed_count, failed_count)

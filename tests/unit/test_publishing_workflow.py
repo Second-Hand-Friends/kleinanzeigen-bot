@@ -25,7 +25,7 @@ from kleinanzeigen_bot.model.config_model import (
     DiagnosticsConfig,
 )
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
-from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError, open_ad_for_edit
+from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError, delete_old_ad_if_needed, open_ad_for_edit
 from kleinanzeigen_bot.utils.exceptions import AdBatchError, AdFormValidationError, CategoryResolutionError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 from tests.conftest import build_published_ads, build_update_ad
@@ -410,6 +410,41 @@ class TestKleinanzeigenBotPublishAdsBasics:
 
             assert publish_mock.await_count == 1
             sleep_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("timing", ["BEFORE_PUBLISH", "AFTER_PUBLISH"])
+    @pytest.mark.parametrize(("listed_ids", "expect_delete"), [([42], True), ([7], False)])
+    async def test_delete_old_ad_skips_ids_not_listed_in_account(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+        caplog:pytest.LogCaptureFixture,
+        timing:str,
+        listed_ids:list[int],
+        *,
+        expect_delete:bool,
+    ) -> None:
+        """An ad ID missing from the account's complete ad list (e.g. ad file moved to another account) is not deleted (#1325)."""
+        test_bot.config.publishing.delete_old_ads = timing  # type: ignore[assignment]
+        ad_cfg = Ad.model_validate(base_ad_config | {"id": 42})
+
+        with (
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
+            caplog.at_level("WARNING"),
+        ):
+            await delete_old_ad_if_needed(
+                test_bot, ad_cfg, [],
+                timing = timing,
+                keep_old_ads = False,
+                config = test_bot.config,
+                root_url = test_bot.root_url,
+                known_published_ad_ids = frozenset(listed_ids),
+            )
+
+        assert delete_ad_mock.await_count == (1 if expect_delete else 0)
+        skipped = any("not listed in this account's ads" in record.getMessage() for record in caplog.records)
+        assert skipped is not expect_delete
+        assert ad_cfg.id == 42
 
     @pytest.mark.asyncio
     async def test_publish_ads_treats_post_publish_persistence_error_as_fail_closed(

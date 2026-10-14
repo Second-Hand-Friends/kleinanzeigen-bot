@@ -193,6 +193,9 @@ kleinanzeigen_bot/publishing_workflow.py:
     " -> effective ad meta:": " -> effektive Anzeigen-Metadaten:"
     "Post-publish persistence failed for '%s' (ad ID %s - ad is live on Kleinanzeigen but local YAML may be out of sync)": "Persistenz nach Veröffentlichung fehlgeschlagen für '%s' (Anzeigen-ID %s - Anzeige ist auf Kleinanzeigen live, aber die lokale YAML ist möglicherweise nicht synchron)"
 
+  delete_old_ad_if_needed:
+    "Skipping deletion of old ad %s for '%s': it is not listed in this account's ads.": "Löschen der alten Anzeige %s für '%s' übersprungen: Sie ist in den Anzeigen dieses Kontos nicht aufgeführt."
+
   _fetch_published_ads_for_publish:
     "Skipping title-based publishes because full published-ad list could not be fetched before publish: %s": "Titelbasierte Veröffentlichungen werden übersprungen, weil die vollständige Liste veröffentlichter Anzeigen vor der Veröffentlichung nicht abgerufen werden konnte: %s"
     "Complete published-ad snapshot unavailable; no-ID publish recovery is disabled: %s": "Vollständiger Stand der veröffentlichten Anzeigen nicht verfügbar; die Wiederherstellung nach Veröffentlichung ohne Anzeigen-ID ist deaktiviert: %s"
