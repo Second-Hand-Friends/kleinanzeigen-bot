@@ -270,8 +270,12 @@ class TestAdExtractorPricing:
         web_text_mock = (
             AsyncMock(side_effect = web_text_result) if web_text_result is TimeoutError else AsyncMock(return_value = web_text_result)
         )
-        with patch.object(test_extractor, "web_text", web_text_mock):
+        web_probe_mock = AsyncMock(return_value = None if web_text_result is TimeoutError else MagicMock())
+        with patch.object(test_extractor, "web_text", web_text_mock), patch.object(test_extractor, "web_probe", web_probe_mock):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
+
+        if web_text_result is TimeoutError:
+            web_text_mock.assert_not_awaited()  # absent legacy element is decided by one quick probe (#1287)
 
         assert price == 120
         assert price_type == "NEGOTIABLE"
@@ -281,7 +285,10 @@ class TestAdExtractorPricing:
     async def test_extract_pricing_give_away_from_island_when_price_element_empty(self, test_extractor:extract_module.AdExtractor) -> None:
         """Give-away pricing ignores an incidental numeric island amount."""
         island_props:dict[str, Any] = {"price": [0, {"amount": [0, 0], "type": [0, "GIVE_AWAY"]}]}
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""):
+        with (
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+        ):
             price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
 
         assert price is None
@@ -306,7 +313,10 @@ class TestAdExtractorPricing:
     ) -> None:
         """Malformed island pricing yields a model-compatible no-price fallback."""
         island_props:dict[str, Any] = {"price": [0, {"amount": [0, amount], "type": [0, price_type]}]}
-        with patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""):
+        with (
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
+        ):
             price, extracted_price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
 
         assert price is None
@@ -329,6 +339,55 @@ class TestAdExtractorPricing:
         assert price is None
         assert price_type == "NOT_APPLICABLE"
         assert any(record.name == extract_module.__name__ and record.levelname == "WARNING" for record in caplog.records)
+
+
+class TestAdExtractorLegacyProbes:
+    """Legacy lookups on redesigned pages fail fast instead of waiting for the full timeout (#1287)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("island_props", "probe_result", "expect_probe", "expect_timeout"),
+        [
+            ({}, None, False, False),
+            ({"formattedCreationDate": [0, "22.08.2026"]}, None, True, True),
+            ({"formattedCreationDate": [0, "22.08.2026"]}, "element", True, False),
+        ],
+        ids = ["classic-page-no-probe", "redesigned-absent-fails-fast", "redesigned-present-continues"],
+    )
+    # pylint: disable=protected-access
+    async def test_fail_fast_if_legacy_absent(
+        self,
+        test_extractor:extract_module.AdExtractor,
+        island_props:dict[str, Any],
+        probe_result:str | None,
+        *,
+        expect_probe:bool,
+        expect_timeout:bool,
+    ) -> None:
+        web_probe_mock = AsyncMock(return_value = MagicMock() if probe_result else None)
+        with patch.object(test_extractor, "web_probe", web_probe_mock):
+            if expect_timeout:
+                with pytest.raises(TimeoutError):
+                    await test_extractor._fail_fast_if_legacy_absent(island_props, By.ID, "viewad-price")
+            else:
+                await test_extractor._fail_fast_if_legacy_absent(island_props, By.ID, "viewad-price")
+
+        assert web_probe_mock.await_count == (1 if expect_probe else 0)
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_redesigned_shipping_skips_full_legacy_lookup(self, test_extractor:extract_module.AdExtractor) -> None:
+        """A missing legacy shipping element on a redesigned page goes straight to the island data."""
+        island_props:dict[str, Any] = {"shippingHeader": [0, "Nur Abholung"]}
+        web_text_mock = AsyncMock(side_effect = AssertionError("full legacy lookup must not run"))
+        with (
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_extractor, "web_text", web_text_mock),
+        ):
+            shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
+
+        assert (shipping_type, costs, options) == ("PICKUP", None, None)
+        web_text_mock.assert_not_awaited()
 
 
 class TestAdExtractorShipping:
@@ -3986,6 +4045,7 @@ class TestAdExtractorAnonymousFallback:
         page_mock.url = "https://www.kleinanzeigen.de/s-anzeige/test/12345"
         test_extractor.page = page_mock
         island_props:dict[str, Any] = {
+            "formattedCreationDate": [0, "03.02.2025"],
             "localizedAttributes": [
                 1,
                 [

@@ -570,10 +570,9 @@ class AdExtractor(WebScrapingMixin):
                 # Redesigned layout: images use Tailwind-style classes.
                 # Scope to the main article's image gallery to avoid picking up
                 # thumbnails from "other ads" or recommendation sections.
-                images = await self.web_find_all(
-                    By.CSS_SELECTOR,
-                    "article img[src*='img.kleinanzeigen.de'][class*='object-contain']",
-                )
+                redesigned_images_selector = "article img[src*='img.kleinanzeigen.de'][class*='object-contain']"
+                await self._fail_fast_if_legacy_absent(island_props, By.CSS_SELECTOR, redesigned_images_selector)
+                images = await self.web_find_all(By.CSS_SELECTOR, redesigned_images_selector)
                 if not images:
                     raise TimeoutError("No image area found.")
 
@@ -749,6 +748,16 @@ class AdExtractor(WebScrapingMixin):
             await self.web_sleep()
         return True
 
+    async def _fail_fast_if_legacy_absent(self, island_props:dict[str, Any] | None, selector_type:By, selector_value:str) -> None:
+        """Raise ``TimeoutError`` at once if a legacy element is missing on a redesigned page.
+
+        Redesigned (Astro) ad pages usually lack the classic markup, so a regular lookup would wait the
+        full timeout plus retries before the island fallback runs (#1287). With island props present, a
+        single ``quick_dom`` probe decides instead. Classic pages (no island props) are unaffected.
+        """
+        if island_props and await self.web_probe(selector_type, selector_value) is None:
+            raise TimeoutError(f"Legacy element {selector_value!r} not present on redesigned ad page")
+
     async def _extract_island_props(self) -> dict[str, Any]:
         """Extract the props JSON from the Astro island on redesigned ad pages.
 
@@ -921,6 +930,7 @@ class AdExtractor(WebScrapingMixin):
         # then finally try the Astro island embedded JSON.
         creation_date:str | None = None
         try:
+            await self._fail_fast_if_legacy_absent(island_props, By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
             legacy_date = await self.web_text(By.CSS_SELECTOR, DOWNLOAD_CREATION_DATE_SELECTOR)
             if self._is_valid_creation_date(legacy_date):
                 creation_date = legacy_date
@@ -928,6 +938,7 @@ class AdExtractor(WebScrapingMixin):
             pass  # Legacy layout may omit the creation-date element.
         if not creation_date:
             try:
+                await self._fail_fast_if_legacy_absent(island_props, By.CSS_SELECTOR, "#viewad-extra-info span")
                 redesigned_date = await self.web_text(By.CSS_SELECTOR, "#viewad-extra-info span")
                 if self._is_valid_creation_date(redesigned_date):
                     creation_date = redesigned_date
@@ -1199,10 +1210,10 @@ class AdExtractor(WebScrapingMixin):
         # e.g. "art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"
         special_attributes_str = dimensions.get("ad_attributes") if isinstance(dimensions, dict) else None
         if not special_attributes_str:
-            return await self._extract_special_attributes_from_dom() or self._extract_special_attributes_from_island(island_props)
+            return await self._extract_special_attributes_from_dom(island_props) or self._extract_special_attributes_from_island(island_props)
         return self._parse_ad_attributes(special_attributes_str)
 
-    async def _extract_special_attributes_from_dom(self) -> dict[str, str]:
+    async def _extract_special_attributes_from_dom(self, island_props:dict[str, Any] | None = None) -> dict[str, str]:
         """Extract special attributes from the ad details section as a fallback.
 
         Used when ``BelenConf.universalAnalyticsOpts.dimensions.ad_attributes`` is empty,
@@ -1213,6 +1224,7 @@ class AdExtractor(WebScrapingMixin):
         """
         attributes:dict[str, str] = {}
         try:
+            await self._fail_fast_if_legacy_absent(island_props, By.CSS_SELECTOR, "#viewad-details .addetailslist--detail")
             detail_items = await self.web_find_all(
                 By.CSS_SELECTOR,
                 "#viewad-details .addetailslist--detail",
@@ -1311,6 +1323,7 @@ class AdExtractor(WebScrapingMixin):
         :return: the price of the offer (optional); and the pricing type
         """
         try:
+            await self._fail_fast_if_legacy_absent(island_props, By.ID, "viewad-price")
             price_str:str = await self.web_text(By.ID, "viewad-price")
         except TimeoutError:  # no 'commercial' ad, has no pricing box etc.
             return self._extract_pricing_info_from_island(island_props) or (None, "NOT_APPLICABLE")
@@ -1339,9 +1352,10 @@ class AdExtractor(WebScrapingMixin):
                 price_type = "NOT_APPLICABLE"
         return price, price_type
 
-    async def _extract_shipping_text_from_dom(self) -> str | None:
+    async def _extract_shipping_text_from_dom(self, island_props:dict[str, Any] | None = None) -> str | None:
         """Return the legacy shipping wording element, or ``None`` if it is absent."""
         try:
+            await self._fail_fast_if_legacy_absent(island_props, By.CLASS_NAME, "boxedarticle--details--shipping")
             return await self.web_text(By.CLASS_NAME, "boxedarticle--details--shipping")
         except TimeoutError:
             return None
@@ -1370,7 +1384,7 @@ class AdExtractor(WebScrapingMixin):
         """
         ship_type, ship_costs, shipping_options = "NOT_APPLICABLE", None, None
         try:
-            shipping_text = await self._extract_shipping_text_from_dom()
+            shipping_text = await self._extract_shipping_text_from_dom(island_props)
             if not shipping_text:
                 # Redesigned layout: legacy shipping element is absent or empty.
                 # Fall back to the shippingHeader Astro island prop, which
