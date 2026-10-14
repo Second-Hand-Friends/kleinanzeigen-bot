@@ -822,7 +822,7 @@ async def test_image_hint_after_next_step_is_confirmed_once(test_bot:Kleinanzeig
 
     with (
         patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_outcome),
-        patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = hint_button) as find,
+        patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = hint_button) as find,
     ):
         await publishing_submission._confirm_image_hint_before_package_page(test_bot)
 
@@ -830,6 +830,16 @@ async def test_image_hint_after_next_step_is_confirmed_once(test_bot:Kleinanzeig
     if expect_click:
         assert find.await_args is not None
         assert find.await_args.args[:2] == (By.TEXT, "Ohne Bild veröffentlichen")
+
+
+@pytest.mark.asyncio
+async def test_vanished_image_hint_does_not_raise(test_bot:KleinanzeigenBot) -> None:
+    """After the draft exists, a hint that disappeared before the click must not trigger a retry."""
+    with (
+        patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = "hint"),
+        patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+    ):
+        await publishing_submission._confirm_image_hint_before_package_page(test_bot)
 
 
 @pytest.mark.asyncio

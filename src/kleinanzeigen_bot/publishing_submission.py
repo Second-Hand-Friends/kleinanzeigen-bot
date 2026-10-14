@@ -439,7 +439,10 @@ async def _confirm_image_hint_before_package_page(web:WebScrapingMixin) -> None:
     except TimeoutError:
         return
     if outcome == "hint":
-        await (await web.web_find(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = web.timeout("quick_dom"))).click()
+        # The draft exists already: a vanished hint must not raise a retryable TimeoutError.
+        hint = await web.web_probe(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = web.timeout("quick_dom"))
+        if hint is not None:
+            await hint.click()
 
 
 async def _click_submit_button(
