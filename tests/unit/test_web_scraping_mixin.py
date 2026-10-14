@@ -420,6 +420,7 @@ class TestWebScrapingErrorHandling:
         with pytest.raises(TimeoutError, match = "Page did not finish loading within"):
             await web_scraper.web_open("https://example.com", timeout = 0.1)
 
+    @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_web_open_accepts_interactive_document(self, web_scraper:WebScrapingMixin, mock_browser:AsyncMock) -> None:
         """A usable DOM should not wait for slow subresources to reach the load event."""

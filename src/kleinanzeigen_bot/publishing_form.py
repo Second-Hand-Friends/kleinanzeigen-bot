@@ -144,7 +144,7 @@ def _category_label_tokens(label:str) -> tuple[str, ...]:
     return tuple(word for word in re.findall(r"[a-z0-9]+", normalized) if word != "und")
 
 
-def _category_label_match_score(label:str, candidate:str, *, is_leaf:bool) -> int:
+def _category_label_match_score(label:str, candidate:str) -> int:
     label_tokens = _category_label_tokens(label)
     candidate_tokens = _category_label_tokens(candidate)
     if not label_tokens or not candidate_tokens:
@@ -153,10 +153,6 @@ def _category_label_match_score(label:str, candidate:str, *, is_leaf:bool) -> in
         return 3
     if set(candidate_tokens).issubset(label_tokens):
         return 2
-    # Pseudo-categories may be shortened in the redesigned dialog (e.g.
-    # "Pullover" for the configured "Pullover & Strickjacken" option).
-    if is_leaf and len(candidate_tokens) > 1 and label_tokens == candidate_tokens[:1]:
-        return 1
     return 0
 
 
@@ -195,8 +191,7 @@ async def _click_category_dialog_level(
             label = await web.extract_visible_text(button)
             if label:
                 score = max(
-                    (_category_label_match_score(label, candidate, is_leaf = depth == len(category.split("/")) - 1)
-                     for candidate in label_candidates),
+                    (_category_label_match_score(label, candidate) for candidate in label_candidates),
                     default = 0,
                 )
                 choices.append((button, label, score))
@@ -254,11 +249,14 @@ async def _set_category_in_dialog(
 
     # The dialog uses aria-pressed for its selected leaf. Fail closed if the
     # category click did not actually select a leaf before applying it.
-    selected_buttons = await web.web_find_all(
-        By.CSS_SELECTOR,
-        f'{dialog_selector} li > button[aria-pressed="true"]',
-        timeout = web.timeout("quick_dom"),
-    )
+    try:
+        selected_buttons = await web.web_find_all(
+            By.CSS_SELECTOR,
+            f'{dialog_selector} li > button[aria-pressed="true"]',
+            timeout = web.timeout("quick_dom"),
+        )
+    except TimeoutError:
+        selected_buttons = []
     selected_labels = {await web.extract_visible_text(button) for button in selected_buttons}
     if selected_leaf not in selected_labels:
         raise CategoryResolutionError(

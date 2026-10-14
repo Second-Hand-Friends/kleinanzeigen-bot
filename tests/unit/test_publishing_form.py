@@ -21,7 +21,9 @@ from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
     _category_dialog_label_options,  # noqa: PLC2701
     _category_label_match_score,  # noqa: PLC2701
+    _click_category_dialog_level,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
+    _set_category_in_dialog,  # noqa: PLC2701
     _set_condition,  # noqa: PLC2701
     _set_configured_shipping_options,  # noqa: PLC2701
     _set_special_attribute_input,  # noqa: PLC2701
@@ -936,14 +938,72 @@ class TestRedesignedCategoryDialog:
         ]
         assert "Andere Baby- & Kinderkleidung" in _category_dialog_label_options("17/22/sonstiges", categories)[2]
 
-    def test_category_dialog_matches_shortened_leaf_label_only_at_leaf(self) -> None:
-        assert _category_label_match_score("Pullover", "Pullover & Strickjacken", is_leaf = True) == 1
-        assert _category_label_match_score("Pullover", "Pullover & Strickjacken", is_leaf = False) == 0
-        assert _category_label_match_score("Hosen, Jeans & Shorts", "Hosen & Jeans", is_leaf = True) == 2
+    def test_category_dialog_does_not_guess_shortened_leaf_label(self) -> None:
+        assert _category_label_match_score("Pullover", "Pullover & Strickjacken") == 0
+        assert _category_label_match_score("Hosen, Jeans & Shorts", "Hosen & Jeans") == 2
         categories = {"Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken": "17/22/pullover_strickjacken"}
         assert _category_dialog_label_options(
             "17/22/pullover_strickjacken", categories, product_title = "Pagene Young Kinder-Strickjacke"
         )[2] == ["Pullover & Strickjacken", "Strickjacken"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_category_dialog_fails_closed_for_ambiguous_split_leaf(self, test_bot:KleinanzeigenBot) -> None:
+        buttons = [MagicMock(), MagicMock()]
+        buttons[0].click = AsyncMock()
+        buttons[0].visible_text = "Pullover"
+        buttons[1].click = AsyncMock()
+        buttons[1].visible_text = "Strickjacken"
+
+        async def visible_text(button:Element) -> str:
+            return str(button.visible_text)
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = buttons),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            pytest.raises(CategoryResolutionError, match = "no unique match"),
+        ):
+            await _click_category_dialog_level(
+                test_bot,
+                "dialog[open]",
+                "17/22/pullover_strickjacken",
+                2,
+                ["Pullover & Strickjacken"],
+            )
+
+        buttons[0].click.assert_not_awaited()
+        buttons[1].click.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_category_dialog_timeout_verifying_leaf_becomes_resolution_error(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        test_bot.categories = {"Bekleidung": "17"}
+        category_button = MagicMock()
+        category_button.click = AsyncMock()
+        category_button.visible_text = "Bekleidung"
+
+        async def find_all(selector_type:By, selector_value:str, **_kwargs:Any) -> list[Element]:
+            if selector_value == "dialog[open] li > button":
+                return [category_button]
+            if selector_value == 'dialog[open] li > button[aria-pressed="true"]':
+                raise TimeoutError("No selected button found")
+            raise AssertionError(f"Unexpected selector: {selector_value}")
+
+        async def visible_text(button:Element) -> str:
+            return str(button.visible_text)
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(CategoryResolutionError, match = "did not select the requested leaf"),
+        ):
+            await _set_category_in_dialog(test_bot, category = "17", dialog_selector = "dialog[open]")
+
+        category_button.click.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_set_category_uses_visible_dialog_labels_and_applies_leaf(self, test_bot:KleinanzeigenBot) -> None:
