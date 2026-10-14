@@ -477,6 +477,20 @@ class TestWebScrapingErrorHandling:
         mock_execute.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_web_execute_debug_log_is_capped(
+        self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage, caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """Huge page data (e.g. Astro props) must not end up verbatim in the debug log."""
+        mock_page.evaluate.return_value = "{" + "x" * 120_000 + "}"
+        with caplog.at_level("DEBUG"):
+            await web_scraper.web_execute("(() => {\n    return document.title;\n})()")
+        messages = [record.getMessage() for record in caplog.records if record.getMessage().startswith("web_execute(")]
+        assert len(messages) == 1
+        assert "\n" not in messages[0]
+        assert len(messages[0]) < 1_000
+        assert "chars)" in messages[0]
+
+    @pytest.mark.asyncio
     async def test_web_request_invalid_response(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Test invalid response handling in web_request."""
         # Mock page.evaluate to return an invalid response
