@@ -442,6 +442,11 @@ async def _click_submit_button(
         continued = await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("next")))
         if continued is not True:
             raise TimeoutError(_("Could not continue to package selection; the ad was not published"))
+        # Ads without images get the image hint right after "Nächster Schritt";
+        # it blocks the package page until it is confirmed.
+        image_hint_button = await web.web_probe(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = web.timeout("quick_dom"))
+        if image_hint_button is not None:
+            await image_hint_button.click()
     if state in {"next", "package"}:
         if package_selection == "BASIS":
             await _submit_free_basis_package(web)

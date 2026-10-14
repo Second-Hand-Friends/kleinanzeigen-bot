@@ -494,6 +494,7 @@ class TestStagedPackageSubmission:
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
         ):
             if scenario in {"invalid", "paid"}:
                 with pytest.raises(AdFormValidationError):
@@ -702,6 +703,7 @@ class TestConfigurablePackageSelection:
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
             patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock,
                   side_effect = manual_completion) as manual_input,
         ):
