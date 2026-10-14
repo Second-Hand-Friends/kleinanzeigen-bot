@@ -410,8 +410,18 @@ class TestFreeBasisPackage:
         assert result["result"]["state"] == expected_state
         assert result["clicks"] == expected_clicks
 
+    def test_free_basis_does_not_depend_on_marketing_copy(self) -> None:
+        """The free check rests on the "Kostenlos" price and the absence of an amount, not on the promo sentence."""
+        dom = _basis_dom()
+        basis = dom["children"][0]["children"][0]
+        basis["children"] = [child for child in basis["children"] if "inserieren" not in child.get("text", "")]
+        script = publishing_submission._FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps("submit"))
+        result = _run_dom_script(script, dom)
+        assert result["result"]["state"] == "submitted"
+        assert result["clicks"] == ["Anzeige aufgeben"]
+
     @pytest.mark.parametrize("case", ["paid", "extra-fee", "hidden-free-price", "duplicate-basis",
-                             "shared-free-text", "disabled", "double-selected", "missing-submit"])
+                             "shared-free-text", "no-own-card", "disabled", "double-selected", "missing-submit"])
     def test_rejects_paid_ambiguous_and_unavailable_packages(self, case:str) -> None:
         """Refuse package clicks when pricing, selection, or availability is unsafe."""
         dom = _basis_dom()
@@ -428,6 +438,10 @@ class TestFreeBasisPackage:
         elif case == "shared-free-text":
             cards.extend(basis["children"][1:3])
             basis["children"] = basis["children"][:1]
+        elif case == "no-own-card":
+            # Both radios share one container, so no card belongs to Basis alone.
+            plus = cards.pop(1)
+            basis["children"].extend(plus["children"])
         elif case == "disabled":
             basis["children"][0]["disabled"] = True
         elif case == "double-selected":

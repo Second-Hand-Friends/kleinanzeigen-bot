@@ -239,21 +239,17 @@ _FREE_BASIS_PACKAGE_SCRIPT:Final[str] = r"""
     if (!candidates.length) return {state: 'waiting'};
     if (candidates.length !== 1) return {state: 'unsafe'};
     const basis = candidates[0];
-    let card = basis.parentElement;
-    let free = false;
-    while (card && card !== document.body) {
-        // Stop before the shared container: another package's price cannot prove
-        // that the Basis option is free, or invalidate its own free price.
-        if (radios.some(element => element !== basis && card.contains(element))) break;
-        const cardText = text(card);
-        const freePrice = [...card.querySelectorAll('*')].some(element => visible(element)
-            && text(element) === 'Kostenlos' && ![...element.children].some(child => text(child) === 'Kostenlos'));
-        if (cardText.includes('Kostenlos inserieren – ohne zusätzliche Vorteile.') && freePrice) {
-            free = !/\d[\d.,]*\s*(?:€|EUR)/i.test(cardText) && !cardText.includes('Plus Paket');
-            break;
-        }
-        card = card.parentElement;
-    }
+    // The Basis card is the largest container holding this radio but no other
+    // package, so another package's price can neither prove nor hide its own.
+    let card = basis;
+    while (card.parentElement && card.parentElement !== document.body
+        && !radios.some(element => element !== basis && card.parentElement.contains(element))) card = card.parentElement;
+    const cardText = text(card);
+    const freePrice = [...card.querySelectorAll('*')].some(element => visible(element)
+        && text(element) === 'Kostenlos' && ![...element.children].some(child => text(child) === 'Kostenlos'));
+    // Free means an explicit "Kostenlos" price and no amount anywhere in the card;
+    // marketing copy is deliberately not part of the check.
+    const free = freePrice && !/\d[\d.,]*\s*(?:€|EUR)/i.test(cardText);
     if (!free || basis.disabled) return {state: 'unsafe'};
     if (action === 'select' && basis.getAttribute('aria-checked') !== 'true') {
         basis.click();
