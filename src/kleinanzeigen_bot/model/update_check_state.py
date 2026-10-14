@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -25,10 +25,10 @@ MAX_INTERVAL_DAYS = 30
 class UpdateCheckState(ContextualModel):
     """State for update checking functionality."""
     version:int = CURRENT_STATE_VERSION
-    last_check:datetime.datetime | None = None
+    last_check:dt.datetime | None = None
 
     @classmethod
-    def _parse_timestamp(cls, timestamp_str:str) -> datetime.datetime | None:
+    def _parse_timestamp(cls, timestamp_str:str) -> dt.datetime | None:
         """Parse a timestamp string and ensure it's in UTC.
 
         Args:
@@ -38,13 +38,13 @@ class UpdateCheckState(ContextualModel):
             The parsed timestamp in UTC, or None if parsing fails.
         """
         try:
-            timestamp = datetime.datetime.fromisoformat(timestamp_str)
+            timestamp = dt.datetime.fromisoformat(timestamp_str)
             if timestamp.tzinfo is None:
                 # If no timezone info, assume UTC
-                timestamp = timestamp.replace(tzinfo = datetime.UTC)
-            elif timestamp.tzinfo != datetime.UTC:
+                timestamp = timestamp.replace(tzinfo = dt.UTC)
+            elif timestamp.tzinfo != dt.UTC:
                 # Convert to UTC if in a different timezone
-                timestamp = timestamp.astimezone(datetime.UTC)
+                timestamp = timestamp.astimezone(dt.UTC)
             return timestamp
         except ValueError as e:
             LOG.warning("Invalid timestamp format in state file: %s", e)
@@ -114,8 +114,8 @@ class UpdateCheckState(ContextualModel):
             data = self.model_dump()
             if data["last_check"]:
                 # Ensure timestamp is in UTC before saving
-                if data["last_check"].tzinfo != datetime.UTC:
-                    data["last_check"] = data["last_check"].astimezone(datetime.UTC)
+                if data["last_check"].tzinfo != dt.UTC:
+                    data["last_check"] = data["last_check"].astimezone(dt.UTC)
                 data["last_check"] = data["last_check"].isoformat()
             xdg_paths.ensure_directory(state_file.parent, "update check state directory")
             dicts.save_dict(str(state_file), data)
@@ -126,9 +126,9 @@ class UpdateCheckState(ContextualModel):
 
     def update_last_check(self) -> None:
         """Update the last check time to now in UTC."""
-        self.last_check = datetime.datetime.now(datetime.UTC)
+        self.last_check = dt.datetime.now(dt.UTC)
 
-    def _validate_update_interval(self, interval:str) -> tuple[datetime.timedelta, bool, str]:
+    def _validate_update_interval(self, interval:str) -> tuple[dt.timedelta, bool, str]:
         """
         Validate the update check interval string.
         Returns (timedelta, is_valid, reason).
@@ -189,7 +189,7 @@ class UpdateCheckState(ContextualModel):
                 LOG.warning("Falling back to default interval: 7d (latest channel). Please fix your config to avoid this warning.")
         if not self.last_check:
             return True
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         elapsed = now - self.last_check
         # Compare using integer seconds to avoid microsecond-level flakiness
         return int(elapsed.total_seconds()) > int(td.total_seconds())
