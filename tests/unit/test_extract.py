@@ -440,6 +440,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = shipping_text),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = MagicMock()),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
         ):
             if expected_cost:
@@ -477,6 +478,7 @@ class TestAdExtractorShipping:
                 side_effect = TimeoutError if dom_text is None else None,
                 return_value = dom_text,
             ),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None if dom_text is None else MagicMock()),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -502,6 +504,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -538,6 +541,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = shipping_response),
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
@@ -556,6 +560,7 @@ class TestAdExtractorShipping:
         with (
             patch.object(test_extractor, "page", MagicMock()),
             patch.object(test_extractor, "web_text", new_callable = AsyncMock, side_effect = TimeoutError),
+            patch.object(test_extractor, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_extractor, "web_request", new_callable = AsyncMock) as mock_web_request,
         ):
             shipping_type, costs, options = await test_extractor._extract_shipping_info_from_ad_page(island_props = island_props)
