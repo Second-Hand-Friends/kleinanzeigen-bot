@@ -1691,7 +1691,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 raise
             raise TimeoutError(timeout_message) from None
         await self.web_await(
-            lambda: self.web_execute("document.readyState == 'complete'"),
+            lambda: self.web_execute("document.readyState === 'interactive' || document.readyState === 'complete'"),
             timeout = page_timeout,
             deadline = page_deadline,
             timeout_error_message = timeout_message,

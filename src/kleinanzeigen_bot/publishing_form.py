@@ -6,7 +6,7 @@
 
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from gettext import gettext as _
 from typing import Any, Final, cast
 
@@ -45,6 +45,11 @@ _OPEN_DIALOG_SELECTORS:Final[tuple[str, ...]] = (
     '[role="dialog"]:not([aria-hidden="true"])',
 )
 _SHIPPING_SIZE_RADIO_VALUES:Final[tuple[str, ...]] = ("SMALL", "MEDIUM", "LARGE")
+_BRAND_COMBOBOX_LABELS:Final[dict[str, str]] = {
+    "c_a": "C&A",
+    "h_m": "H&M",
+    "other": "Sonstige Marke",
+}
 
 
 async def _probe_in_dialog(
@@ -87,7 +92,201 @@ async def _find_in_dialog(
     raise TimeoutError(error_message)
 
 
-async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str) -> None:
+def _category_dialog_label_options(
+    category:str,
+    categories:Mapping[str, str],
+    *,
+    product_title:str | None = None,
+) -> list[list[str]]:
+    """Return visible-label candidates for each segment of a configured category path."""
+    path = [segment for segment in category.split("/") if segment]
+    options:list[set[str]] = [set() for _ in path]
+
+    for display_path, category_path in categories.items():
+        display_segments = [segment.strip() for segment in display_path.split(">")]
+        category_segments = [segment.strip() for segment in category_path.split("/") if segment.strip()]
+        for depth in range(min(len(path), len(display_segments), len(category_segments))):
+            if category_segments[:depth + 1] == path[:depth + 1]:
+                options[depth].add(display_segments[depth])
+
+    # Some legacy aliases point to the site's generic "other" category without
+    # naming that final level. Resolve it from the current parent's visible label.
+    if path and not options[-1]:
+        final_segment = path[-1].casefold()
+        if final_segment.isdigit() or final_segment in {"sonstiges", "sonstige", "andere", "weiteres", "weitere"}:
+            options[-1].update({"Sonstiges", "Sonstige", "Andere", "Weiteres", "Weitere"})
+            if len(path) > 1:
+                for parent_label in options[-2]:
+                    options[-1].update({
+                        f"Andere {parent_label}",
+                        f"Sonstige {parent_label}",
+                        f"Weitere {parent_label}",
+                    })
+        else:
+            options[-1].add(final_segment.replace("_", " "))
+
+    # The current picker splits the legacy combined category into two choices.
+    # Use the ad title to distinguish cardigans from pullovers where possible.
+    if path and path[-1] == "pullover_strickjacken" and product_title:
+        title = product_title.casefold()
+        if re.search(r"\b(?:strickjacke|cardigan)\w*\b", title):
+            options[-1].add("Strickjacken")
+        elif re.search(r"\b(?:pullover|pulli|hoodie|sweatshirt|sweater)\w*\b", title):
+            options[-1].add("Pullover")
+
+    return [sorted(labels) for labels in options]
+
+
+def _category_label_tokens(label:str) -> tuple[str, ...]:
+    """Normalize category labels for matching UI wording and punctuation changes."""
+    replacements:dict[str, str | int | None] = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
+    normalized = label.casefold().translate(str.maketrans(replacements))
+    return tuple(word for word in re.findall(r"[a-z0-9]+", normalized) if word != "und")
+
+
+def _category_label_match_score(label:str, candidate:str) -> int:
+    label_tokens = _category_label_tokens(label)
+    candidate_tokens = _category_label_tokens(candidate)
+    if not label_tokens or not candidate_tokens:
+        return 0
+    if label_tokens == candidate_tokens:
+        return 3
+    if set(candidate_tokens).issubset(label_tokens):
+        return 2
+    return 0
+
+
+async def _probe_category_dialog(web:WebScrapingMixin) -> str | None:
+    """Return the selector for the redesigned category dialog, if it is open."""
+    for dialog_selector in _OPEN_DIALOG_SELECTORS:
+        dialog = await web.web_probe(By.CSS_SELECTOR, dialog_selector, timeout = web.timeout("quick_dom"))
+        if dialog is None:
+            continue
+        dialog_text = await web.extract_visible_text(dialog)
+        if "Kategorie wählen" in dialog_text or "Choose category" in dialog_text:
+            return dialog_selector
+    return None
+
+
+async def _click_category_dialog_level(
+    web:WebScrapingMixin,
+    dialog_selector:str,
+    category:str,
+    depth:int,
+    label_candidates:list[str],
+) -> str:
+    """Click the unique visible choice matching one category-path level."""
+    async def read_offered() -> list[tuple[Element, str, int]]:
+        try:
+            buttons = await web.web_find_all(
+                By.CSS_SELECTOR,
+                f"{dialog_selector} li > button",
+                timeout = web.timeout("quick_dom"),
+            )
+        except TimeoutError:
+            buttons = []
+
+        choices:list[tuple[Element, str, int]] = []
+        for button in buttons:
+            label = await web.extract_visible_text(button)
+            if label:
+                score = max(
+                    (_category_label_match_score(label, candidate) for candidate in label_candidates),
+                    default = 0,
+                )
+                choices.append((button, label, score))
+        return choices
+
+    offered = await read_offered()
+    if (
+        depth == 0
+        and len(offered) == 1
+        and offered[0][2] == 0
+        and _category_label_tokens(offered[0][1]) in {("alle", "kategorien"), ("all", "categories")}
+    ):
+        # Some sessions initially show only a generic entry point. Open it
+        # once, then resolve the requested root against the newly visible list.
+        await offered[0][0].click()
+        await web.web_sleep()
+        offered = await read_offered()
+
+    best_score = max((score for _button, _label, score in offered), default = 0)
+    matches = [(button, label) for button, label, score in offered if score == best_score and score > 0]
+    if len(matches) != 1:
+        visible_labels = ", ".join(sorted(label for _button, label, _score in offered)) or "<none>"
+        category_segment = category.split("/")[depth]
+        raise CategoryResolutionError(
+            _("Category dialog has no unique match for '%(category)s' at path segment '%(segment)s'. Offered choices: %(offered)s")
+            % {"category": category, "segment": category_segment, "offered": visible_labels}
+        )
+
+    target, label = matches[0]
+    await target.click()
+    await web.web_sleep()
+    return label
+
+
+async def _set_category_in_dialog(
+    web:WebScrapingMixin,
+    *,
+    category:str,
+    dialog_selector:str,
+    product_title:str | None = None,
+) -> None:
+    """Select a configured category path in Kleinanzeigen's redesigned dialog."""
+    categories = getattr(web, "categories", {})
+    if not isinstance(categories, Mapping):
+        categories = {}
+    label_options = _category_dialog_label_options(category, categories, product_title = product_title)
+    if not label_options or any(not candidates for candidates in label_options):
+        raise CategoryResolutionError(
+            _("Category dialog cannot resolve the configured category path '%s' to visible labels.") % category
+        )
+
+    selected_leaf = ""
+    for depth, candidates in enumerate(label_options):
+        selected_leaf = await _click_category_dialog_level(web, dialog_selector, category, depth, candidates)
+
+    # The dialog uses aria-pressed for its selected leaf. Fail closed if the
+    # category click did not actually select a leaf before applying it.
+    try:
+        selected_buttons = await web.web_find_all(
+            By.CSS_SELECTOR,
+            f'{dialog_selector} li > button[aria-pressed="true"]',
+            timeout = web.timeout("quick_dom"),
+        )
+    except TimeoutError:
+        selected_buttons = []
+    selected_labels = {await web.extract_visible_text(button) for button in selected_buttons}
+    if selected_leaf not in selected_labels:
+        raise CategoryResolutionError(
+            _("Category dialog did not select the requested leaf '%s'.") % selected_leaf
+        )
+
+    buttons = await web.web_find_all(
+        By.CSS_SELECTOR,
+        f"{dialog_selector} button",
+        timeout = web.timeout("quick_dom"),
+    )
+    apply_buttons = [button for button in buttons if (await web.extract_visible_text(button)) in {"Übernehmen", "Apply"}]
+    if len(apply_buttons) != 1:
+        raise CategoryResolutionError(
+            _("Category dialog does not have one unique apply button for '%s'.") % category
+        )
+    await apply_buttons[0].click()
+    await web.web_sleep()
+
+    if await _probe_category_dialog(web) is not None:
+        raise TimeoutError(_("Category dialog remained open after applying '%s'.") % category)
+
+
+async def set_category(
+    web:WebScrapingMixin,
+    *,
+    category:str | None,
+    ad_file:str,
+    product_title:str | None = None,
+) -> None:
     """Set or verify the ad category on the publishing form.
 
     Clicks through the category picker to select the configured category path,
@@ -123,6 +322,16 @@ async def set_category(web:WebScrapingMixin, *, category:str | None, ad_file:str
             category_link = await web.web_find(By.TEXT, "Kategorie")
         await category_link.click()
         await web.web_sleep()
+
+        dialog_selector = await _probe_category_dialog(web)
+        if dialog_selector is not None:
+            await _set_category_in_dialog(
+                web,
+                category = category,
+                dialog_selector = dialog_selector,
+                product_title = product_title,
+            )
+            return
 
         # Preserve the form session established by the category link. Reloading
         # this page directly can lose the edit context and fail with HTTP 400/403.
@@ -1291,6 +1500,17 @@ async def _set_special_attribute_input(
     else:
         raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
 
+    button_value = special_attribute_value_str
+    normalized_key = re.sub(r"_[a-z]+$", "", special_attribute_key).rsplit(".", maxsplit = 1)[-1]
+    if (
+        special_attribute_key.startswith("baby_kinderkleidung.")
+        and normalized_key == "groesse"
+        and re.fullmatch(r"\d+\s*/\s*\d+", special_attribute_value_str.strip())
+    ):
+        # The redesigned child-clothing form has individual numeric sizes
+        # and an "Andere Größe" option, but no combined ranges such as 158/164.
+        button_value = "andere_groesse"
+
     # If the only match was a hidden backing input, search for the
     # associated <button role="combobox"> by walking up the DOM tree.
     if elem_type == "hidden":
@@ -1304,7 +1524,7 @@ async def _set_special_attribute_input(
         if associated_button_id is None:
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key)
         LOG.debug("Attribute field '%s': found associated button combobox id='%s'", special_attribute_key, associated_button_id)
-        await _select_button_combobox(web, associated_button_id, special_attribute_value_str)
+        await _select_button_combobox(web, associated_button_id, button_value)
         return  # NO log here — caller logs success
 
     if special_attr_elem.local_name == "select":
@@ -1339,10 +1559,17 @@ async def _set_special_attribute_input(
     elif special_attr_elem.local_name == "button" and elem_role == "combobox":
         LOG.debug("Attribute field '%s' seems to be a button combobox (click-to-open dropdown)...", special_attribute_key)
         ensure(elem_id, f"No id available for button combobox special attribute [{special_attribute_key}]")
-        await _select_button_combobox(web, cast(str, elem_id), special_attribute_value_str)
+        await _select_button_combobox(web, cast(str, elem_id), button_value)
     elif elem_role == "combobox" and elem_type in {"text", ""} and special_attr_elem.local_name == "input":
         LOG.debug("Attribute field '%s' seems to be a Combobox (i.e. text input with filtering dropdown)...", special_attribute_key)
-        await web.web_select_combobox(elem_selector_type, elem_selector_value, special_attribute_value_str)
+        combobox_value = special_attribute_value_str
+        if normalized_key == "brand":
+            brand_slug = special_attribute_value_str.strip().casefold()
+            if brand_slug == "other" and special_attribute_key.startswith(("kleidung_damen.", "kleidung_herren.")):
+                combobox_value = "Sonstige"
+            else:
+                combobox_value = _BRAND_COMBOBOX_LABELS.get(brand_slug, special_attribute_value_str)
+        await web.web_select_combobox(elem_selector_type, elem_selector_value, combobox_value)
     else:
         LOG.debug("Attribute field '%s' seems to be a text input...", special_attribute_key)
         await web.web_input(elem_selector_type, elem_selector_value, special_attribute_value_str)
@@ -1422,7 +1649,7 @@ async def set_special_attributes(web:WebScrapingMixin, ad_cfg:Ad) -> None:
         try:
             await _set_special_attribute_input(web, special_attr_elem, special_attribute_key, special_attribute_value_str)
         except TimeoutError as ex:
-            LOG.debug("Failed to set attribute field '%s' via known input types.", special_attribute_key)
+            LOG.debug("Failed to set attribute field '%s' via known input types: %s", special_attribute_key, ex)
             raise TimeoutError(_("Failed to set attribute '%s'") % special_attribute_key) from ex
         LOG.debug("Successfully set attribute field [%s] to [%s]...", special_attribute_key, special_attribute_value_str)
 
@@ -1447,7 +1674,7 @@ async def fill_ad_form(
     #############################
     # set category (before title to avoid form reset clearing title)
     #############################
-    await set_category(web, category = ad_cfg.category, ad_file = ad_file)
+    await set_category(web, category = ad_cfg.category, ad_file = ad_file, product_title = ad_cfg.title)
     await web.web_sleep()  # wait for category-dependent fields to render before setting attributes
 
     #############################

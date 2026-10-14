@@ -19,9 +19,14 @@ from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
+    _category_dialog_label_options,  # noqa: PLC2701
+    _category_label_match_score,  # noqa: PLC2701
+    _click_category_dialog_level,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
+    _set_category_in_dialog,  # noqa: PLC2701
     _set_condition,  # noqa: PLC2701
     _set_configured_shipping_options,  # noqa: PLC2701
+    _set_special_attribute_input,  # noqa: PLC2701
     _special_attribute_candidate_priority,  # noqa: PLC2701
     city_option_text,
     fill_image_section,
@@ -914,6 +919,192 @@ class TestCategorySuggestionPicker:
         assert mock_find.call_args.args[0] == By.CSS_SELECTOR
         assert "#ad-category-picker label[for='id-for-77']" in mock_find.call_args.args[1]
         label_elem.click.assert_awaited_once()
+
+
+class TestRedesignedCategoryDialog:
+    """Regression coverage for the visible-label category dialog."""
+
+    def test_category_path_label_options_include_specific_and_generic_names(self) -> None:
+        categories = {
+            "Familie, Kind & Baby": "17/18",
+            "Familie, Kind & Baby > Baby- & Kinderkleidung": "17/22/sonstiges",
+            "Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken": "17/22/pullover_strickjacken",
+        }
+
+        assert _category_dialog_label_options("17/22/pullover_strickjacken", categories) == [
+            ["Familie, Kind & Baby"],
+            ["Baby- & Kinderkleidung"],
+            ["Pullover & Strickjacken"],
+        ]
+        assert "Andere Baby- & Kinderkleidung" in _category_dialog_label_options("17/22/sonstiges", categories)[2]
+
+    def test_category_dialog_does_not_guess_shortened_leaf_label(self) -> None:
+        assert _category_label_match_score("Pullover", "Pullover & Strickjacken") == 0
+        assert _category_label_match_score("Hosen, Jeans & Shorts", "Hosen & Jeans") == 2
+        categories = {"Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken": "17/22/pullover_strickjacken"}
+        assert _category_dialog_label_options(
+            "17/22/pullover_strickjacken", categories, product_title = "Pagene Young Kinder-Strickjacke"
+        )[2] == ["Pullover & Strickjacken", "Strickjacken"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_category_dialog_fails_closed_for_ambiguous_split_leaf(self, test_bot:KleinanzeigenBot) -> None:
+        buttons = [MagicMock(), MagicMock()]
+        buttons[0].click = AsyncMock()
+        buttons[0].visible_text = "Pullover"
+        buttons[1].click = AsyncMock()
+        buttons[1].visible_text = "Strickjacken"
+
+        async def visible_text(button:Element) -> str:
+            return str(button.visible_text)
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = buttons),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            pytest.raises(CategoryResolutionError, match = "no unique match"),
+        ):
+            await _click_category_dialog_level(
+                test_bot,
+                "dialog[open]",
+                "17/22/pullover_strickjacken",
+                2,
+                ["Pullover & Strickjacken"],
+            )
+
+        buttons[0].click.assert_not_awaited()
+        buttons[1].click.assert_not_awaited()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_category_dialog_timeout_verifying_leaf_becomes_resolution_error(
+        self,
+        test_bot:KleinanzeigenBot,
+    ) -> None:
+        test_bot.categories = {"Bekleidung": "17"}
+        category_button = MagicMock()
+        category_button.click = AsyncMock()
+        category_button.visible_text = "Bekleidung"
+
+        async def find_all(selector_type:By, selector_value:str, **_kwargs:Any) -> list[Element]:
+            if selector_value == "dialog[open] li > button":
+                return [category_button]
+            if selector_value == 'dialog[open] li > button[aria-pressed="true"]':
+                raise TimeoutError("No selected button found")
+            raise AssertionError(f"Unexpected selector: {selector_value}")
+
+        async def visible_text(button:Element) -> str:
+            return str(button.visible_text)
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(CategoryResolutionError, match = "did not select the requested leaf"),
+        ):
+            await _set_category_in_dialog(test_bot, category = "17", dialog_selector = "dialog[open]")
+
+        category_button.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_set_category_uses_visible_dialog_labels_and_applies_leaf(self, test_bot:KleinanzeigenBot) -> None:
+        category = "17/22/pullover_strickjacken"
+        test_bot.categories = {
+            "Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken": category,
+        }
+        clicked:list[str] = []
+        dialog_open = False
+        level = 0
+        show_all_categories = False
+        selected_leaf = ""
+        category_link = MagicMock()
+
+        async def open_dialog() -> None:
+            nonlocal dialog_open
+            dialog_open = True
+
+        category_link.click = AsyncMock(side_effect = open_dialog)
+        dialog = MagicMock(spec = Element)
+
+        def make_button(label:str, on_click:Callable[[], Awaitable[None]] | None = None) -> MagicMock:
+            button = MagicMock()
+            button.visible_text = label
+            button.click = AsyncMock(side_effect = on_click)
+            return button
+
+        async def choose(label:str) -> None:
+            nonlocal level, selected_leaf
+            clicked.append(label)
+            if label == "Familie, Kind & Baby":
+                level = 1
+            elif label == "Baby- & Kinderkleidung":
+                level = 2
+            elif label == "Strickjacken":
+                selected_leaf = label
+
+        async def click_root() -> None:
+            await choose("Familie, Kind & Baby")
+
+        async def click_all_categories() -> None:
+            nonlocal show_all_categories
+            show_all_categories = True
+
+        async def click_child() -> None:
+            await choose("Baby- & Kinderkleidung")
+
+        async def click_strickjacken() -> None:
+            await choose("Strickjacken")
+
+        all_categories_button = make_button("Alle Kategorien", click_all_categories)
+        root_button = make_button("Familie, Kind & Baby", click_root)
+        child_button = make_button("Baby- & Kinderkleidung", click_child)
+        cardigan_button = make_button("Strickjacken", click_strickjacken)
+        pullover_button = make_button("Pullover")
+        cancel_button = make_button("Abbrechen")
+
+        async def apply_category() -> None:
+            nonlocal dialog_open
+            clicked.append("Übernehmen")
+            dialog_open = False
+
+        apply_button = make_button("Übernehmen", apply_category)
+
+        async def probe(selector_type:By, selector_value:str, **_kwargs:Any) -> Any:
+            if selector_value == "ad-category-path":
+                return None
+            if selector_value == 'a[aria-describedby="ad-category-path"]':
+                return category_link
+            if selector_value == "dialog[open]" and dialog_open:
+                return dialog
+            return None
+
+        async def visible_text(element:Element) -> str:
+            return str(element.visible_text) if hasattr(element, "visible_text") else "Kategorie wählen"
+
+        async def find_all(selector_type:By, selector_value:str, **_kwargs:Any) -> list[Element]:
+            if selector_value == "dialog[open] li > button":
+                if level == 0 and not show_all_categories:
+                    return [all_categories_button]
+                return [root_button] if level == 0 else [child_button] if level == 1 else [pullover_button, cardigan_button]
+            if selector_value == 'dialog[open] li > button[aria-pressed="true"]':
+                return [cardigan_button] if selected_leaf else []
+            if selector_value == "dialog[open] button":
+                return [cancel_button, apply_button]
+            raise AssertionError(f"Unexpected selector: {selector_value}")
+
+        with (
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
+        ):
+            await set_category(test_bot, category = category, ad_file = "ad.yaml", product_title = "Kinder-Strickjacke")
+
+        assert clicked == ["Familie, Kind & Baby", "Baby- & Kinderkleidung", "Strickjacken", "Übernehmen"]
+        assert show_all_categories
+        mock_find.assert_not_awaited()
 
 
 class TestImageUploadProcessedMarkerFallback:
@@ -2805,6 +2996,43 @@ class TestSpecialAttributes:
     """Tests for special attribute handling."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("special_attribute_key", "brand_value", "expected_label"),
+        [
+            ("baby_kinderkleidung.brand", "c_a", "C&A"),
+            ("baby_kinderkleidung.brand", "h_m", "H&M"),
+            ("baby_kinderkleidung.brand", "other", "Sonstige Marke"),
+            ("kleidung_damen.brand", "other", "Sonstige"),
+            ("kleidung_herren.brand", "other", "Sonstige"),
+            ("kleidung_damen.brand", "armani", "armani"),
+        ],
+    )
+    async def test_brand_api_values_are_converted_to_redesigned_form_labels(
+        self,
+        test_bot:KleinanzeigenBot,
+        special_attribute_key:str,
+        brand_value:str,
+        expected_label:str,
+    ) -> None:
+        """The redesigned brand combobox filters by German display labels, not API slugs."""
+        elem = MagicMock()
+        attrs = MagicMock()
+        attrs.id = special_attribute_key
+        attrs.get.side_effect = lambda key, default = None: {
+            "id": special_attribute_key,
+            "name": None,
+            "type": "text",
+            "role": "combobox",
+        }.get(key, default)
+        elem.attrs = attrs
+        elem.local_name = "input"
+
+        with patch.object(test_bot, "web_select_combobox", new_callable = AsyncMock) as mock_select:
+            await _set_special_attribute_input(test_bot, elem, special_attribute_key, brand_value)
+
+        mock_select.assert_awaited_once_with(By.ID, special_attribute_key, expected_label)
+
+    @pytest.mark.asyncio
     async def test_special_attributes_compound_name_lookup(self, test_bot:KleinanzeigenBot, base_ad_config:dict[str, Any]) -> None:
         """Compound special-attribute names should be matched via original key in @name."""
         ad_cfg = Ad.model_validate(
@@ -3053,6 +3281,83 @@ class TestSpecialAttributes:
         mock_find_button.assert_awaited_once_with(hidden_input_name = "attributeMap[groesse]")
         mock_select_combobox.assert_awaited_once_with(test_bot, ":r8r7:", "68")
         mock_input.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_combined_child_clothing_size_uses_other_size_option(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Combined label sizes stay in the ad text when the form only accepts single sizes."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"baby_kinderkleidung.groesse_s": "158/164"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        hidden_elem = MagicMock()
+        hidden_attrs = MagicMock()
+        hidden_attrs.id = None
+        hidden_attrs.type = "hidden"
+        hidden_attrs.get.side_effect = lambda key, default = None: {
+            "id": None,
+            "name": "attributeMap[baby_kinderkleidung.groesse]",
+            "type": "hidden",
+            "role": None,
+        }.get(key, default)
+        hidden_elem.attrs = hidden_attrs
+        hidden_elem.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [hidden_elem]),
+            patch.object(test_bot, "_find_associated_button_combobox", new_callable = AsyncMock, return_value = "size-picker"),
+            patch("kleinanzeigen_bot.publishing_form._select_button_combobox", new_callable = AsyncMock) as mock_select,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_select.assert_awaited_once_with(test_bot, "size-picker", "andere_groesse")
+
+    @pytest.mark.asyncio
+    async def test_combined_child_clothing_size_uses_other_option_when_button_matches_directly(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """Normalize combined sizes in the direct-button resolver path too."""
+        ad_cfg = Ad.model_validate(
+            base_ad_config
+            | {
+                "special_attributes": {"baby_kinderkleidung.groesse_s": "158/164"},
+                "updated_on": "2024-01-01T00:00:00",
+                "created_on": "2024-01-01T00:00:00",
+            }
+        )
+
+        button_elem = MagicMock()
+        button_attrs = MagicMock()
+        button_attrs.id = "baby_kinderkleidung.groesse"
+        button_attrs.type = "button"
+        button_attrs.get.side_effect = lambda key, default = None: {
+            "id": "baby_kinderkleidung.groesse",
+            "name": None,
+            "type": "button",
+            "role": "combobox",
+        }.get(key, default)
+        button_elem.attrs = button_attrs
+        button_elem.local_name = "button"
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button_elem]),
+            patch.object(test_bot, "_find_associated_button_combobox", new_callable = AsyncMock) as mock_find_button,
+            patch("kleinanzeigen_bot.publishing_form._select_button_combobox", new_callable = AsyncMock) as mock_select,
+        ):
+            await set_special_attributes(test_bot, ad_cfg)
+
+        mock_find_button.assert_not_awaited()
+        mock_select.assert_awaited_once_with(test_bot, "baby_kinderkleidung.groesse", "andere_groesse")
 
     @pytest.mark.asyncio
     async def test_hidden_input_fallback_no_associated_button_raises(

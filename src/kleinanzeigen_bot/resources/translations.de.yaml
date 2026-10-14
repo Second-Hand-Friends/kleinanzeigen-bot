@@ -279,6 +279,15 @@ kleinanzeigen_bot/publishing_form.py:
     "Unknown category alias '%s'. Use a category name from categories.yaml or a numeric category path.": "Unbekannter Kategorie-Alias '%s'. Verwenden Sie einen Kategorienamen aus categories.yaml oder einen numerischen Kategoriepfad."
     "Category element 'cat_%s' not found. Page layout: %s": "Kategorie-Element 'cat_%s' nicht gefunden. Seitenlayout: %s"
 
+  _click_category_dialog_level:
+    "Category dialog has no unique match for '%(category)s' at path segment '%(segment)s'. Offered choices: %(offered)s": "Im Kategorie-Dialog gibt es für '%(category)s' auf Pfadstufe '%(segment)s' keine eindeutige Auswahl. Angezeigte Optionen: %(offered)s"
+
+  _set_category_in_dialog:
+    "Category dialog cannot resolve the configured category path '%s' to visible labels.": "Der Kategorie-Dialog kann den konfigurierten Kategorienpfad '%s' nicht in sichtbare Bezeichnungen auflösen."
+    "Category dialog did not select the requested leaf '%s'.": "Der Kategorie-Dialog hat die gewünschte Unterkategorie '%s' nicht ausgewählt."
+    "Category dialog does not have one unique apply button for '%s'.": "Der Kategorie-Dialog hat für '%s' keine eindeutige Schaltfläche zum Übernehmen."
+    "Category dialog remained open after applying '%s'.": "Der Kategorie-Dialog blieb nach dem Übernehmen von '%s' geöffnet."
+
   _open_shipping_size_selection:
     "Failed to configure shipping options in dialog!": "Versandoptionen konnten im Dialog nicht konfiguriert werden!"
 
@@ -378,7 +387,6 @@ kleinanzeigen_bot/publishing_form.py:
     "Successfully set attribute field [%s] to [%s]...": "Attributfeld [%s] erfolgreich auf [%s] gesetzt..."
     "Failed to set attribute '%s'": "Fehler beim Setzen des Attributs '%s'"
     "Special attribute '%s' is not available for the selected category. Skipping.": "Spezielles Attribut '%s' ist für die ausgewählte Kategorie nicht verfügbar. Überspringe."
-    "Failed to set attribute field '%s' via known input types.": "Fehler beim Setzen des Attributfelds '%s' über bekannte Eingabetypen."
     "Condition dialog not available, falling back to generic attribute handler for [%s]...": "Zustandsdialog nicht verfügbar, falle auf generischen Attribut-Handler für [%s] zurück..."
 
   _set_special_attribute_input:
