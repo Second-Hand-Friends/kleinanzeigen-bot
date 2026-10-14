@@ -30,7 +30,7 @@ from .chrome_version_detector import (
     detect_chrome_version_from_binary,
     detect_chrome_version_from_remote_debugging,
 )
-from .misc import T, ensure
+from .misc import T, ensure, truncate_for_log
 
 if TYPE_CHECKING:
     from nodriver.cdp.runtime import RemoteObject
@@ -1361,10 +1361,11 @@ class WebScrapingMixin:  # noqa: PLR0904
                 LOG.debug("Failed to extract value from RemoteObject: %s", e)
                 return result
 
-        # debug log the jscode but avoid excessive debug logging of window.scrollTo calls
+        # debug log the jscode but avoid excessive debug logging of window.scrollTo calls;
+        # scripts and results are capped because page data (e.g. Astro props) can be huge
         _prev_jscode:str = getattr(self.__class__.web_execute, "_prev_jscode", "")
         if not (jscode == _prev_jscode or (jscode.startswith("window.scrollTo") and _prev_jscode.startswith("window.scrollTo"))):
-            LOG.debug("web_execute(`%s`) = `%s`", jscode, result)
+            LOG.debug("web_execute(`%s`) = `%s`", truncate_for_log(jscode), truncate_for_log(result))
         self.__class__.web_execute._prev_jscode = jscode  # type: ignore[attr-defined]  # noqa: SLF001 Private member accessed
 
         return result

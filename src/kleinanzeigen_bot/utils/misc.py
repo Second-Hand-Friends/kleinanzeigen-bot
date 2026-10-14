@@ -302,6 +302,18 @@ def format_timedelta(td:timedelta) -> str:
     return ", ".join(parts) if parts else i18n.pluralize("second", 0)
 
 
+def truncate_for_log(value:object, max_length:int = 300) -> str:
+    """Return ``value`` as a single line for debug logs, capped at ``max_length`` characters.
+
+    Whitespace runs (including newlines of inline scripts) collapse to one space; longer
+    text is cut and gets a marker with the number of omitted characters.
+    """
+    text = " ".join(str(value).split())
+    if len(text) <= max_length:
+        return text
+    return f"{text[:max_length]}… (+{len(text) - max_length} chars)"
+
+
 def sanitize_folder_name(name:str, max_length:int = 100) -> str:
     """
     Sanitize a string for use as a folder name using `sanitize-filename`.

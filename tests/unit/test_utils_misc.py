@@ -265,3 +265,18 @@ def test_sanitize_folder_name_cross_platform_consistency(
 
     # All platforms should produce the same result for safe inputs
     assert len(set(results)) == 1, f"Cross-platform inconsistency for '{test_input}': {results}"
+
+
+@pytest.mark.parametrize(("value", "expected"), [
+    ("short", "short"),
+    ("(() => {\n    return 1;\n})()", "(() => { return 1; })()"),
+    ({"a": 1}, "{'a': 1}"),
+    (None, "None"),
+])
+def test_truncate_for_log_keeps_short_values_on_one_line(value:object, expected:str) -> None:
+    assert misc.truncate_for_log(value) == expected
+
+
+def test_truncate_for_log_caps_long_values() -> None:
+    result = misc.truncate_for_log("x" * 121_075, max_length = 300)
+    assert result == "x" * 300 + "… (+120775 chars)"
