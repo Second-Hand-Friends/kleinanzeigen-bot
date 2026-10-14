@@ -1333,9 +1333,10 @@ class AdExtractor(WebScrapingMixin):
         :param island_props: optional Astro island props from the redesigned layout
         :return: the price of the offer (optional); and the pricing type
         """
+        island_pricing = self._extract_pricing_info_from_island(island_props)
         try:
             await self._fail_fast_if_legacy_absent(
-                has_island_fallback = self._extract_pricing_info_from_island(island_props) is not None,
+                has_island_fallback = island_pricing is not None and island_pricing[1] != "NOT_APPLICABLE",
                 selector_type = By.ID, selector_value = "viewad-price",
             )
             price_str:str = await self.web_text(By.ID, "viewad-price")

@@ -380,10 +380,19 @@ class TestAdExtractorLegacyProbes:
         assert web_probe_mock.await_count == (1 if expect_probe else 0)
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "island_props",
+        [
+            {"shippingHeader": [0, "Nur Abholung"]},
+            {"price": [0, {"amount": [0, None], "type": [0, "FIXED"]}]},
+        ],
+        ids = ["no-island-price", "unusable-island-price"],
+    )
     # pylint: disable=protected-access
-    async def test_redesigned_price_keeps_full_lookup_without_island_price(self, test_extractor:extract_module.AdExtractor) -> None:
-        """Island data without a price must not skip the regular, retrying #viewad-price lookup."""
-        island_props:dict[str, Any] = {"shippingHeader": [0, "Nur Abholung"]}
+    async def test_redesigned_price_keeps_full_lookup_without_usable_island_price(
+        self, test_extractor:extract_module.AdExtractor, island_props:dict[str, Any]
+    ) -> None:
+        """Island data without a usable price must not skip the regular, retrying #viewad-price lookup."""
         web_probe_mock = AsyncMock(return_value = None)
         with (
             patch.object(test_extractor, "web_probe", web_probe_mock),
