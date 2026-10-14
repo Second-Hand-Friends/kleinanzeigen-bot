@@ -38,7 +38,7 @@ def _freeze_update_state_datetime(monkeypatch:pytest.MonkeyPatch, fixed_now:date
             base = fixed_now.astimezone(UTC).replace(tzinfo = None)
             return cls(base.year, base.month, base.day, base.hour, base.minute, base.second, base.microsecond)
 
-    datetime_module = getattr(update_check_state_module, "datetime")
+    datetime_module = getattr(update_check_state_module, "dt")
     monkeypatch.setattr(datetime_module, "datetime", FixedDateTime)
 
 
