@@ -341,26 +341,27 @@ class TestAdExtractorPricing:
         assert any(record.name == extract_module.__name__ and record.levelname == "WARNING" for record in caplog.records)
 
 
+@pytest.mark.unit
 class TestAdExtractorLegacyProbes:
     """Legacy lookups on redesigned pages fail fast instead of waiting for the full timeout (#1287)."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("island_props", "probe_result", "expect_probe", "expect_timeout"),
+        ("has_island_fallback", "probe_result", "expect_probe", "expect_timeout"),
         [
-            ({}, None, False, False),
-            ({"formattedCreationDate": [0, "22.08.2026"]}, None, True, True),
-            ({"formattedCreationDate": [0, "22.08.2026"]}, "element", True, False),
+            (False, None, False, False),
+            (True, None, True, True),
+            (True, "element", True, False),
         ],
-        ids = ["classic-page-no-probe", "redesigned-absent-fails-fast", "redesigned-present-continues"],
+        ids = ["no-island-fallback-no-probe", "fallback-and-absent-fails-fast", "fallback-and-present-continues"],
     )
     # pylint: disable=protected-access
     async def test_fail_fast_if_legacy_absent(
         self,
         test_extractor:extract_module.AdExtractor,
-        island_props:dict[str, Any],
         probe_result:str | None,
         *,
+        has_island_fallback:bool,
         expect_probe:bool,
         expect_timeout:bool,
     ) -> None:
@@ -368,11 +369,30 @@ class TestAdExtractorLegacyProbes:
         with patch.object(test_extractor, "web_probe", web_probe_mock):
             if expect_timeout:
                 with pytest.raises(TimeoutError):
-                    await test_extractor._fail_fast_if_legacy_absent(island_props, By.ID, "viewad-price")
+                    await test_extractor._fail_fast_if_legacy_absent(
+                        has_island_fallback = has_island_fallback, selector_type = By.ID, selector_value = "viewad-price",
+                    )
             else:
-                await test_extractor._fail_fast_if_legacy_absent(island_props, By.ID, "viewad-price")
+                await test_extractor._fail_fast_if_legacy_absent(
+                    has_island_fallback = has_island_fallback, selector_type = By.ID, selector_value = "viewad-price",
+                )
 
         assert web_probe_mock.await_count == (1 if expect_probe else 0)
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_redesigned_price_keeps_full_lookup_without_island_price(self, test_extractor:extract_module.AdExtractor) -> None:
+        """Island data without a price must not skip the regular, retrying #viewad-price lookup."""
+        island_props:dict[str, Any] = {"shippingHeader": [0, "Nur Abholung"]}
+        web_probe_mock = AsyncMock(return_value = None)
+        with (
+            patch.object(test_extractor, "web_probe", web_probe_mock),
+            patch.object(test_extractor, "web_text", new_callable = AsyncMock, return_value = "25 €"),
+        ):
+            price, price_type = await test_extractor._extract_pricing_info_from_ad_page(island_props = island_props)
+
+        assert (price, price_type) == (25, "FIXED")
+        web_probe_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     # pylint: disable=protected-access
