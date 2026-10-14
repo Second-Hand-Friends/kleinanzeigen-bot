@@ -332,10 +332,10 @@ async def _wait_for_manual_package_submission(web:WebScrapingMixin) -> None:
     failure_message = _("Manual package publication was not confirmed; check your listings before retrying")
     try:
         await ainput(_("Choose a package and finish publishing in the browser, then press Enter to continue..."))
-        still_editing = await web.web_execute(r"""
-        (() => window.location.pathname.startsWith('/p-anzeigentypauswahl/')
-            || window.location.pathname === '/p-anzeige-aufgeben-schritt2.html')()
-        """)
+        still_editing = await web.web_execute(
+            "window.location.pathname.startsWith('/p-anzeigentypauswahl/')"
+            " || window.location.pathname === '/p-anzeige-aufgeben-schritt2.html'"
+        )
     except (EOFError, OSError, TimeoutError, ProtocolException) as ex:
         # A human may have submitted already. Never retry an uncertain publish.
         raise PublishSubmissionUncertainError(failure_message) from ex
@@ -417,6 +417,31 @@ async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     return [error for error in result if isinstance(error, str) and error.strip()] if isinstance(result, list) else []
 
 
+_NEXT_STEP_OUTCOME_SCRIPT:Final[str] = r"""
+window.location.pathname.startsWith('/p-anzeigentypauswahl/') ? 'package'
+    : [...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Ohne Bild veröffentlichen') ? 'hint'
+    : null
+"""
+
+
+async def _confirm_image_hint_before_package_page(web:WebScrapingMixin) -> None:
+    """Confirm the no-image hint that "Nächster Schritt" shows before the package page.
+
+    Waits (bounded) for either the hint or the package page; only the hint is clicked,
+    and only once. Anything else (e.g. editor validation errors) is left to the caller's
+    package-page polling, which reports it.
+    """
+    try:
+        outcome = await web.web_await(
+            lambda: web.web_execute(_NEXT_STEP_OUTCOME_SCRIPT),
+            timeout = web.timeout("page_load"),
+        )
+    except TimeoutError:
+        return
+    if outcome == "hint":
+        await (await web.web_find(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = web.timeout("quick_dom"))).click()
+
+
 async def _click_submit_button(
     web:WebScrapingMixin,
     *,
@@ -438,11 +463,7 @@ async def _click_submit_button(
         continued = await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("next")))
         if continued is not True:
             raise TimeoutError(_("Could not continue to package selection; the ad was not published"))
-        # Ads without images get the image hint right after "Nächster Schritt";
-        # it blocks the package page until it is confirmed.
-        image_hint_button = await web.web_probe(By.TEXT, "Ohne Bild ver\u00f6ffentlichen", timeout = web.timeout("quick_dom"))
-        if image_hint_button is not None:
-            await image_hint_button.click()
+        await _confirm_image_hint_before_package_page(web)
     if state in {"next", "package"}:
         if package_selection == "BASIS":
             await _submit_free_basis_package(web)

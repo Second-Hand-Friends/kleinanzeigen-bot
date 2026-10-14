@@ -810,22 +810,39 @@ async def test_manual_preflight_requires_interactive_input_before_prompt(
 
 
 @pytest.mark.asyncio
-async def test_image_hint_after_next_step_is_confirmed_before_package_selection(test_bot:KleinanzeigenBot) -> None:
-    """Without images the form asks to confirm right after "Nächster Schritt"; the package step waits behind it."""
-    image_hint = AsyncMock()
+@pytest.mark.parametrize(("outcome", "expect_click"), [("hint", True), ("package", False), ("timeout", False)])
+async def test_image_hint_after_next_step_is_confirmed_once(test_bot:KleinanzeigenBot, outcome:str, *, expect_click:bool) -> None:
+    """Without images "Nächster Schritt" first shows the image hint; confirm it, but nothing else."""
+    hint_button = AsyncMock()
 
-    async def package_step(_web:object) -> None:
-        image_hint.click.assert_awaited_once()
+    async def await_outcome(condition:Any, **_:Any) -> Any:
+        if outcome == "timeout":
+            raise TimeoutError("neither hint nor package page")
+        return outcome
 
+    with (
+        patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_outcome),
+        patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = hint_button) as find,
+    ):
+        await publishing_submission._confirm_image_hint_before_package_page(test_bot)
+
+    assert hint_button.click.await_count == (1 if expect_click else 0)
+    if expect_click:
+        assert find.await_args is not None
+        assert find.await_args.args[:2] == (By.TEXT, "Ohne Bild veröffentlichen")
+
+
+@pytest.mark.asyncio
+async def test_next_step_confirms_image_hint_before_package_selection(test_bot:KleinanzeigenBot) -> None:
+    """The image hint is handled before the package step starts polling."""
+    order:list[str] = []
     with (
         patch.object(publishing_submission, "_find_submit_button", new_callable = AsyncMock, return_value = "next"),
         patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = True),
-        patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = image_hint) as probe,
         patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-        patch.object(publishing_submission, "_submit_free_basis_package", side_effect = package_step) as basis,
+        patch.object(publishing_submission, "_confirm_image_hint_before_package_page",
+                     side_effect = lambda _web: order.append("hint")),
+        patch.object(publishing_submission, "_submit_free_basis_package", side_effect = lambda _web: order.append("basis")),
     ):
         await publishing_submission._click_submit_button(test_bot, package_selection = "BASIS")
-
-    assert probe.await_args is not None
-    assert probe.await_args.args[:2] == (By.TEXT, "Ohne Bild veröffentlichen")
-    basis.assert_awaited_once()
+    assert order == ["hint", "basis"]
