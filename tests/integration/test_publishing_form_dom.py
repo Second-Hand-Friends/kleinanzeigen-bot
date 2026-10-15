@@ -28,9 +28,10 @@ async def _show_combobox(web:WebScrapingMixin, show_html:ShowHtml, body:str, men
         for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click']) {{
             button.addEventListener(type, () => events.push(type));
         }}
-        button.addEventListener('click', () => setTimeout(() => {{
+        // Render synchronously: headless Chromium may throttle page timers on slow CI runners.
+        button.addEventListener('click', () => {{
             document.getElementById('slot').innerHTML = {json.dumps(menu)};
-        }}, 50));
+        }});
         true
     """)
 
