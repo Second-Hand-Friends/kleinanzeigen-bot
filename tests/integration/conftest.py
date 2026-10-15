@@ -67,13 +67,25 @@ async def web(browser_session:WebScrapingMixin) -> WebScrapingMixin:
 
 
 class _BlankPageHandler(BaseHTTPRequestHandler):
-    """Serve an empty page under every path, so page scripts see a real ``location``."""
+    """Serve an empty page under every path, so page scripts see a real ``location``.
+
+    ``/echo`` answers with the request's method and headers as JSON, ``/missing`` with 404.
+    """
 
     def do_GET(self) -> None:  # noqa: N802 - HTTPServer handler contract
-        """Serve the empty page."""
-        body = b'<!doctype html><html lang="de"><meta charset="utf-8"><body></body></html>'
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
+        """Serve the empty page, the echo or the 404."""
+        if self.path == "/echo":
+            self._send(200, "application/json", json.dumps({"method": self.command, "headers": dict(self.headers)}).encode())
+        elif self.path == "/missing":
+            self._send(404, "text/plain", b"missing")
+        else:
+            self._send(200, "text/html; charset=utf-8", b'<!doctype html><html lang="de"><meta charset="utf-8"><body></body></html>')
+
+    do_POST = do_GET  # noqa: N815 - HTTPServer handler contract
+
+    def _send(self, status:int, content_type:str, body:bytes) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)

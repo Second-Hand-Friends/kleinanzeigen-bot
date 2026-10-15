@@ -3,11 +3,13 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Run the WebScrapingMixin page scripts in the real browser against inline HTML."""
 
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from nodriver import cdp
 
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
@@ -49,14 +51,12 @@ async def test_web_check_reads_display_and_selection_state(
 
 async def test_page_layout_summary_reports_layout_hints(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """The troubleshooting summary counts islands and lists category links."""
-    await show_html('<astro-island></astro-island><a id="cat_1">A</a><a id="cat_2">B</a><div id="ad-category-picker"></div>')
+    await show_html('<astro-island></astro-island><span data-testid="logged-in-user"></span>'
+                    '<a id="cat_1">A</a><a id="cat_2">B</a><div id="ad-category-picker"></div>')
+    await fast_web.page.send(cdp.emulation.set_device_metrics_override(width = 765, height = 600, device_scale_factor = 1, mobile = False))
     summary = await fast_web.page_layout_summary()
-    assert summary["astro_islands"] == 1
-    assert summary["logged_in_marker"] is False
-    assert summary["category_ids"] == ["cat_1", "cat_2"]
-    assert summary["category_picker"] is True
-    assert summary["inner_width"] > 0
-    assert summary["ready_state"] == "complete"
+    assert summary == {"url": fast_web.page.url, "astro_islands": 1, "logged_in_marker": True, "category_ids": ["cat_1", "cat_2"],
+                       "category_picker": True, "inner_width": 765, "ready_state": "complete"}
 
 
 @pytest.mark.parametrize("tag", ["input", "textarea"])
@@ -77,21 +77,23 @@ async def test_set_input_value_uses_native_setter_and_dispatches_events(
     assert await fast_web.web_execute(f"{native}.call(document.getElementById('field'))") == 'Er sagte "Hallo"'
 
 
-async def test_web_request_returns_status_headers_and_content(fast_web:WebScrapingMixin, show_html:ShowHtml, blank_site:str) -> None:
-    """A request from the page returns the response as plain data."""
+async def test_web_request_sends_method_and_headers(fast_web:WebScrapingMixin, show_html:ShowHtml, blank_site:str) -> None:
+    """Method and headers reach the server unchanged, quotes included, as the delete flow's CSRF header must."""
     await show_html("")
-    response = await fast_web.web_request(f"{blank_site}/data.json", headers = {"x-test": "1"})
+    response = await fast_web.web_request(f"{blank_site}/echo", method = "post", headers = {"x-csrf-token": 'to"k\'en'})
     assert response["statusCode"] == 200
     assert response["statusMessage"] == "OK"
-    assert response["headers"]["content-type"] == "text/html; charset=utf-8"
-    assert "<body></body>" in response["content"]
+    assert response["headers"]["content-type"] == "application/json"
+    echo = json.loads(response["content"])
+    assert echo["method"] == "POST"
+    assert echo["headers"]["x-csrf-token"] == 'to"k\'en'
 
 
 async def test_web_request_rejects_unexpected_status(fast_web:WebScrapingMixin, show_html:ShowHtml, blank_site:str) -> None:
-    """The loopback server does not implement POST, so the 501 response is rejected."""
+    """A status outside the valid codes is an error."""
     await show_html("")
-    with pytest.raises(AssertionError, match = "501"):
-        await fast_web.web_request(f"{blank_site}/delete.json", method = "post")
+    with pytest.raises(AssertionError, match = "404"):
+        await fast_web.web_request(f"{blank_site}/missing")
 
 
 @pytest.mark.parametrize(("selected_value", "expected"), [("b", "b"), ("Option C", "c"), (2, "2")])
@@ -119,9 +121,10 @@ async def test_web_select_unknown_option_raises_timeout(fast_web:WebScrapingMixi
 async def test_web_select_combobox_clicks_matching_item(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """The typed value selects the list item whose normalized label matches."""
     await show_html('<input id="brand" aria-controls="brands"><ul id="brands">'
-                    "<li><span>Logo</span><span>Rene Lezard</span></li><li><span>Logo</span><span>Esprit</span></li></ul>")
+                    '<li id="rene" onclick="this.dataset.clicked = 1"><span>Logo</span><span>Rene Lezard</span></li>'
+                    '<li id="esprit" onclick="this.dataset.clicked = 1"><span>Logo</span><span>Esprit</span></li></ul>')
     await fast_web.web_select_combobox(By.ID, "brand", "rene__lezard")
-    assert await fast_web.web_execute("clicks") == ["LogoRene Lezard"]
+    assert await fast_web.web_execute("[...document.querySelectorAll('[data-clicked]')].map(li => li.id)") == ["rene"]
 
 
 async def test_web_select_button_combobox_clicks_matching_option(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:

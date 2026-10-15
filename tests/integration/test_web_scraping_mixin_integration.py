@@ -48,3 +48,14 @@ async def test_logged_in_marker_is_detected_on_redesigned_start_page_at_any_view
 
     assert await has_logged_in_marker(web, username = "user@example.com") is True
     assert await has_logged_in_marker(web, username = "someone_else@example.com") is False
+
+
+async def test_viewport_resize_applies_window_bounds(web:WebScrapingMixin) -> None:
+    """The randomized viewport is applied through CDP window bounds; headless sessions skip it at start, so test it directly."""
+    window_id, original = await web.page.get_window()
+    try:
+        assert await web._apply_viewport_size("1111x777") is True
+        _, bounds = await web.page.get_window()
+        assert (bounds.width, bounds.height) == (1111, 777)
+    finally:
+        await web.page.send(cdp.browser.set_window_bounds(window_id, bounds = cdp.browser.Bounds(width = original.width, height = original.height)))

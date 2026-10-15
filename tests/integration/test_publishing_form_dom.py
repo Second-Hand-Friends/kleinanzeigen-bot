@@ -68,7 +68,6 @@ async def test_button_combobox_prefers_react_option_values(web:WebScrapingMixin,
 
 
 @pytest.mark.parametrize(("body", "menu", "message"), [
-    pytest.param('<div><button id="other">x</button></div>', "", "Button not found", id = "missing-button"),
     pytest.param('<div><button id="fuel" role="combobox">Kraftstoff</button><div id="slot"></div></div>',
                  f'<ul id="fuel-menu">{_OPTIONS}</ul>', "Option not found", id = "unknown-value"),
     pytest.param('<div><button id="fuel" role="combobox">Kraftstoff</button><div id="slot"></div></div>',
@@ -78,12 +77,17 @@ async def test_button_combobox_failures_raise_timeout(
     web:WebScrapingMixin, show_html:ShowHtml, body:str, menu:str, message:str,
 ) -> None:
     """Every failure the script reports becomes a TimeoutError with its reason."""
-    if "fuel" in body:
-        await _show_combobox(web, show_html, body, menu)
-    else:
-        await show_html(body)
+    await _show_combobox(web, show_html, body, menu)
     with pytest.raises(TimeoutError, match = message):
         await publishing_form._select_button_combobox(web, "fuel", "elektro")
+
+
+async def test_button_combobox_missing_button_raises_timeout(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """Without the button nothing is opened or clicked."""
+    await show_html('<button id="other">x</button>')
+    with pytest.raises(TimeoutError, match = "Button not found"):
+        await publishing_form._select_button_combobox(web, "fuel", "elektro")
+    assert await web.web_execute("clicks") == []
 
 
 async def test_condition_trigger_is_marked_next_to_its_label(web:WebScrapingMixin, show_html:ShowHtml) -> None:
