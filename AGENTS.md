@@ -49,7 +49,7 @@ Do not preserve accidental internal compatibility:
 ## Repo Patterns
 
 - Browser automation: follow existing `WebScrapingMixin` patterns and use `ensure()` for validation.
-- In-page JavaScript: put non-trivial scripts in `src/kleinanzeigen_bot/resources/js/` and call them via `utils/page_scripts.py`; see `CONTRIBUTING.md` for the `js-debt` convention and `docs/TESTING.md` for browser tests.
+- In-page JavaScript: put non-trivial scripts in `src/kleinanzeigen_bot/resources/js/` and call them via `utils/page_scripts.py`; new or changed scripts must pass `deno lint`/`deno check` without suppressions (never add `js-debt` markers; see `CONTRIBUTING.md`); test them in the browser as described in `docs/TESTING.md`.
 - Logging: use `loggers.get_logger(__name__)`.
 - Config and file paths: prefer `pathlib.Path` and existing file helpers.
 - For Windows-specific cross-platform path logic, prefer `pathlib.PureWindowsPath` when relevant.

@@ -37,7 +37,10 @@ This project uses a layered testing approach, with a focus on reliability and fa
 Test the scripts in `src/kleinanzeigen_bot/resources/js/` in the real browser, not against a hand-written or simulated DOM: visibility, `:disabled`, form validity and click semantics only behave correctly in Chromium.
 
 - Use the `web` and `show_html` fixtures from `tests/integration/conftest.py`. `show_html(body, path)` opens `path` on a loopback server, so scripts see a real `location`, and records clicks in `window.clicks`.
-- All browser tests share one Chromium session; a test costs milliseconds. They are `itest` and `slow`, with `pytest.mark.asyncio(loop_scope = "session")`.
+- All browser tests share one headless Chromium session; a test costs milliseconds. To watch the browser while debugging,
+  run e.g. `KLEINANZEIGEN_BOT_ITEST_HEADED=1 pdm run itest` (PowerShell: `$env:KLEINANZEIGEN_BOT_ITEST_HEADED=1`).
+  The window then switches pages in quick succession.
+- Browser tests are `itest` and `slow`, with `pytest.mark.asyncio(loop_scope = "session")`.
 - Unit tests that mock `web_execute` should recognize a script by comparing with the exact call (e.g. `page_scripts.call("submit_button", ...)`), not by searching its text, which `deno fmt` may change.
 
 ## Smoke Test Marking and Execution

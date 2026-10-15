@@ -4,13 +4,14 @@
 """One real browser for all browser-based integration tests.
 
 Starting Chromium is the slowest and flakiest part of these tests, and each start opens a window.
-The tests only load offline HTML and emulate viewport widths via CDP, so they share one session
-and reset the per-test state instead.
+The tests only load offline HTML and emulate viewport widths via CDP, so they share one headless
+session and reset the per-test state instead.
 """
 
 import asyncio
 import contextlib
 import json
+import os
 import platform
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -30,6 +31,10 @@ _BROWSER_START_RETRY_DELAY = 10  # seconds, as the former per-test reruns
 async def browser_session() -> AsyncIterator[WebScrapingMixin]:
     """Start the browser with the bot's default launch configuration once per test session."""
     web = WebScrapingMixin()
+    # No window by default: tests switch pages in quick succession, and a flickering window is
+    # disruptive. Set KLEINANZEIGEN_BOT_ITEST_HEADED=1 to watch the browser while debugging.
+    if os.environ.get("KLEINANZEIGEN_BOT_ITEST_HEADED") != "1":
+        web.browser_config.arguments.append("--headless=new")
     if platform.system() == "Linux":
         # required for Ubuntu 24.04 or newer
         web.browser_config.arguments.append("--no-sandbox")
