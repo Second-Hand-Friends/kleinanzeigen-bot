@@ -76,9 +76,13 @@ _IP_RANGE_BLOCKED_TEXT:Final[str] = "IP-Bereich vorübergehend gesperrt"
 
 
 # Both the request-code screen and the already-sent-code screen require the user.
+# The lead phrase must sit in one text node (any, not only the first); the rest may be
+# split by inline markup. script/style are excluded so inline page data cannot trigger
+# a blocking prompt.
 _SMS_VERIFICATION_SELECTOR:Final[str] = (
-    "//*[contains(text(), 'Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer') "
-    "or (contains(text(), 'Wir senden dir') and contains(., 'Code'))]"
+    "//*[not(self::script or self::style)]"
+    "[(text()[contains(., 'Wir haben dir gerade')] and contains(., 'Telefonnummer')) "
+    "or (text()[contains(., 'Wir senden dir')] and contains(., 'Code'))]"
 )
 
 
@@ -524,6 +528,7 @@ async def wait_for_post_auth0_submit_transition(
     if "SMS_VERIFICATION" in classification:
         # A recognized challenge is progress, not a failed login. The caller
         # pauses in check_sms_verification and verifies the session afterward.
+        LOG.debug("Post-submit SMS verification challenge detected; deferring to manual verification")
         return
     sanitized_url = _diagnostic_url(web)
     LOG.warning("Auth0 post-submit verification remained inconclusive")
