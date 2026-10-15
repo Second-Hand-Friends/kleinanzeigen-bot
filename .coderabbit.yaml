@@ -37,12 +37,14 @@ reviews:
     - "src/**/*.py"
     - "tests/**/*.py"
     - "scripts/**/*.py"
+    - "src/**/*.js"
 
     # GitHub automation - workflows, dependabot, templates, etc.
     - ".github/**"
 
     # Root config files
     - "pyproject.toml"
+    - "deno.json"
     - "*.yaml"
     - "**/*.yaml"
     - "*.yml"
@@ -120,6 +122,16 @@ reviews:
         5. Use appropriate logging
         6. Include SPDX license headers
         7. Use type hints for all functions
+    - path: "src/kleinanzeigen_bot/resources/js/**/*.js"
+      instructions: |
+        IN-PAGE JAVASCRIPT RULES (see CONTRIBUTING.md "In-Page JavaScript"):
+        1. Each file holds one parenthesized function expression with SPDX header, `// @ts-check` and JSDoc types
+        2. Python passes arguments via kleinanzeigen_bot.utils.page_scripts as JSON; flag values spliced into script text
+        3. No new suppressions: flag any added @ts-expect-error, @ts-ignore, @ts-nocheck, deno-lint-ignore or js-debt marker
+        4. JSDoc casts only where the selector or preceding code proves the type
+        5. Use globalThis.X instead of window.X or bare page globals that a page could shadow
+        6. Scripts must be tested in the real browser (tests/integration, show_html fixture), not against a simulated DOM
+        7. NEVER flag formatting; deno fmt handles it via pdm run format
     - path: "docs/**/*.md"
       instructions: |
         DOCUMENTATION RULES:
