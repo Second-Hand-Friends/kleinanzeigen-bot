@@ -35,11 +35,16 @@ kleinanzeigen_bot/cli.py:
     "Unknown command: %s": "Unbekannter Befehl: %s"
     "More than one command given: %s": "Mehr als ein Befehl angegeben: %s"
     "Invalid --workspace-mode '%s'. Use 'portable' or 'xdg'.": "Ungültiger --workspace-mode '%s'. Verwenden Sie 'portable' oder 'xdg'."
+    'Invalid --fee-limit: use a finite nonnegative amount in the configured currency.': 'Ungültiges --fee-limit: Verwenden Sie einen endlichen, nicht negativen Betrag in der konfigurierten Währung.'
   _warn_unpatched_nodriver:
     ? "nodriver CDP re-attach patch not found: installed nodriver may miss the flat-mode fix. Plain pip installs skip the PDM post_install hook; run `pdm install` from a source checkout or `python scripts/fix_nodriver.py` from the repository. Symptom: repeated `Re-attaching CDP session after -32601`."
     : "nodriver CDP Re-Attach-Patch nicht gefunden: installiertes nodriver hat möglicherweise nicht den Flat-Mode-Fix. Reine pip-Installationen überspringen den PDM post_install-Hook; führen Sie `pdm install` in einem Quell-Checkout aus oder `python scripts/fix_nodriver.py` aus dem Repository. Symptom: wiederholtes `Re-attaching CDP session after -32601`."
 
 #################################################
+  _validate_ebay_options:
+    --refresh is available only for ebay-status.: --refresh ist nur für ebay-status verfügbar.
+    --fee-limit is available only for ebay-publish.: --fee-limit ist nur für ebay-publish verfügbar.
+    --dry-run, --refresh and --fee-limit are available only for eBay commands.: --dry-run, --refresh und --fee-limit sind nur für eBay-Befehle verfügbar.
 kleinanzeigen_bot/runtime_config.py:
 #################################################
   create_default_config:
@@ -1303,3 +1308,115 @@ kleinanzeigen_bot/utils/xdg_paths.py:
     "XDG footprint hits": "Gefundene XDG-Spuren"
     "Detected both portable and XDG footprints.": "Sowohl portable als auch XDG-Spuren wurden gefunden."
     "Detected neither portable nor XDG footprints.": "Weder portable noch XDG-Spuren wurden gefunden."
+
+kleinanzeigen_bot/ebay_store.py:
+  record_listing:
+    eBay returned an invalid listing ID: eBay hat eine ungültige Angebots-ID zurückgegeben
+  identify:
+    Conflicting eBay source identities; restore the original source ID before continuing: Widersprüchliche eBay-Quellidentitäten; stellen Sie vor dem Fortfahren die ursprüngliche Quell-ID wieder her
+  remember_alias:
+    Conflicting eBay source identities; restore the original source ID before continuing: Widersprüchliche eBay-Quellidentitäten; stellen Sie vor dem Fortfahren die ursprüngliche Quell-ID wieder her
+  restore_download_metadata:
+    Conflicting eBay source identities; restore the original source ID before continuing: Widersprüchliche eBay-Quellidentitäten; stellen Sie vor dem Fortfahren die ursprüngliche Quell-ID wieder her
+
+kleinanzeigen_bot/ebay_auth.py:
+  login:
+    eBay authorization completed: eBay-Autorisierung abgeschlossen
+    'Open this eBay authorization URL in your browser:': 'Öffnen Sie diese eBay-Autorisierungsadresse in Ihrem Browser:'
+    After approving access, paste the full callback URL below.: Fügen Sie nach der Zugriffserlaubnis unten die vollständige Rückleitungsadresse ein.
+    'eBay callback URL: ': 'eBay-Rückleitungsadresse: '
+    'eBay login aborted: no callback URL provided.': 'eBay-Anmeldung abgebrochen: keine Rückleitungsadresse angegeben.'
+  access_token:
+    Refreshed eBay access token: eBay-Zugriffstoken erneuert
+  _client_secret:
+    Prompting for eBay client secret: eBay-Client-Geheimnis wird abgefragt
+    Using eBay client secret from environment: eBay-Client-Geheimnis aus der Umgebung wird verwendet
+    'eBay login aborted: no client secret provided.': 'eBay-Anmeldung abgebrochen: kein Client-Geheimnis angegeben.'
+    'eBay client secret: ': 'eBay-Client-Geheimnis: '
+  _save_tokens:
+    Stored eBay authorization: eBay-Autorisierung gespeichert
+  _extract_code:
+    'eBay authorization failed: invalid callback.': 'eBay-Autorisierung fehlgeschlagen: ungültige Rückleitung.'
+  _fsync_directory:
+    'Failed to fsync directory: %s': 'Verzeichnis konnte nicht synchronisiert werden: %s'
+  __init__:
+    Invalid eBay environment. Expected 'sandbox' or 'production'.: Ungültige eBay-Umgebung. Erwartet wird 'sandbox' oder 'production'.
+    Invalid eBay account label.: Ungültige eBay-Kontobezeichnung.
+    Invalid eBay client ID.: Ungültige eBay-Client-ID.
+    Invalid eBay redirect URI.: Ungültige eBay-Rückleitungskennung.
+  _token_request:
+    eBay token request failed.: eBay-Tokenanfrage fehlgeschlagen.
+  _load_tokens:
+    Stored eBay authorization is invalid. Run login again.: Gespeicherte eBay-Autorisierung ist ungültig. Führen Sie die Anmeldung erneut aus.
+    No eBay authorization found for this account. Run login first.: Keine eBay-Autorisierung für dieses Konto gefunden. Melden Sie sich zuerst an.
+
+kleinanzeigen_bot/ebay_preparation.py:
+  prepare:
+    at least one local picture: mindestens ein lokales Bild
+    at most 24 pictures: höchstens 24 Bilder
+    a description after link removal: eine Beschreibung nach dem Entfernen der Links
+    auctions require quantity one and Best Offer disabled: Auktionen erfordern Menge eins und deaktivierte Preisvorschläge
+    a positive eBay price: ein positiver eBay-Preis
+    an explicit eBay price override for wanted, giveaway or unpriced sources: ein ausdrücklicher eBay-Preis für Gesuche, Geschenke oder Quellen ohne Preis
+  build_item:
+    Complete the missing eBay details before verification or publication: Ergänzen Sie vor der Prüfung oder Veröffentlichung die fehlenden eBay-Angaben
+
+kleinanzeigen_bot/ebay_workflow.py:
+  show_prepared:
+    'eBay preparation: %s': 'eBay-Vorbereitung: %s'
+    'Title: %s | Price: %s | Format: %s | Quantity: %s': 'Titel: %s | Preis: %s | Format: %s | Menge: %s'
+    ? "Cleaned description (%s links removed):\n%s"
+    : "Bereinigte Beschreibung (%s Links entfernt):\n%s"
+    'Pictures: %s': 'Bilder: %s'
+    'Missing eBay details: %s': 'Fehlende eBay-Angaben: %s'
+  process_listing:
+    'Estimated eBay listing fees: %s %s (limit: %s)': 'Geschätzte eBay-Einstellgebühren: %s %s (Grenze: %s)'
+    Published eBay listing %s for source %s: eBay-Angebot %s für Quelle %s veröffentlicht
+    eBay source %s already has a publish journal; skipping submission: eBay-Quelle %s hat bereits einen Veröffentlichungseintrag; Übermittlung wird übersprungen
+    Estimated eBay listing fees exceed --fee-limit; publication skipped: Geschätzte eBay-Einstellgebühren überschreiten --fee-limit; Veröffentlichung übersprungen
+    Publish intent was not persisted; publication stopped: Veröffentlichungsabsicht wurde nicht gespeichert; Veröffentlichung gestoppt
+    eBay publication requires reconciliation for source %s; no automatic retry: eBay-Veröffentlichung für Quelle %s muss abgeglichen werden; keine automatische Wiederholung
+  show_record:
+    'eBay source %s | Listing: %s | Status: %s': 'eBay-Quelle %s | Angebot: %s | Status: %s'
+    not published: nicht veröffentlicht
+  run:
+    --refresh is available only for ebay-status.: --refresh ist nur für ebay-status verfügbar.
+    'Invalid --fee-limit: use a finite nonnegative amount in the configured currency.': 'Ungültiges --fee-limit: Verwenden Sie einen endlichen, nicht negativen Betrag in der konfigurierten Währung.'
+    eBay --ads must be new, all, or comma-separated Kleinanzeigen IDs: eBay --ads muss new, all oder durch Kommas getrennte Kleinanzeigen-IDs enthalten
+    eBay seller authorization confirmed for %s (%s): eBay-Verkäuferautorisierung für %s (%s) bestätigt
+    One or more eBay sources failed; correct their details before retrying: Mindestens eine eBay-Quelle ist fehlgeschlagen; korrigieren Sie die Angaben vor einem erneuten Versuch
+    Configure ebay.account, ebay.client_id and ebay.redirect_uri before connecting to eBay: Konfigurieren Sie vor der eBay-Verbindung ebay.account, ebay.client_id und ebay.redirect_uri
+    'eBay processing failed for %s: %s': 'eBay-Verarbeitung für %s fehlgeschlagen: %s'
+  _process_source:
+    Publish intent was not persisted; publication stopped: Veröffentlichungsabsicht wurde nicht gespeichert; Veröffentlichung gestoppt
+    'Skipping eBay source %s: an existing mapping or intent prevents relisting': 'eBay-Quelle %s wird übersprungen: Eine bestehende Zuordnung oder Veröffentlichungsabsicht verhindert erneutes Einstellen'
+    Complete the missing eBay details before verification or publication: Ergänzen Sie vor der Prüfung oder Veröffentlichung die fehlenden eBay-Angaben
+    eBay authorization is required: eBay-Autorisierung ist erforderlich
+  reconcile:
+    ? Publication outcome is unresolved; source %s remains blocked. Run ebay-status --ads=all --refresh later; do not delete its journal.
+    : Veröffentlichungsergebnis ist ungeklärt; Quelle %s bleibt gesperrt. Führen Sie später ebay-status --ads=all --refresh aus; löschen Sie den Veröffentlichungseintrag nicht.
+
+kleinanzeigen_bot/ebay_api.py:
+  call:
+    eBay seller listing lookup was incomplete; publication remains blocked: Die eBay-Verkäuferangebotsabfrage war unvollständig; die Veröffentlichung bleibt gesperrt
+    eBay returned an incomplete acknowledgement; publication may need reconciliation: eBay hat eine unvollständige Bestätigung zurückgegeben; ein Abgleich der Veröffentlichung kann erforderlich sein
+    eBay request failed or timed out; publication may need reconciliation: eBay-Anfrage ist fehlgeschlagen oder hat die Zeit überschritten; ein Abgleich der Veröffentlichung kann erforderlich sein
+    eBay returned an unreadable response; publication may need reconciliation: eBay hat eine unlesbare Antwort zurückgegeben; ein Abgleich der Veröffentlichung kann erforderlich sein
+    'eBay rejected the request (error codes: %s): %s': 'eBay hat die Anfrage abgelehnt (Fehlercodes: %s): %s'
+  seller:
+    Authorized eBay seller does not match ebay.account; check the account and environment: Autorisierter eBay-Verkäufer stimmt nicht mit ebay.account überein; prüfen Sie Konto und Umgebung
+  upload_picture:
+    eBay did not return a hosted picture URL: eBay hat keine Adresse für das hochgeladene Bild zurückgegeben
+    eBay picture upload failed; no listing was submitted: eBay-Bildupload fehlgeschlagen; kein Angebot wurde übermittelt
+  publish:
+    eBay did not return a listing ID; reconcile before continuing: eBay hat keine Angebots-ID zurückgegeben; gleichen Sie den Status vor dem Fortfahren ab
+  status:
+    eBay did not return a listing status: eBay hat keinen Angebotsstatus zurückgegeben
+  reconcile:
+    Multiple eBay listings match this source; publication remains blocked: Mehrere eBay-Angebote passen zu dieser Quelle; die Veröffentlichung bleibt gesperrt
+    eBay seller listing lookup was incomplete; publication remains blocked: Die eBay-Verkäuferangebotsabfrage war unvollständig; die Veröffentlichung bleibt gesperrt
+    eBay returned an invalid listing ID: eBay hat eine ungültige Angebots-ID zurückgegeben
+  verify:
+    eBay did not return complete listing fees in the configured currency: eBay hat keine vollständigen Einstellgebühren in der konfigurierten Währung zurückgegeben
+
+kleinanzeigen_bot/ebay_description.py: {}

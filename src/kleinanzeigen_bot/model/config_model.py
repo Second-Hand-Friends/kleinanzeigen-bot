@@ -11,6 +11,7 @@ from typing import Annotated, Any, Final, Literal
 from pydantic import AfterValidator, Field, field_validator, model_validator
 from typing_extensions import deprecated
 
+from kleinanzeigen_bot.model.ebay_model import EbayConfig
 from kleinanzeigen_bot.model.update_check_model import UpdateCheckConfig
 from kleinanzeigen_bot.utils import dicts, loggers
 from kleinanzeigen_bot.utils.misc import get_attr
@@ -599,6 +600,8 @@ class Config(ContextualModel):
         ),
         examples = ['"./downloaded-ads/**/*.yaml"', '"./**/ad_*.{json,yml,yaml}"'],
     )
+
+    ebay:EbayConfig = Field(default_factory = EbayConfig, description = "Optional eBay CLI configuration; existing Kleinanzeigen commands are unaffected")
 
     ad_defaults:AdDefaults = Field(default_factory = AdDefaults, description = "Default values for ads, can be overwritten in each ad configuration file")
 

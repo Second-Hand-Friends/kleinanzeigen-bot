@@ -19,6 +19,7 @@ import signal
 import sys
 import textwrap
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -60,6 +61,9 @@ class ParsedArgs:
     log_file_path:str | None = None
     logfile_explicitly_provided:bool = False
     workspace_mode:str | None = None
+    dry_run:bool = False
+    refresh:bool = False
+    fee_limit:Decimal = Decimal(0)
 
 
 def _restore_library_path_for_subprocesses() -> None:
@@ -163,6 +167,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               status   - Zeigt Anzeigenstatus und APR-Vorschau an
               list     - Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an
+              ebay-login - Verbindet das eBay-Verkäuferkonto über OAuth
+              ebay-prepare - Bereitet lokale Anzeigen für eBay vor und entfernt Beschreibungslinks
+              ebay-verify - Prüft eBay-Anzeigen und geschätzte Einstellgebühren ohne Veröffentlichung
+              ebay-publish - Veröffentlicht gültige eBay-Anzeigen ohne bestehende Zuordnung
+              ebay-status - Zeigt lokale eBay-Zuordnungen (--ads=all für alle)
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -197,6 +206,10 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * all: Stellt alle passenden Anzeigen um
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
                     * Hinweis: Anzeigen, die bereits im Zielzustand sind, werden übersprungen.
+              --ads=new|all|<id(s)> (ebay-*) - Wählt Quellen nach Kleinanzeigen-ID (STANDARD: new, noch keine eBay-Zuordnung)
+              --dry-run (ebay-*) - Nur lokale Vorbereitung, ohne Netzwerkanfragen
+              --refresh (ebay-status) - Gleicht den Online-Status ab
+              --fee-limit=<BETRAG> (ebay-publish) - Obergrenze geschätzter Einstellgebühren pro Anzeige (STANDARD: 0)
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --preserve-local-settings - Erzwingt das Beibehalten lokaler Einstellungen bei erneutem Download (überschreibt config-Wert false)
@@ -228,6 +241,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           diagnose - diagnoses browser connection issues and shows troubleshooting information
           status   - shows ad status and APR preview details
           list     - lists current online ads with ID, title, state, and expiry date
+          ebay-login - connects an eBay seller account with OAuth
+          ebay-prepare - prepares local ads for eBay and removes description links
+          ebay-verify - validates eBay listings and estimated fees without publishing
+          ebay-publish - publishes valid eBay listings without an existing mapping
+          ebay-status - shows local eBay mappings (--ads=all for all)
           --
           help     - displays this help (default command)
           version  - displays the application version
@@ -261,6 +279,10 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * all: switch all eligible ads
                 * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
                 * Note: ads already in the target state are skipped.
+          --ads=new|all|<id(s)> (ebay-*) - selects sources by Kleinanzeigen ID (DEFAULT: new, no eBay mapping)
+          --dry-run (ebay-*) - strictly local preparation with no network requests
+          --refresh (ebay-status) - reconciles online listing status
+          --fee-limit=<AMOUNT> (ebay-publish) - maximum estimated listing fees per listing (DEFAULT: 0)
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication
           --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
@@ -284,7 +306,8 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
         options, arguments = getopt.gnu_getopt(
             list(args)[1:],
             "hv",
-            ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "preserve-local-settings", "verbose", "workspace-mode="],
+            ["ads=", "config=", "dry-run", "refresh", "fee-limit=", "force", "help", "keep-old", "logfile=", "lang=",
+             "preserve-local-settings", "verbose", "workspace-mode="],
         )
     except getopt.error as ex:
         LOG.error(ex.msg)
@@ -314,6 +337,18 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
             case "--force":
                 parsed.ads_selector = "all"
                 parsed.ads_selector_explicit = True
+            case "--dry-run":
+                parsed.dry_run = True
+            case "--refresh":
+                parsed.refresh = True
+            case "--fee-limit":
+                try:
+                    parsed.fee_limit = Decimal(value)
+                    if not parsed.fee_limit.is_finite() or parsed.fee_limit < 0:
+                        raise InvalidOperation
+                except InvalidOperation:
+                    LOG.error("Invalid --fee-limit: use a finite nonnegative amount in the configured currency.")
+                    sys.exit(2)
             case "--keep-old":
                 parsed.keep_old_ads = True
             case "--preserve-local-settings":
@@ -342,7 +377,23 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
             LOG.error("More than one command given: %s", arguments)
             sys.exit(2)
 
+    _validate_ebay_options(parsed, options)
     return parsed
+
+
+def _validate_ebay_options(parsed:ParsedArgs, options:list[tuple[str, str]]) -> None:
+    if parsed.refresh and parsed.command != "ebay-status":
+        LOG.error("--refresh is available only for ebay-status.")
+        sys.exit(2)
+    if any(option == "--fee-limit" for option, _value in options) and parsed.command != "ebay-publish":
+        LOG.error("--fee-limit is available only for ebay-publish.")
+        sys.exit(2)
+    if parsed.command.startswith("ebay-"):
+        if not parsed.ads_selector_explicit:
+            parsed.ads_selector = "new"
+    elif parsed.dry_run or parsed.refresh or any(option == "--fee-limit" for option, _value in options):
+        LOG.error("--dry-run, --refresh and --fee-limit are available only for eBay commands.")
+        sys.exit(2)
 
 
 def main(args:Sequence[str]) -> None:

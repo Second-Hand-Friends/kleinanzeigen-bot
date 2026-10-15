@@ -37,6 +37,12 @@
 - **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
 - **Flexible Configuration**: Configure defaults once, override per listing as needed
 
+### Optional eBay publishing
+
+Prepare, verify and publish local ads on eBay through separate CLI commands.
+The default environment is sandbox; dry runs stay local and existing Kleinanzeigen
+offers remain online. See [eBay setup, fees and recovery](docs/EBAY.md).
+
 ### ⚠️ Legal Disclaimer
 
 The use of this program could violate the terms of service of kleinanzeigen.de applicable at the time of use.
@@ -222,6 +228,11 @@ Commands:
   diagnose - diagnoses browser connection issues and shows troubleshooting information
   status   - shows ad status and APR preview details
   list     - lists current online ads with ID, title, state, and expiry date
+  ebay-login - connects an eBay seller account with OAuth
+  ebay-prepare - prepares local ads for eBay and removes description links
+  ebay-verify - validates eBay listings and estimated fees without publishing
+  ebay-publish - publishes valid eBay listings without an existing mapping
+  ebay-status - shows local eBay mappings (--ads=all for all)
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -255,6 +266,10 @@ Options:
         * all: switch all eligible ads
         * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
         * Note: ads already in the target state are skipped.
+  --ads=new|all|<id(s)> (ebay-*) - selects sources by Kleinanzeigen ID (DEFAULT: new, no eBay mapping)
+  --dry-run (ebay-*) - strictly local preparation with no network requests
+  --refresh (ebay-status) - reconciles online listing status
+  --fee-limit=<AMOUNT> (ebay-publish) - maximum estimated listing fees per listing (DEFAULT: 0)
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
   --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
