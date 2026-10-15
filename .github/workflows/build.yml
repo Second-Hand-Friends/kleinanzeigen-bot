@@ -230,6 +230,10 @@ jobs:
       run: pdm run basedpyright
 
 
+    - name: Check in-page JavaScript with deno
+      run: pdm run lint:js
+
+
     - name: Prepare split coverage artifacts
       run: pdm run ci:coverage:prepare
 
