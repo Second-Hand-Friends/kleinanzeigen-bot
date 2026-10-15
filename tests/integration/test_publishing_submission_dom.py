@@ -14,7 +14,7 @@ from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.utils import page_scripts
-from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, PublishSubmissionUncertainError
+from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, ManualPackageSelectionRequiredError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 
 pytestmark = [pytest.mark.itest, pytest.mark.slow, pytest.mark.asyncio(loop_scope = "session")]
@@ -409,10 +409,94 @@ async def test_omitted_selection_never_chooses_or_publishes_a_package(
     with (
         patch.object(web, "web_await", side_effect = _poll_three_times),
         patch.object(web, "web_sleep", new_callable = AsyncMock),
-        patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock, return_value = ""),
+        patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock, return_value = "") as manual_input,
         pytest.raises(PublishSubmissionUncertainError),
     ):
         await publishing_submission._click_submit_button(web)
+    assert await _clicks(web) == []
+    manual_input.assert_awaited_once()
+
+
+async def test_manual_selection_keeps_the_legacy_submit_flow(
+    web:WebScrapingMixin, show_html:ShowHtml, monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """Preserve single-step publishing when no package-selection page appears."""
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    await show_html("<button>Anzeige aufgeben</button>", _EDITOR_PATH)
+    with (
+        patch.object(web, "web_await", side_effect = _poll_three_times),
+        patch.object(web, "web_sleep", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock) as manual_input,
+    ):
+        await publishing_submission._click_submit_button(web, package_selection = "MANUAL")
+    assert await _clicks(web) == ["Anzeige aufgeben"]
+    manual_input.assert_not_awaited()
+
+
+@pytest.mark.parametrize("initial_stage", ["editor", "package"])
+@pytest.mark.parametrize("outcome", ["completed", "still-package", "still-editor", "eof", "input-error", "page-timeout"])
+async def test_manual_package_selection_never_clicks_a_package_or_final_submit(
+    web:WebScrapingMixin, show_html:ShowHtml, monkeypatch:pytest.MonkeyPatch, initial_stage:str, outcome:str,
+) -> None:
+    """Leave package and final submit controls to the user throughout manual completion."""
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
+    package = _basis_html(selected = False)
+    if initial_stage == "editor":
+        await _show_staged(web, show_html, _editor_html(), _EDITOR_PATH, next_page = package)
+    else:
+        await _show_staged(web, show_html, package, _PACKAGE_PATH)
+    real_execute = web.web_execute
+    input_seen = False
+
+    async def execute(script:str) -> Any:
+        """Lose the browser state once the user has answered, if the scenario asks for it."""
+        if input_seen and outcome == "page-timeout":
+            raise TimeoutError("manual completion state unavailable")
+        return await real_execute(script)
+
+    async def manual_completion(*_:object) -> str:
+        """Act as the user: finish, leave a draft behind, or fail to answer."""
+        nonlocal input_seen
+        assert await real_execute("location.pathname") == _PACKAGE_PATH
+        clicked = list(await real_execute("clicks"))
+        assert "Basis Paket" not in clicked
+        assert "Anzeige aufgeben" not in clicked
+        input_seen = True
+        if outcome == "eof":
+            raise EOFError("interactive input unavailable")
+        if outcome == "input-error":
+            raise OSError("interactive input unavailable")
+        path = {"still-package": _PACKAGE_PATH, "still-editor": _EDITOR_PATH}.get(outcome, "/p-anzeige-aufgeben-bestaetigung.html")
+        await real_execute(f"history.replaceState({{}}, '', {json.dumps(path)}); true")
+        return ""
+
+    with (
+        patch.object(web, "web_execute", side_effect = execute),
+        patch.object(web, "web_await", side_effect = _poll_three_times),
+        patch.object(web, "web_sleep", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock, side_effect = manual_completion) as manual_input,
+    ):
+        if outcome == "completed":
+            await publishing_submission._click_submit_button(web, package_selection = "MANUAL")
+        else:
+            with pytest.raises(PublishSubmissionUncertainError):
+                await publishing_submission._click_submit_button(web, package_selection = "MANUAL")
+    assert list(await real_execute("clicks")) == (["Nächster Schritt"] if initial_stage == "editor" else [])
+    manual_input.assert_awaited_once()
+
+
+async def test_manual_without_terminal_stops_before_next_step(
+    web:WebScrapingMixin, show_html:ShowHtml, monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    """Unattended MANUAL runs must not click "Nächster Schritt", which would leave an unfinished draft (#1341)."""
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    await _show_staged(web, show_html, _editor_html(), _EDITOR_PATH, next_page = _basis_html(selected = False))
+    with (
+        patch.object(web, "web_await", side_effect = _poll_three_times),
+        patch.object(web, "web_sleep", new_callable = AsyncMock),
+        pytest.raises(ManualPackageSelectionRequiredError),
+    ):
+        await publishing_submission._click_submit_button(web, package_selection = "MANUAL")
     assert await _clicks(web) == []
 
 
