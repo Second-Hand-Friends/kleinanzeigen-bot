@@ -24,7 +24,7 @@ from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
 from .model.config_model import AutoPriceReductionConfig, Config
-from .utils import dicts, files, i18n, loggers, misc, reflect
+from .utils import dicts, files, i18n, loggers, misc, page_scripts, reflect
 from .utils.web_scraping_mixin import Browser, By, WebScrapingMixin
 
 __all__ = [
@@ -774,17 +774,7 @@ class AdExtractor(WebScrapingMixin):
         Returns an empty dict if the island or its props cannot be parsed.
         """
         try:
-            raw = await self.web_execute("""(() => {
-                // Find the astro-island that contains ad data (imageDetails, userDetails, etc.)
-                const islands = document.querySelectorAll('astro-island');
-                for (const island of islands) {
-                    const props = island.getAttribute('props') || '';
-                    if (props.includes('imageDetails') || props.includes('formattedCreationDate') || props.includes('userDetails')) {
-                        return props;
-                    }
-                }
-                return null;
-            })()""")
+            raw = await self.web_execute(page_scripts.call("ad_island_props"))
             if not raw or not isinstance(raw, str):
                 LOG.debug("No Astro island with ad data found on %s", self.page.url)
                 return {}
