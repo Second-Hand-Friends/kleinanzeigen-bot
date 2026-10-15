@@ -154,6 +154,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               extend   - Verlängert Anzeigen im 8-Tage-Zeitfenster (behält Beobachter/Interessenten bei und zählt nicht zum monatlichen Anzeigenkontingent)
               reserve  - Reserviert Anzeigen: nimmt sie aus der Suche, behält aber ID, Alter, Aufrufe und Beobachter/Interessenten
               activate - Aktiviert reservierte Anzeigen wieder
+              login    - Öffnet einen sichtbaren Browser für manuelle Anmeldung und Geräteverifizierung
               download - Lädt eine oder mehrere Anzeigen herunter
               update-check - Prüft auf verfügbare Updates
               update-content-hash - Berechnet den content_hash aller Anzeigen anhand der aktuellen ad_defaults neu;
@@ -220,6 +221,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
           reserve  - reserves ads: removes them from search results while keeping the ad ID, age, view count and watchers/savers
           activate - re-activates reserved ads
+          login    - opens a visible browser for manual login and device verification
           download - downloads one or multiple ads
           update-check - checks for available updates
           update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;

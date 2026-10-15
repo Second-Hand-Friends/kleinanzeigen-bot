@@ -20,4 +20,4 @@ fi
 
 cd /mnt/data
 
-/opt/kleinanzeigen-bot --config $CONFIG_FILE "$@"
+exec /opt/kleinanzeigen-bot --config "$CONFIG_FILE" "$@"

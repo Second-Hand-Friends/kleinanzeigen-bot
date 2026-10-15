@@ -139,6 +139,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     self._handle_update_content_hash()
                 case "status":
                     self._handle_status()
+                case "login":
+                    await self._handle_login()
                 case "list":
                     await self._handle_list()
                 case "publish":
@@ -266,6 +268,29 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         use_color = _color.should_use_color()
         output = ad_status.render_status_rows(rows, color = use_color)
         print(output)
+
+    async def _handle_login(self) -> None:
+        """Let the user authenticate in the configured persistent browser profile."""
+        _misc.ensure(sys.stdin.isatty(), _("Manual login requires an interactive terminal."))
+        self._bootstrap_runtime()
+        if self.browser_config.use_private_window or any(
+            arg in {"--incognito", "--guest", "--inprivate"} for arg in self.browser_config.arguments
+        ):
+            LOG.warning("To reuse this session, disable private/guest mode in your browser configuration for subsequent commands.")
+        self.browser_config.use_private_window = False
+        self.browser_config.arguments = [
+            arg for arg in self.browser_config.arguments
+            if arg.partition("=")[0] not in {"--headless", "--incognito", "--guest", "--inprivate"}
+        ]
+        await self.create_browser_session()
+        await self.web_open(self.root_url)
+        await _login_flow.click_gdpr_banner(self)
+        LOG.info("Complete login and any device verification in the browser, then return to this terminal.")
+        await _misc.ainput(_("Press ENTER when done..."))
+        await self.web_open(self.root_url, reload_if_already_open = True)
+        detection = await self.get_login_state(capture_diagnostics = False)
+        _misc.ensure(detection.is_logged_in, _("Manual login could not be confirmed. Check the account and try again."))
+        LOG.info("Manual login confirmed. The browser session is saved in the configured profile.")
 
     async def _handle_list(self) -> None:
         """Show current online ads without loading or changing local ad files."""

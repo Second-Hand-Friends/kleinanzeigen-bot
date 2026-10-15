@@ -111,6 +111,8 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
    Use `ghcr.io/second-hand-friends/kleinanzeigen-bot:preview` for the preview channel.
 
+For manual login, SMS verification, and an optional noVNC web desktop, see [Manual login](docs/BROWSER_TROUBLESHOOTING.md#manual-login-and-sms-device-verification).
+
 ### Installation from source
 
 1. The following components need to be installed:
@@ -151,6 +153,8 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
    ```bash
    pdm run app --help
    ```
+
+For manual login, SMS verification, and an optional noVNC web desktop, see [Manual login](docs/BROWSER_TROUBLESHOOTING.md#manual-login-and-sms-device-verification).
 
 ### Installation from source using Docker
 
@@ -214,6 +218,7 @@ Commands:
   extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
   reserve  - reserves ads: removes them from search results while keeping the ad ID, age, view count and watchers/savers
   activate - re-activates reserved ads
+  login    - opens a visible browser for manual login and device verification
   download - downloads one or multiple ads
   update-check - checks for available updates
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;

@@ -649,6 +649,67 @@ pdm run app -v publish        # For source users
 curl http://localhost:9222/json/version
 ```
 
+## Manual login and SMS device verification
+
+Run `kleinanzeigen-bot login --config=/path/to/config.yaml` in an interactive terminal.
+The command opens a visible browser with the same profile as subsequent bot runs.
+It disables private/guest mode and headless arguments for this run, without changing the config file.
+Enter your credentials and complete any CAPTCHA, SMS request ("Code senden"), SMS code entry, or email verification in that browser.
+Then return to the terminal and press ENTER. The bot verifies the configured account and closes the browser to save the session.
+The command never fills credentials, sends SMS, downloads ads, or publishes ads.
+Your configured username must match the account you log into. Normal config validation still applies.
+
+For subsequent commands to reuse the session, set `browser.use_private_window: false` in your config
+and remove any `--incognito`, `--guest`, or `--inprivate` browser arguments. The login command changes
+these settings only for its own run and warns if your config would start a private session later.
+Keep the profile directory persistent and use that same directory for later commands.
+Stop other bot/browser processes using it before starting; Chromium cannot share a profile between simultaneous processes.
+If connecting to an externally managed browser via remote debugging, ensure that browser uses a persistent profile and close it yourself when finished.
+
+### Optional web desktop for Docker and Portainer
+
+The standard Docker image already supports X11 (see the README).
+For a server without a local display, build the optional noVNC image from a bot image containing the `login` command:
+
+```bash
+docker build -f docker/manual-login/Dockerfile \
+  --build-arg BOT_IMAGE=ghcr.io/second-hand-friends/kleinanzeigen-bot:preview \
+  -t kleinanzeigen-bot-login .
+
+docker run --rm -it --shm-size=256m \
+  -p 127.0.0.1:6080:6080 \
+  -v /path/to/bot-data:/mnt/data \
+  kleinanzeigen-bot-login
+```
+
+Stop scheduled bot runs first. Mount the same data directory (or named volume) containing your config and browser profile.
+For example, set the following in `config.yaml` for both the login container and normal bot container:
+
+```yaml
+browser:
+  user_data_dir: /mnt/data/browser-profile
+  use_private_window: false
+```
+
+Open `http://localhost:6080/vnc.html`, connect, and enter the separate VNC password chosen in the terminal on first use.
+VNC uses only the first eight password characters; use a separate eight-character password, not your account password.
+Complete the login in Chromium, then press ENTER in the container console. The desktop stops when the command completes.
+The VNC password is stored with restricted permissions under `/mnt/data/.vnc/passwd`.
+
+For Portainer, first publish this optional image to a registry your Docker host can pull from.
+Create a temporary container with the same data volume and port 6080 published, overriding its entrypoint to
+`/bin/bash -c "sleep infinity"` so it stays available for the console. Do not enable automatic restarts.
+Open an interactive `/bin/bash` container console and run `/opt/manual-login.sh`. Keep that console open until login completes.
+Afterward stop/remove the temporary container while retaining the data volume.
+For a remote host, tunnel port 6080 over SSH, or publish it only on a trusted LAN interface.
+The example binds to localhost; VNC password authentication does not encrypt the desktop traffic.
+Do not expose the desktop to the Internet. Resume normal bot commands after the login process has exited.
+
+To check the optional image offline, run `bash docker/manual-login/check.sh kleinanzeigen-bot-login`.
+The check uses an isolated container with networking disabled, a fake bot, and Chromium on `about:blank`.
+It checks the real desktop, VNC password requirement, terminal input forwarding, and shutdown.
+
+
 ## Using an Existing Browser Window
 
 By default a new browser process will be launched. To reuse a manually launched browser window/process, follow these steps:
