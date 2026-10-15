@@ -22,7 +22,7 @@ from kleinanzeigen_bot import ad_overview
 from kleinanzeigen_bot.model.config_model import Config as BotConfig
 from kleinanzeigen_bot.model.config_model import HumanizationConfig, TimeoutConfig
 
-from . import files, loggers, net, xdg_paths
+from . import files, loggers, net, page_scripts, xdg_paths
 from .browser_diagnostics import _is_linux_container_without_sys_ptrace, _run_browser_diagnostics
 from .browser_runtime_config import BrowserConfig
 from .chrome_version_detector import (
@@ -552,18 +552,7 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def extract_visible_text(self, element:Element) -> str:
         """Return visible text for a DOM element using user-selection extraction."""
         return str(
-            await element.apply("""
-            function (elem) {
-                let sel = window.getSelection()
-                sel.removeAllRanges()
-                let range = document.createRange()
-                range.selectNode(elem)
-                sel.addRange(range)
-                let visibleText = sel.toString().trim()
-                sel.removeAllRanges()
-                return visibleText
-            }
-        """)
+            await element.apply(page_scripts.function("visible_text"))
         )
 
     async def create_browser_session(self) -> None:
@@ -1275,16 +1264,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         async def is_displayed(elem:Element) -> bool:
             return cast(
                 bool,
-                await elem.apply("""
-                function (element) {
-                    var style = window.getComputedStyle(element);
-                    return style.display !== 'none'
-                        && style.visibility !== 'hidden'
-                        && style.opacity !== '0'
-                        && element.offsetWidth > 0
-                        && element.offsetHeight > 0
-                }
-            """),
+                await elem.apply(page_scripts.function("is_displayed")),
             )
 
         elem:Element = await self.web_find(selector_type, selector_value, timeout = timeout)
@@ -1301,16 +1281,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             case Is.SELECTED:
                 return cast(
                     bool,
-                    await elem.apply("""
-                    function (element) {
-                        if (element.tagName.toLowerCase() === 'input') {
-                            if (element.type === 'checkbox' || element.type === 'radio') {
-                                return element.checked
-                            }
-                        }
-                        return false
-                    }
-                """),
+                    await elem.apply(page_scripts.function("is_selected")),
                 )
         raise AssertionError(_("Unsupported attribute: %s") % attr)
 
@@ -1377,14 +1348,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         category links currently offered, ``inner_width`` reveals hidden ``md:block`` headers.
         """
         try:
-            result = await self.web_execute("""(() => ({
-                astro_islands: document.querySelectorAll('astro-island').length,
-                logged_in_marker: !!document.querySelector('[data-testid="logged-in-user"]'),
-                category_ids: [...document.querySelectorAll('[id^="cat_"]')].map(e => e.id).slice(0, 30),
-                category_picker: !!document.getElementById('ad-category-picker'),
-                inner_width: window.innerWidth,
-                ready_state: document.readyState,
-            }))()""")
+            result = await self.web_execute(page_scripts.call("page_layout_summary"))
         except Exception as ex:  # noqa: BLE001 diagnostics must never break the workflow
             return {"unavailable": str(ex)}
         return {"url": self.page.url, **result} if isinstance(result, dict) else {"url": self.page.url, "raw": result}
@@ -1392,20 +1356,7 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def web_set_input_value(self, element_id:str, value:str) -> None:
         """Sets a framework-controlled input value using the native DOM setter to trigger onChange."""
         await self.web_find(By.ID, element_id)  # raises TimeoutError if element is absent
-        js_element_id = json.dumps(element_id)
-        js_value = json.dumps(value)
-        result = await self.web_execute(
-            f"(function(id,v){{"
-            "var el=document.getElementById(id);"
-            "if(!el)return false;"
-            "var tag=el.tagName.toLowerCase();"
-            "var proto=tag==='textarea'?window.HTMLTextAreaElement:window.HTMLInputElement;"
-            "var setter=Object.getOwnPropertyDescriptor(proto.prototype,'value').set;"
-            "setter.call(el,v);"
-            "el.dispatchEvent(new Event('input',{bubbles:true}));"
-            "el.dispatchEvent(new Event('change',{bubbles:true}));"
-            f"}})({js_element_id},{js_value})"
-        )
+        result = await self.web_execute(page_scripts.call("set_input_value", element_id, value))
         if result is False:
             raise TimeoutError(
                 _("web_set_input_value: element '%(id)s' not found in DOM (TOCTOU race)") % {"id": element_id}
@@ -1852,23 +1803,7 @@ class WebScrapingMixin:  # noqa: PLR0904
     async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200, headers:dict[str, str] | None = None) -> Any:
         method = method.upper()
         LOG.debug(" -> HTTP %s [%s]...", method, url)
-        response = await self.web_execute(f"""
-            fetch("{url}", {{
-                method: "{method}",
-                redirect: "follow",
-                headers: {headers or {}}
-            }})
-            .then(response => response.text().then(responseText => {{
-                headers = {{}};
-                response.headers.forEach((v, k) => headers[k] = v);
-                return {{
-                    statusCode: response.status,
-                    statusMessage: response.statusText,
-                    headers: headers,
-                    content: responseText
-                }}
-            }}))
-        """)
+        response = await self.web_execute(page_scripts.call("web_request", url, method, headers or {}))
         if isinstance(valid_response_codes, int):
             valid_response_codes = [valid_response_codes]
         # web_execute may return a CDP ExceptionDetails (or None) instead of the
@@ -1923,36 +1858,8 @@ class WebScrapingMixin:  # noqa: PLR0904
         )
         elem = await self.web_find(selector_type, selector_value, timeout = timeout)
 
-        js_value = json.dumps(selected_value)  # safe escaping for JS
         try:
-            await elem.apply(f"""
-                function (element) {{
-                    const wanted = String({js_value});
-
-                    // 1) Try by value
-                    for (let i = 0; i < element.options.length; i++) {{
-                        if (element.options[i].value === wanted) {{
-                            element.selectedIndex = i;
-                            element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            return;
-                        }}
-                    }}
-
-                    // 2) Fallback by displayed text (trimmed)
-                    const needle = wanted.trim();
-                    for (let i = 0; i < element.options.length; i++) {{
-                        const opt = element.options[i];
-                        const shown = (opt.label ?? opt.text ?? opt.textContent ?? '').trim();
-                        if (shown === needle) {{
-                            element.selectedIndex = i;
-                            element.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                            return;
-                        }}
-                    }}
-
-                    throw new Error("Option not found by value or displayed text: " + wanted);
-                }}
-            """)
+            await elem.apply(page_scripts.function("select_option", selected_value))
         except Exception as ex:
             # Normalize selection failures to TimeoutError
             raise TimeoutError(_("Option not found by value or displayed text: %s") % selected_value) from ex
@@ -2011,43 +1918,11 @@ class WebScrapingMixin:  # noqa: PLR0904
                     ) from None
                 return input_field
 
-        js_value = json.dumps(search_value)  # safe escaping for JS
-
         # This selects the correct <li> by visible text inside the dropdown. It includes normalization, i.e. trimming
         # leading/trailing spaces, collapsing multiple spaces, and converting underscores to spaces for matching.
         # Hyphens are preserved since they can be legitimate characters in brand names.
         # Matching is done case-insensitive.
-        ok = await dropdown_elem.apply(f"""
-        function (element) {{
-          const selected = String({js_value});
-          const normalize = s => (s ?? '').replace(/_+/g, ' ').replace(/\\s+/g, ' ').trim().toLowerCase();
-          // Normalize whitespace and convert to lowercase for comparison
-
-          // Get all <li> elements inside the dropdown
-          const items = element.querySelectorAll(':scope > li[role="option"], :scope > li');
-
-          for (const li of items) {{
-            // The visible label is typically inside the last <span>
-            const labelEl = li.querySelector(':scope > span:last-of-type');
-            const label = normalize(labelEl ? labelEl.textContent : li.textContent);
-
-            // Compare normalized lowercase values
-            if (label === normalize(selected)) {{
-              // Scroll to make sure the element is visible
-              try {{
-                li.scrollIntoView({{block: 'nearest'}});
-              }} catch (e) {{}}
-
-              // Click the matched element
-              li.click();
-              return true;
-            }}
-          }}
-
-          // Return false if no matching item was found
-          return false;
-        }}
-        """)
+        ok = await dropdown_elem.apply(page_scripts.function("select_combobox_item", search_value))
 
         if not ok:
             LOG.warning("No matching option found in listbox for combobox '%s'. Falling back to ArrowDown + Enter.", selected_value)
@@ -2102,20 +1977,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         listbox_id = f"{elem_id}-menu"
         listbox = await self.web_find(By.ID, listbox_id, timeout = timeout)
 
-        js_value = json.dumps(selected_value)
-        ok = await listbox.apply(f"""(function(element) {{
-            const normalize = s => (s ?? '').replace(/\\s+/g, ' ').trim().toLowerCase();
-            const needle = normalize({js_value});
-            const items = element.querySelectorAll('[role="option"]');
-            for (const li of items) {{
-                if (normalize(li.textContent) === needle) {{
-                    try {{ li.scrollIntoView({{block: 'nearest'}}); }} catch (e) {{}}
-                    li.click();
-                    return true;
-                }}
-            }}
-            return false;
-        }})""")
+        ok = await listbox.apply(page_scripts.function("select_listbox_option", selected_value))
 
         if not ok:
             raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": selected_value, "id": elem_id})
@@ -2148,34 +2010,22 @@ class WebScrapingMixin:  # noqa: PLR0904
         timeout the navigation continues as before, with whatever state the page has stored.
         """
         try:
-            removed = await self.web_execute(f"""
-                (() => {{
-                    try {{
-                        const stored = JSON.parse(sessionStorage.getItem("queryParams") || "null");
-                        if (!stored || typeof stored !== "object") return [];
-                        const removed = {json.dumps(list(ad_overview.UNFILTERED_FIRST_PAGE_PARAMS))}.filter(key => key in stored);
-                        removed.forEach(key => delete stored[key]);
-                        if (removed.length) sessionStorage.setItem("queryParams", JSON.stringify(stored));
-                        return removed;
-                    }} catch (e) {{
-                        return [];
-                    }}
-                }})()
-            """)
+            removed = await self.web_execute(
+                page_scripts.call("reset_ad_overview_state", list(ad_overview.UNFILTERED_FIRST_PAGE_PARAMS))
+            )
         except TimeoutError as ex:
             LOG.warning("Could not reset the stored ad overview page and search: %s", ex)
             return
         if removed:
             LOG.debug("Reset stored ad overview parameters: %s", removed)
 
-    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:  # pragma: no cover — browser JS helper
+    async def _find_associated_button_combobox(self, *, hidden_input_name:str) -> str | None:
         """Locate a ``<button role="combobox">`` by walking from its backing hidden input.
 
-        The interesting logic (DOM queries, ``getElementById``, ancestor walk)
-        lives in the inline JavaScript and requires a live browser session for
-        meaningful coverage.  The Python wrapper (``json.dumps``, ``isinstance``
-        check, return) is trivial boilerplate.  Integration-level routing is
-        tested in ``test_init.py`` via the ``_set_special_attributes`` dispatch.
+        The DOM logic lives in ``resources/js/find_associated_button_combobox.js``
+        and is tested in the browser (``tests/integration/test_web_scraping_mixin_dom.py``).
+        Integration-level routing is tested in ``test_init.py`` via the
+        ``_set_special_attributes`` dispatch.
 
         Anchors to the specific hidden input identified by *hidden_input_name*
         (e.g. ``attributeMap[baby_kinderkleidung.groesse]``), derives the
@@ -2187,33 +2037,10 @@ class WebScrapingMixin:  # noqa: PLR0904
             hidden ``<input>``.
         :returns: The button's ``id`` attribute, or ``None`` if not found.
         """
-        js_hidden_name = json.dumps(hidden_input_name)  # pragma: no cover — browser JS helper
-        result = await self.web_execute(f"""(function() {{
-    const name = {js_hidden_name};
-
-    // Find the specific hidden input by exact name.
-    const inp = document.querySelector("input[type='hidden'][name=" + JSON.stringify(name) + "]");
-    if (!inp) return null;
-
-    // Derive expected button ID from attributeMap[VALUE].
-    const match = name.match(/^attributeMap\\[(.+)\\]$/);
-    if (match) {{
-        const btn = document.getElementById(match[1]);
-        if (btn && btn.getAttribute('role') === 'combobox' && btn.tagName === 'BUTTON') return match[1];
-    }}
-
-    // Walk up the DOM tree to find a button[role="combobox"].
-    let parent = inp.parentElement;
-    for (let i = 0; i < 8 && parent; i++, parent = parent.parentElement) {{
-        const btn = parent.querySelector('button[role="combobox"]');
-        if (btn && btn.id) return btn.id;
-    }}
-
-    return null;
-}})()""")  # pragma: no cover — browser JS helper
-        if isinstance(result, str) and result:  # pragma: no cover — browser JS helper
-            return result  # pragma: no cover — browser JS helper
-        return None  # pragma: no cover — browser JS helper
+        result = await self.web_execute(page_scripts.call("find_associated_button_combobox", hidden_input_name))
+        if isinstance(result, str) and result:
+            return result
+        return None
 
     async def _clear_input(self, input_field:Element) -> None:
         """Clear an input field by selecting all text via ``elem.select()`` and deleting it via CDP Backspace.

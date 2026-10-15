@@ -18,7 +18,7 @@
     /** @param {Element | null | undefined} element */
     const text = (element) =>
       (/** @type {HTMLElement | null | undefined} */ (element)?.innerText || "").replace(/\s+/g, " ").trim();
-    if (!location.pathname.startsWith("/p-anzeigentypauswahl/")) return { state: "waiting" };
+    if (!globalThis.location.pathname.startsWith("/p-anzeigentypauswahl/")) return { state: "waiting" };
     const radios = [.../** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('button[role="radio"]'))]
       .filter(visible);
     const candidates = radios.filter((element) => text(element) === "Basis Paket");

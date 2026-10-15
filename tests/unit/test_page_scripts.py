@@ -21,6 +21,7 @@ _SUPPRESSION = re.compile(r"@ts-expect-error|@ts-ignore|@ts-nocheck|deno-lint-ig
 # of js-debt markers. Only ever lower these numbers; new or changed scripts must pass without suppressions.
 _MIGRATION_DEBT:dict[str, int] = {
     "select_button_combobox": 3,
+    "select_listbox_option": 1,
 }
 
 

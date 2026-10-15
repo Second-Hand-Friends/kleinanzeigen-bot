@@ -12,7 +12,7 @@
    * @returns {"package" | "submit" | "next" | boolean}
    */
   (action, labels) => {
-    if (location.pathname.startsWith("/p-anzeigentypauswahl/")) return "package";
+    if (globalThis.location.pathname.startsWith("/p-anzeigentypauswahl/")) return "package";
     /** @param {HTMLElement} element */
     const visible = (element) =>
       element.getClientRects().length > 0 &&

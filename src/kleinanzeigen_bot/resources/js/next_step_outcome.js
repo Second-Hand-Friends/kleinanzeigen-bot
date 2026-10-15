@@ -6,7 +6,7 @@
 (
   /** Tell whether "Nächster Schritt" led to the package page or the no-image hint. */
   () =>
-    location.pathname.startsWith("/p-anzeigentypauswahl/")
+    globalThis.location.pathname.startsWith("/p-anzeigentypauswahl/")
       ? "package"
       : [...document.querySelectorAll("button")].some((button) =>
           button.textContent.trim() === "Ohne Bild veröffentlichen"
