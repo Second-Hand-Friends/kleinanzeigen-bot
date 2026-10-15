@@ -781,6 +781,8 @@ kleinanzeigen_bot/extract.py:
     "Could not remove staging directory %s: %s": "Konnte Staging-Verzeichnis %s nicht entfernen: %s"
 
   _extract_ad_page_info:
+    ? "Ad %s: no predefined shipping option could be extracted. Saved with sell_directly=false; review shipping_options before enabling direct purchase."
+    : "Anzeige %s: Keine vordefinierte Versandoption konnte ermittelt werden. Mit sell_directly=false gespeichert; shipping_options vor dem Aktivieren von Direkt kaufen prüfen."
     "Could not extract creation date from any selector or Astro component data.": "Erstellungsdatum konnte weder über Selektoren noch über Astro-Komponentendaten extrahiert werden."
     ? "Ad %s: neither BelenConf nor the anonymous fallback delivered ad dimensions; category attributes may stay incomplete and publishing can fail."
     : "Für Anzeige %s haben weder BelenConf noch der anonyme Fallback Anzeigen-Dimensionen geliefert; Kategorie-Attribute können unvollständig bleiben und das Veröffentlichen kann fehlschlagen."
