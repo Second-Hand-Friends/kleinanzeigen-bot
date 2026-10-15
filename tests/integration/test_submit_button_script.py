@@ -4,6 +4,7 @@
 """Run the submit button page script in the real browser against inline HTML."""
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -16,28 +17,24 @@ from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
 
 pytestmark = [pytest.mark.itest, pytest.mark.slow, pytest.mark.asyncio(loop_scope = "session")]
 
-
-def _show(body:str) -> str:
-    """Script that replaces the page body and records the label of every clicked button."""
-    # A real submit would navigate away and destroy the recorded clicks.
-    return (f"document.body.innerHTML = {json.dumps(body)}; window.clicks = [];"
-            " document.onclick = event => clicks.push(event.target.closest('button').innerText);"
-            " document.onsubmit = event => event.preventDefault(); true")
+ShowHtml = Callable[..., Awaitable[None]]
 
 
-async def _submit(web:WebScrapingMixin, body:str) -> list[str]:
+async def _submit(web:WebScrapingMixin, show_html:ShowHtml, body:str) -> list[str]:
     """Click the submit button found by the page script and return the clicked labels."""
-    await web.web_execute(_show(body))
+    await show_html(body, "/p-anzeige-aufgeben-schritt2.html")
     await web.web_execute(publishing_submission._submit_button_script("submit"))
     return list(await web.web_execute("clicks"))
 
 
 @pytest.mark.parametrize("label", ["Anzeige aufgeben", "Änderungen speichern", "Anzeige speichern"])
 @pytest.mark.parametrize("outcome", ["success", "timeout", "protocol", "response-lost", "sleep-timeout"])
-async def test_legacy_publish_and_update_click_once_outside_polling(web:WebScrapingMixin, label:str, outcome:str) -> None:
+async def test_legacy_publish_and_update_click_once_outside_polling(
+    web:WebScrapingMixin, show_html:ShowHtml, label:str, outcome:str,
+) -> None:
     """Keep the final publish or update click outside polling and avoid retries after uncertainty."""
+    await show_html("", "/p-anzeige-aufgeben-schritt2.html")
     real_execute = web.web_execute
-    await real_execute(_show(""))
     discovery_attempts = 0
     polling = False
 
@@ -47,7 +44,7 @@ async def test_legacy_publish_and_update_click_once_outside_polling(web:WebScrap
         if script == publishing_submission._submit_button_script("inspect"):
             discovery_attempts += 1
             if discovery_attempts == 2:
-                await real_execute(_show(f"<button>{label}</button>"))
+                await real_execute(f"document.body.innerHTML = {json.dumps(f'<button>{label}</button>')}")
         else:
             assert not polling, "The final click must not be inside retry polling"
         result = await real_execute(script)
@@ -88,15 +85,16 @@ async def test_legacy_publish_and_update_click_once_outside_polling(web:WebScrap
     assert await real_execute("clicks") == [label]
 
 
-async def test_submit_label_priority_beats_dom_order(web:WebScrapingMixin) -> None:
+async def test_submit_label_priority_beats_dom_order(web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """A secondary save button earlier in the DOM must not be clicked instead of the real submit."""
-    assert await _submit(web, "<button>Anzeige speichern</button><button>Anzeige aufgeben</button>") == ["Anzeige aufgeben"]
+    body = "<button>Anzeige speichern</button><button>Anzeige aufgeben</button>"
+    assert await _submit(web, show_html, body) == ["Anzeige aufgeben"]
 
 
-async def test_submit_search_stays_inside_the_editor_form(web:WebScrapingMixin) -> None:
+async def test_submit_search_stays_inside_the_editor_form(web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """A higher-priority label outside the editor form (e.g. a header) must not be clicked."""
     body = '<header><button>Anzeige aufgeben</button></header><form><input id="ad-title"><button>Anzeige speichern</button></form>'
-    assert await _submit(web, body) == ["Anzeige speichern"]
+    assert await _submit(web, show_html, body) == ["Anzeige speichern"]
 
 
 @pytest.mark.parametrize("body", [
@@ -104,7 +102,26 @@ async def test_submit_search_stays_inside_the_editor_form(web:WebScrapingMixin) 
     '<button style="display: none">Anzeige aufgeben</button>',
     '<div style="visibility: hidden"><button>Anzeige aufgeben</button></div>',
 ])
-async def test_unusable_button_is_not_clicked(web:WebScrapingMixin, body:str) -> None:
+async def test_unusable_button_is_not_clicked(web:WebScrapingMixin, show_html:ShowHtml, body:str) -> None:
     """Disabled or invisible submit buttons must not count as submitted."""
-    assert await _submit(web, body) == []
+    assert await _submit(web, show_html, body) == []
     assert await web.web_execute(publishing_submission._submit_button_script("submit")) is False
+
+
+@pytest.mark.parametrize(("body", "expected"), [
+    ("<button>Nächster Schritt</button>", "next"),
+    ("<button>Anzeige aufgeben</button>", "submit"),
+    ("", False),
+])
+async def test_inspect_reports_the_available_action(web:WebScrapingMixin, show_html:ShowHtml, body:str, expected:object) -> None:
+    """Inspection names the available action without clicking anything."""
+    await show_html(body, "/p-anzeige-aufgeben-schritt2.html")
+    assert await web.web_execute(publishing_submission._submit_button_script("inspect")) == expected
+    assert await web.web_execute("clicks") == []
+
+
+async def test_package_page_is_reported_before_any_button_lookup(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """The package selection page is detected by its path, so its submit button is never clicked here."""
+    await show_html("<button>Anzeige aufgeben</button>", "/p-anzeigentypauswahl/216/draft/test")
+    assert await web.web_execute(publishing_submission._submit_button_script("submit")) == "package"
+    assert await web.web_execute("clicks") == []

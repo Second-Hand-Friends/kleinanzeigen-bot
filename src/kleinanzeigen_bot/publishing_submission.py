@@ -14,7 +14,6 @@ import re
 import sys
 import urllib.parse as urllib_parse
 from gettext import gettext as _
-from importlib import resources
 from typing import Final, Literal
 
 from nodriver.core.connection import ProtocolException
@@ -23,6 +22,7 @@ from . import captcha_flow, published_ads
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import CaptchaConfig
 from .utils import loggers as _loggers
+from .utils import page_scripts
 from .utils.exceptions import AdFormValidationError, ManualPackageSelectionRequiredError, PublishSubmissionUncertainError
 from .utils.misc import ainput
 from .utils.web_scraping_mixin import By, WebScrapingMixin
@@ -169,12 +169,9 @@ _SUBMIT_LABELS:Final[tuple[str, ...]] = (
 )
 
 
-_SUBMIT_BUTTON_JS:Final[str] = resources.files("kleinanzeigen_bot.resources").joinpath("js/submit_button.js").read_text(encoding = "utf-8")
-
-
 def _submit_button_script(action:Literal["inspect", "submit", "next"]) -> str:
-    """Call the page script with JSON-encoded arguments."""
-    return f"{_SUBMIT_BUTTON_JS.strip().removesuffix(';')}({json.dumps(action)}, {json.dumps(_SUBMIT_LABELS)})"
+    """Script that inspects or clicks the editor's submit or next-step button."""
+    return page_scripts.call("submit_button", action, _SUBMIT_LABELS)
 
 
 async def _find_submit_button(web:WebScrapingMixin) -> object:

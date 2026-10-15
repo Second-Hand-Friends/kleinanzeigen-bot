@@ -180,6 +180,18 @@ All Python files must start with SPDX license headers:
 - Use `Final` for constants
 - Use `cast()` when type checker needs help
 
+### In-Page JavaScript
+
+Scripts the bot runs in the page (`web_execute`, `Element.apply`) live in `src/kleinanzeigen_bot/resources/js/`, except one-liners such as `document.referrer`.
+
+- Each file holds one parenthesized function expression, starts with the SPDX header (as `//` comments) and `// @ts-check`, and declares its parameter and return types with JSDoc.
+- Call it through `kleinanzeigen_bot.utils.page_scripts`: `call(name, *args)` for `web_execute`, `function(name, *bound)` for `Element.apply`. Arguments are passed as JSON; never splice values into script text.
+- `pdm run lint` runs `deno lint`, `deno fmt --check` and `deno check` (TypeScript checker with DOM types); `pdm run format` runs `deno fmt`.
+- A finding that can only be fixed by changing behavior is marked instead of silenced:
+  `// @ts-expect-error js-debt: <reason>` or `// deno-lint-ignore <rule> -- js-debt: <reason>`.
+  Both fail the lint once the finding is gone, so fixed debt cannot linger. Never use `@ts-ignore`, `@ts-nocheck` or a JSDoc cast to hide a finding.
+  `grep -rn js-debt src/kleinanzeigen_bot/resources/js` lists the open items; fix them in separate, tested changes.
+
 ### Documentation
 
 #### Docstrings
