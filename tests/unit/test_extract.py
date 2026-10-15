@@ -1303,6 +1303,41 @@ class TestAdExtractorContent:
             assert ad_cfg.description == raw_description
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(("options", "eligible", "expected", "expected_options", "warned"), [
+        (None, True, False, [], True),
+        ([], True, False, [], True),
+        (["DHL_2"], True, True, ["DHL_2"], False),
+        (None, False, False, None, False),
+    ])
+    async def test_extract_direct_purchase_with_unresolved_shipping(
+        self, test_extractor:extract_module.AdExtractor, tmp_path:Path, caplog:pytest.LogCaptureFixture, *,
+        options:list[str] | None, eligible:bool, expected:bool, expected_options:list[str] | None, warned:bool,
+    ) -> None:
+        """Unresolved shipping must not discard the ad, invent a carrier, or let ad defaults re-enable direct purchase."""
+        test_extractor.config = test_extractor.config.with_values({"ad_defaults": {"sell_directly": True}})
+        test_extractor.page = MagicMock(url = "https://www.kleinanzeigen.de/s-anzeige/test/12345")
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Original Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (10, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("SHIPPING", 4.99, options)),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = eligible),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ), caplog.at_level("WARNING"):
+            ad_cfg, *_ = await test_extractor._extract_ad_page_info_with_directory_handling(tmp_path, 12345)
+        assert ad_cfg.sell_directly is expected
+        assert ad_cfg.shipping_costs == 4.99
+        assert ad_cfg.content_hash
+        assert ad_cfg.shipping_options == expected_options
+        assert ("no predefined shipping option" in caplog.text) is warned
+        assert ad_cfg.to_ad(test_extractor.config.ad_defaults).sell_directly is expected
+
+    @pytest.mark.asyncio
     async def test_extract_ad_page_info_uses_css_selector_for_creation_date(
         self,
         test_extractor:extract_module.AdExtractor,

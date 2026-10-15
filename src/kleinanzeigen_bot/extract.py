@@ -925,6 +925,15 @@ class AdExtractor(WebScrapingMixin):
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page(island_props = island_props)
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page(island_props = island_props)
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
+        if info["sell_directly"] and not info["shipping_options"]:
+            # Eligibility does not identify a carrier. Keep the extracted costs without
+            # inventing a predefined option or inheriting unrelated ad defaults.
+            info["sell_directly"] = False
+            info["shipping_options"] = []
+            LOG.warning(
+                "Ad %s: no predefined shipping option could be extracted. Saved with sell_directly=false; "
+                "review shipping_options before enabling direct purchase.", ad_id,
+            )
         info["images"] = await self._download_images_from_ad_page(directory, ad_file_stem, island_props = island_props)
         info["contact"] = await self._extract_contact_from_ad_page(island_props = island_props)
         info["id"] = ad_id
