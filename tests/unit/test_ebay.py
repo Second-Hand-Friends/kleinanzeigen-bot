@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 from xml.etree import ElementTree as ET  # noqa: S405 - test fixtures only
@@ -571,3 +572,39 @@ def test_failed_intent_write_never_submits(source_files:tuple[Path, Path, dict[s
     with pytest.raises(EbayAPIError):
         ebay_workflow.run(config_path, "ebay-publish", "all", store = store, api = api)
     assert session.items == []
+
+
+def test_source_sync_uses_writable_handle(
+    source_files:tuple[Path, Path, dict[str, Any]], store:EbayStore, monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    _, path, raw = source_files
+    sync = os.fsync
+
+    def require_writable_handle(fd:int) -> None:
+        # A zero-byte write reproduces Windows' writable-handle requirement
+        # without changing the saved source data.
+        os.write(fd, b"")
+        sync(fd)
+
+    monkeypatch.setattr(os, "fsync", require_writable_handle)
+    source_id = store.identify(path, raw)
+    saved = dicts.load_dict(str(path), "ad")
+    assert saved["ebay_source_id"] == source_id
+    assert saved["description"] == raw["description"]
+
+
+def test_failed_source_sync_preserves_original_and_rolls_back_identity(
+    source_files:tuple[Path, Path, dict[str, Any]], store:EbayStore, monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    _, path, raw = source_files
+    original = path.read_bytes()
+
+    def fail_sync(fd:int) -> None:
+        raise OSError("simulated sync failure")
+
+    monkeypatch.setattr(os, "fsync", fail_sync)
+    with pytest.raises(OSError, match = "sync failure"):
+        store.identify(path, raw)
+    assert path.read_bytes() == original
+    assert store.lookup_identity(raw) is None
+    assert not list(path.parent.glob(".ebay-source-*"))

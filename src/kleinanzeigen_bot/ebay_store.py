@@ -43,7 +43,8 @@ def save_source(path:Path, raw:dict[str, Any]) -> None:
     os.close(fd)
     try:
         dicts.save_dict(temporary, raw)
-        with temporary.open("rb") as stream:
+        # Windows requires a writable handle for fsync/FlushFileBuffers.
+        with temporary.open("r+b") as stream:
             os.fsync(stream.fileno())
         temporary.chmod(path.stat().st_mode & 0o777)
         os.replace(temporary, path)

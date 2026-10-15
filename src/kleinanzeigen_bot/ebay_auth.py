@@ -283,11 +283,11 @@ class OAuthClient:
 
     @overload
     def _token_request(self, payload:dict[str, str], secret:str, *, require_refresh_token:Literal[True]) -> tuple[str, str, int]:
-        ...
+        pass
 
     @overload
     def _token_request(self, payload:dict[str, str], secret:str, *, require_refresh_token:Literal[False]) -> tuple[str, str | None, int]:
-        ...
+        pass
 
     def _token_request(self, payload:dict[str, str], secret:str, *, require_refresh_token:bool) -> tuple[str, str | None, int]:
         """POST a token request; all failures map to one generic error with suppressed cause."""

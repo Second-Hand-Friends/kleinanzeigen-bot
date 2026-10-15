@@ -654,14 +654,14 @@ class TestTokenFilePermissions:
         assert stat.S_IMODE(os.stat(client.token_file.parent).st_mode) == 0o700
         assert stat.S_IMODE(os.stat(client.store_dir).st_mode) == 0o700
 
-    def test_save_tightens_wide_permissions(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
+    def test_save_restores_private_permissions(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EBAY_SANDBOX_CLIENT_SECRET", "sandbox-secret")
         client = _make_client(tmp_path)
         client.token_file.parent.mkdir(parents = True, exist_ok = True)
         client.token_file.write_text("stale", encoding = "utf-8")
-        os.chmod(client.token_file, 0o644)
-        os.chmod(client.token_file.parent, 0o755)  # noqa: S103 - intentionally wide to verify tightening
-        os.chmod(client.store_dir, 0o755)  # noqa: S103 - intentionally wide to verify tightening
+        os.chmod(client.token_file, 0o700)
+        os.chmod(client.token_file.parent, 0o500)
+        os.chmod(client.store_dir, 0o500)
         _patch_getpass(monkeypatch, [_callback_url()])
         _patch_post(monkeypatch, _FakeResponse(200, {"access_token": "a", "refresh_token": "r", "expires_in": 7200}))
 
