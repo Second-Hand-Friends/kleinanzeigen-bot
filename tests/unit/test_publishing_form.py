@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import LOG
+from kleinanzeigen_bot import LOG, publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
@@ -2616,7 +2616,7 @@ class TestShippingOptionsDialog:
             if "window.location.href" in script:
                 return test_bot.page.url  # Return confirmation URL for ad_id extraction
             # Submit button JS click returns True (button found and clicked)
-            if "querySelectorAll('button')" in script:
+            if script in {publishing_submission._submit_button_script("inspect"), publishing_submission._submit_button_script("submit")}:
                 return True
             return None
 

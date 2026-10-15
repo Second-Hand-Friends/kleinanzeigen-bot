@@ -44,8 +44,10 @@ def _confirmation_execute(url:str) -> Callable[[str], Awaitable[Any]]:
     """Return a successful final click and the requested confirmation URL."""
     async def execute(script:str) -> Any:
         """Simulate submit discovery, the final click, and publication URL reads."""
-        if "const action =" in script and "const labels =" in script:
-            return "submit" if 'const action = "inspect"' in script else True
+        if script == publishing_submission._submit_button_script("inspect"):
+            return "submit"
+        if script == publishing_submission._submit_button_script("submit"):
+            return True
         if "window.location.href" in script:
             return url
         if "document.referrer" in script:
@@ -64,7 +66,7 @@ def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
         # _click_submit_button injects JS that locates a <button> by label
         # text and clicks it, returning True/False. The helper must report a
         # successful click so the submit step advances.
-        if "querySelectorAll('button')" in script and ".textContent.trim().includes" in script:
+        if script in {publishing_submission._submit_button_script("inspect"), publishing_submission._submit_button_script("submit")}:
             return True
         if "Geschafft!" in script:
             return True

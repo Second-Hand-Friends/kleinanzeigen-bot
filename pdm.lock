@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.1"
-content_hash = "sha256:8ca5ce14bc1445509733acdb4a204d8a82609c710a126e17799005118e2eed65"
+content_hash = "sha256:6a9cd6d3da321cfe50186a2ed011ab0263eb932f05b8ee27f9f935d8fcb1f503"
 
 [[metadata.targets]]
 requires_python = ">=3.12,<3.16"
@@ -610,6 +610,21 @@ groups = ["dev"]
 files = [
     {file = "defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61"},
     {file = "defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69"},
+]
+
+[[package]]
+name = "deno"
+version = "2.9.7"
+requires_python = ">=3.10"
+summary = "Python redistribution of Deno binaries"
+groups = ["dev"]
+files = [
+    {file = "deno-2.9.7-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:826634a6719f0183d85ef33f702de4388adb47d1f097b0732f70e033599a43c2"},
+    {file = "deno-2.9.7-py3-none-macosx_11_0_arm64.whl", hash = "sha256:adc015b5630572c06d04d28741e6ac9eed8b053c501d0ae776bfb155f5b7204b"},
+    {file = "deno-2.9.7-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:d8f4622774a5bed3a6b6305340495abe699f09c99b70d2882f52abc1ff23321a"},
+    {file = "deno-2.9.7-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:836f2ab5918723b47b638a05bc4fdac99fc35e69b49a6771c24e32b19dff5d8a"},
+    {file = "deno-2.9.7-py3-none-win_amd64.whl", hash = "sha256:80b90a0aad3f167ffbfefe55830b7b14e9d49865eed741c013bb48f1c5996681"},
+    {file = "deno-2.9.7.tar.gz", hash = "sha256:79f4b7acdd9a37e98a4d1e0ca08d71c4e55f6c0cb13bd1e0946fa9b5497be2d9"},
 ]
 
 [[package]]

@@ -14,6 +14,7 @@ import re
 import sys
 import urllib.parse as urllib_parse
 from gettext import gettext as _
+from importlib import resources
 from typing import Final, Literal
 
 from nodriver.core.connection import ProtocolException
@@ -168,46 +169,19 @@ _SUBMIT_LABELS:Final[tuple[str, ...]] = (
 )
 
 
-_SUBMIT_BUTTON_SCRIPT:Final[str] = r"""
-(() => {
-    const action = ACTION;
-    if (window.location.pathname.startsWith('/p-anzeigentypauswahl/')) return 'package';
-    const visible = element => element.getClientRects().length > 0
-        && getComputedStyle(element).visibility !== 'hidden' && !element.matches(':disabled');
-    const labels = LABELS;
-    // The editor's action buttons live in the native form around #ad-title.
-    const scope = document.getElementById('ad-title')?.closest('form') || document;
-    const buttons = [...scope.querySelectorAll('button')].filter(visible);
-    // Labels in priority order: a secondary save button earlier in the DOM must not win.
-    let submit = null;
-    for (const label of labels) {
-        submit = buttons.find(button => button.textContent.trim().includes(label));
-        if (submit) break;
-    }
-    if (submit) {
-        if (action === 'inspect') return 'submit';
-        if (action !== 'submit') return false;
-        submit.click();
-        return true;
-    }
-    // New vehicle/real-estate ads continue to a package selection step instead.
-    const next = buttons.find(button => button.textContent.replace(/\s+/g, ' ').trim() === 'Nächster Schritt');
-    if (next) {
-        if (action === 'inspect') return 'next';
-        if (action !== 'next') return false;
-        next.click();
-        return true;
-    }
-    return false;
-})()
-""".replace("LABELS", json.dumps(_SUBMIT_LABELS))
+_SUBMIT_BUTTON_JS:Final[str] = resources.files("kleinanzeigen_bot.resources").joinpath("js/submit_button.js").read_text(encoding = "utf-8")
+
+
+def _submit_button_script(action:Literal["inspect", "submit", "next"]) -> str:
+    """Call the page script with JSON-encoded arguments."""
+    return f"{_SUBMIT_BUTTON_JS.strip().removesuffix(';')}({json.dumps(action)}, {json.dumps(_SUBMIT_LABELS)})"
 
 
 async def _find_submit_button(web:WebScrapingMixin) -> object:
     """Wait for a submit control without performing any click inside polling."""
     async def _inspect() -> object:
         """Read the available submit action without clicking any control."""
-        return await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("inspect")))
+        return await web.web_execute(_submit_button_script("inspect"))
 
     return await web.web_await(_inspect, timeout_error_message = str(_("Could not find submit button")))
 
@@ -215,7 +189,7 @@ async def _find_submit_button(web:WebScrapingMixin) -> object:
 async def _click_final_submit_button(web:WebScrapingMixin) -> None:
     """Attempt one final click, treating a lost response as an uncertain publish."""
     try:
-        submitted = await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("submit")))
+        submitted = await web.web_execute(_submit_button_script("submit"))
     except (TimeoutError, ProtocolException) as ex:
         raise PublishSubmissionUncertainError(_("submission may have succeeded before failure")) from ex
     if submitted is False:
@@ -463,7 +437,7 @@ async def _click_submit_button(
     if state == "next":
         # This creates a draft, not a published listing. Preserve retryable
         # TimeoutError/ProtocolException instead of claiming form rejection.
-        continued = await web.web_execute(_SUBMIT_BUTTON_SCRIPT.replace("ACTION", json.dumps("next")))
+        continued = await web.web_execute(_submit_button_script("next"))
         if continued is not True:
             raise TimeoutError(_("Could not continue to package selection; the ad was not published"))
         await _confirm_image_hint_before_package_page(web)

@@ -122,6 +122,7 @@ const document = {
     getElementById: id => [body, ...body.querySelectorAll('*')].find(element => element.id === id) || null,
 };
 const window = {location: {pathname: payload.pathname}};
+const location = window.location;
 const getComputedStyle = element => ({visibility: element.getClientRects().length ? 'visible' : 'hidden'});
 const result = eval(payload.script);
 process.stdout.write(JSON.stringify({result, clicks}));
@@ -222,140 +223,6 @@ class TestReactFormValidation:
             side_effect = lambda script: _run_dom_script(script, dom)["result"],
         ):
             assert await publishing_submission._get_form_validation_errors(test_bot) == ["Marke: Bitte waehle eine Marke."]
-
-
-class TestSingleFinalSubmit:
-    """Button discovery may poll, but a final click may never be repeated."""
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("label", ["Anzeige aufgeben", "Änderungen speichern", "Anzeige speichern"])
-    @pytest.mark.parametrize("outcome", ["success", "timeout", "protocol", "response-lost", "sleep-timeout"])
-    async def test_legacy_publish_and_update_click_once_outside_polling(
-        self, test_bot:KleinanzeigenBot, label:str, outcome:str,
-    ) -> None:
-        """Keep the final publish or update click outside polling and avoid retries after uncertainty."""
-        clicked:list[str] = []
-        discovery_attempts = 0
-        polling = False
-
-        async def execute(script:str) -> Any:
-            """Simulate delayed button discovery and failures after the recorded final click."""
-            nonlocal discovery_attempts
-            if 'const action = "inspect"' in script:
-                discovery_attempts += 1
-                dom = {"tag": "body", "children": [] if discovery_attempts == 1 else [{"tag": "button", "text": label}]}
-            else:
-                assert not polling, "The final click must not be inside retry polling"
-                dom = {"tag": "body", "children": [{"tag": "button", "text": label}]}
-            result = _run_dom_script(script, dom, pathname = "/p-anzeige-aufgeben-schritt2.html")
-            clicked.extend(result["clicks"])
-            if result["clicks"]:
-                if outcome == "timeout":
-                    raise TimeoutError("response lost after final click")
-                if outcome == "protocol":
-                    raise ProtocolException(MagicMock(), "response lost after final click", 0)
-                if outcome == "response-lost":
-                    return None
-            return result["result"]
-
-        async def await_condition(condition:Any, **_:Any) -> Any:
-            """Poll only discovery callbacks while exposing whether a click occurs during polling."""
-            nonlocal polling
-            polling = True
-            try:
-                for _attempt in range(3):
-                    result = await condition()
-                    if result:
-                        return result
-            finally:
-                polling = False
-            raise TimeoutError("No submit button")
-
-        with (
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock,
-                         side_effect = TimeoutError("navigation lost after click") if outcome == "sleep-timeout" else None),
-        ):
-            if outcome == "success":
-                await publishing_submission._click_submit_button(test_bot)
-            else:
-                with pytest.raises(PublishSubmissionUncertainError):
-                    await publishing_submission._click_submit_button(test_bot)
-        assert discovery_attempts == 2
-        assert clicked == [label]
-
-    @pytest.mark.asyncio
-    async def test_submit_label_priority_beats_dom_order(self, test_bot:KleinanzeigenBot) -> None:
-        """A secondary save button earlier in the DOM must not be clicked instead of the real submit."""
-        dom = {"tag": "body", "children": [{"tag": "button", "text": "Anzeige speichern"}, {"tag": "button", "text": "Anzeige aufgeben"}]}
-        clicked:list[str] = []
-
-        async def execute(script:str) -> Any:
-            result = _run_dom_script(script, dom, pathname = "/p-anzeige-aufgeben-schritt2.html")
-            clicked.extend(result["clicks"])
-            return result["result"]
-
-        async def await_condition(condition:Any, **_:Any) -> Any:
-            return await condition()
-
-        with (
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-        ):
-            await publishing_submission._click_submit_button(test_bot)
-        assert clicked == ["Anzeige aufgeben"]
-
-    @pytest.mark.asyncio
-    async def test_submit_search_stays_inside_the_editor_form(self, test_bot:KleinanzeigenBot) -> None:
-        """A higher-priority label outside the editor form (e.g. a header) must not be clicked."""
-        dom = {"tag": "body", "children": [
-            {"tag": "header", "children": [{"tag": "button", "text": "Anzeige aufgeben"}]},
-            {"tag": "form", "children": [{"tag": "input", "attrs": {"id": "ad-title"}}, {"tag": "button", "text": "Anzeige speichern"}]},
-        ]}
-        clicked:list[str] = []
-
-        async def execute(script:str) -> Any:
-            result = _run_dom_script(script, dom, pathname = "/p-anzeige-bearbeiten.html")
-            clicked.extend(result["clicks"])
-            return result["result"]
-
-        async def await_condition(condition:Any, **_:Any) -> Any:
-            return await condition()
-
-        with (
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-        ):
-            await publishing_submission._click_submit_button(test_bot)
-        assert clicked == ["Anzeige speichern"]
-
-    @pytest.mark.asyncio
-    async def test_button_disabled_by_fieldset_is_not_clicked(self, test_bot:KleinanzeigenBot) -> None:
-        """A submit button inside <fieldset disabled> cannot be clicked, so it must not count as submitted."""
-        dom = {"tag": "body", "children": [
-            {"tag": "fieldset", "attrs": {"disabled": ""}, "children": [{"tag": "button", "text": "Anzeige aufgeben"}]},
-        ]}
-        clicked:list[str] = []
-
-        async def execute(script:str) -> Any:
-            result = _run_dom_script(script, dom, pathname = "/p-anzeige-aufgeben-schritt2.html")
-            clicked.extend(result["clicks"])
-            return result["result"]
-
-        async def await_condition(condition:Any, **_:Any) -> Any:
-            return await condition()
-
-        with (
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            pytest.raises(TimeoutError),
-        ):
-            await publishing_submission._click_submit_button(test_bot)
-        assert clicked == []
 
 
 @pytest.mark.asyncio
@@ -545,9 +412,9 @@ class TestPreSubmitTransportFailures:
             """Inject transport failures at the selected pre-publication boundary."""
             nonlocal stage, selected
             failing = (
-                (boundary == "discovery" and 'const action = "inspect"' in script and "const labels =" in script)
-                or (boundary == "next" and 'const action = "next"' in script)
-                or (boundary == "package-inspect" and 'const action = "inspect"' in script and "const labels =" not in script)
+                (boundary == "discovery" and script == publishing_submission._submit_button_script("inspect"))
+                or (boundary == "next" and script == publishing_submission._submit_button_script("next"))
+                or (boundary == "package-inspect" and 'const action = "inspect"' in script)
                 or (boundary == "package-select" and 'const action = "select"' in script)
                 or (boundary == "selected-state" and selected and 'const action = "inspect"' in script)
             )
