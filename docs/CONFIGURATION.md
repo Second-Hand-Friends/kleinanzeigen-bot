@@ -192,6 +192,7 @@ download:
   preserve_local_settings: true  # if true, preserve local-only settings when re-downloading an already saved ad (default: true)
 ```
 
+- If an ad is eligible for direct purchase but no predefined shipping option can be extracted (for example, no price match or all matches are excluded), the download saves `sell_directly: false` and `shipping_options: []` with a warning. Extracted shipping costs are retained. Review the shipping options before enabling direct purchase again; no carrier is guessed for this fallback, and `ad_defaults.sell_directly` does not re-enable it.
 - `download.dir` controls where `download` writes ad files.
 - Leaving `download.dir` at the default literal `downloaded-ads` keeps workspace-mode behavior (portable workspace folder in portable mode, XDG workspace folder in XDG mode).
 - Custom relative `download.dir` values are resolved relative to `config.yaml`, not the current shell working directory.

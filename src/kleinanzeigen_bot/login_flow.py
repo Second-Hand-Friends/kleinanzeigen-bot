@@ -75,6 +75,17 @@ _AUTH0_POST_SUBMIT_ERROR_SELECTORS:Final[list[tuple[By, str]]] = [
 _IP_RANGE_BLOCKED_TEXT:Final[str] = "IP-Bereich vorübergehend gesperrt"
 
 
+# Both the request-code screen and the already-sent-code screen require the user.
+# The lead phrase must sit in one text node (any, not only the first); the rest may be
+# split by inline markup. script/style are excluded so inline page data cannot trigger
+# a blocking prompt.
+_SMS_VERIFICATION_SELECTOR:Final[str] = (
+    "//*[not(self::script or self::style)]"
+    "[(text()[contains(., 'Wir haben dir gerade')] and contains(., 'Telefonnummer')) "
+    "or (text()[contains(., 'Wir senden dir')] and contains(., 'Code'))]"
+)
+
+
 async def _click_auth0_submit(web:WebScrapingMixin, *, timeout:float | None = None) -> None:
     """Click the visible Auth0 submit button, avoiding the hidden form-submit button."""
     effective_timeout = web.timeout("quick_dom") if timeout is None else timeout
@@ -439,8 +450,8 @@ async def _classify_post_submit_state(web:WebScrapingMixin) -> str:
         # German SMS verification prompt (same text as check_sms_verification)
         try:
             sms_element = await web.web_probe(
-                By.TEXT,
-                "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer",
+                By.XPATH,
+                _SMS_VERIFICATION_SELECTOR,
                 timeout = quick_dom,
             )
             if sms_element is not None:
@@ -514,6 +525,11 @@ async def wait_for_post_auth0_submit_transition(
         LOG.debug("Final post-submit login confirmation did not complete within %.1fs", quick_dom_timeout)
 
     classification = await _classify_post_submit_state(web)
+    if "SMS_VERIFICATION" in classification:
+        # A recognized challenge is progress, not a failed login. The caller
+        # pauses in check_sms_verification and verifies the session afterward.
+        LOG.debug("Post-submit SMS verification challenge detected; deferring to manual verification")
+        return
     sanitized_url = _diagnostic_url(web)
     LOG.warning("Auth0 post-submit verification remained inconclusive")
 
@@ -713,7 +729,7 @@ async def handle_after_login_logic(web:WebScrapingMixin) -> None:
 
 async def check_sms_verification(web:WebScrapingMixin) -> None:
     sms_timeout = web.timeout("sms_verification")
-    element = await web.web_probe(By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer", timeout = sms_timeout)
+    element = await web.web_probe(By.XPATH, _SMS_VERIFICATION_SELECTOR, timeout = sms_timeout)
     if element is None:
         LOG.debug("No SMS verification prompt detected after login")
         return
