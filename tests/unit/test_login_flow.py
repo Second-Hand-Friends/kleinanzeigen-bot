@@ -981,7 +981,7 @@ class TestKleinanzeigenBotAuthentication:
 
             mock_probe.assert_awaited_once()
             assert mock_probe.await_args is not None
-            assert mock_probe.await_args.args == (By.TEXT, "Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer")
+            assert mock_probe.await_args.args == (By.XPATH, login_flow._SMS_VERIFICATION_SELECTOR)
             mock_ainput.assert_awaited_once()
 
     @pytest.mark.asyncio
@@ -1850,3 +1850,15 @@ class TestClassifyPostSubmitState:
                 diagnostics_output_dir_fn = test_bot._diagnostics_output_dir,
                 log_file_path = test_bot.log_file_path,
             )
+
+
+@pytest.mark.asyncio
+async def test_post_submit_sms_challenge_reaches_manual_verification(test_bot:KleinanzeigenBot) -> None:
+    """An Auth0-hosted SMS challenge must not raise before the manual prompt."""
+    with (
+        patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = TimeoutError),
+        patch("kleinanzeigen_bot.login_flow.is_logged_in", new_callable = AsyncMock, return_value = False),
+        patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.login_flow._classify_post_submit_state", new_callable = AsyncMock, return_value = "MFA_DETECTED (SMS_VERIFICATION)"),
+    ):
+        await wait_for_post_auth0_submit_transition(test_bot, username = test_bot.config.login.username)
