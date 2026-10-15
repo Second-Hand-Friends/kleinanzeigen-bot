@@ -724,3 +724,13 @@ To avoid browser connection issues:
 1. **Keep browser updated** - Use the latest stable version
 1. **Check permissions** - Ensure proper file and folder permissions
 1. **Monitor system resources** - Ensure sufficient memory and disk space
+
+
+## SMS verification stages
+
+Device verification may first ask you to request a code ("Wir senden dir …", "Code senden"),
+then ask for an already sent code ("Wir haben dir gerade einen 6-stelligen Code …").
+Both stages require manual completion in the browser. The bot pauses for either stage;
+it does not click "Code senden" or read/submit SMS codes. Press ENTER in the terminal
+only after completing verification. For a server/container, use a visible browser via X11
+or the existing-browser setup above. A headless browser cannot display these controls.

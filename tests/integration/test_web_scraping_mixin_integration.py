@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from nodriver import cdp
 
-from kleinanzeigen_bot.login_flow import has_logged_in_marker
+from kleinanzeigen_bot.login_flow import check_sms_verification, has_logged_in_marker
 from kleinanzeigen_bot.utils.misc import ensure
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, WebScrapingMixin
 
@@ -48,3 +49,21 @@ async def test_logged_in_marker_is_detected_on_redesigned_start_page_at_any_view
 
     assert await has_logged_in_marker(web, username = "user@example.com") is True
     assert await has_logged_in_marker(web, username = "someone_else@example.com") is False
+
+
+@pytest.mark.parametrize(("markup", "requires_verification"), [
+    ("<p>Wir senden dir einen 6-stelligen Code für die Telefonnummer +49 ***.</p><button>Code senden</button>", True),
+    ("<p>Wir senden dir einen <strong>6-stelligen Code</strong> für die Telefonnummer.</p><button>Code senden</button>", True),
+    ("<p>Wir haben dir gerade einen 6-stelligen Code für die Telefonnummer +49 *** geschickt.</p>", True),
+    ("<p>Wir senden dir unsere Angebote per E-Mail.</p>", False),
+    ("<p>Willkommen</p>", False),
+])
+async def test_sms_verification_prompts_at_request_and_entry_stages(web:WebScrapingMixin, markup:str, requires_verification:bool) -> None:
+    """Exercise real DOM matching offline; requesting/sending the SMS stays manual."""
+    await web.page.send(cdp.runtime.evaluate("document.body.innerHTML = " + repr(markup)))
+    with (
+        patch("kleinanzeigen_bot.login_flow.ainput", new_callable = AsyncMock) as prompt,
+        patch.object(web, "timeout", return_value = 0.2),
+    ):
+        await check_sms_verification(web)
+    assert prompt.await_count == int(requires_verification)
