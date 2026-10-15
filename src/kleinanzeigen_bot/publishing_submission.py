@@ -9,7 +9,6 @@ confirmation page redirects too fast to inspect the URL directly.
 """
 
 import html
-import json
 import re
 import sys
 import urllib.parse as urllib_parse
@@ -34,15 +33,7 @@ _PUBLISHED_AD_RECOVERY_DELAYS_MS:Final[tuple[int, ...]] = (0, 1_000, 2_000, 4_00
 async def _is_idless_publish_success_page(web:WebScrapingMixin) -> bool:
     """Detect the redesigned successful publish page that exposes no ad ID."""
     try:
-        result = await web.web_execute(r"""
-(() => {
-    const bodyText = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
-    const hasManageAdsControl = [...document.querySelectorAll('a, button')].some((element) =>
-        (element.innerText || '').replace(/\s+/g, ' ').trim().includes('Zu meinen Anzeigen')
-    );
-    return bodyText.includes('Geschafft!') && hasManageAdsControl;
-})()
-""")
+        result = await web.web_execute(page_scripts.call("idless_success_page"))
     except (TimeoutError, ProtocolException):
         return False
     return result is True
@@ -198,51 +189,6 @@ async def _click_final_submit_button(web:WebScrapingMixin) -> None:
         raise PublishSubmissionUncertainError(_("submission may have succeeded before failure"))
 
 
-_FREE_BASIS_PACKAGE_SCRIPT:Final[str] = r"""
-(() => {
-    const action = ACTION;
-    const visible = element => element && element.getClientRects().length > 0
-        && getComputedStyle(element).visibility !== 'hidden';
-    const text = element => (element?.innerText || '').replace(/\s+/g, ' ').trim();
-    if (!window.location.pathname.startsWith('/p-anzeigentypauswahl/')) return {state: 'waiting'};
-    const radios = [...document.querySelectorAll('button[role="radio"]')].filter(visible);
-    const candidates = radios.filter(element => text(element) === 'Basis Paket');
-    if (!candidates.length) return {state: 'waiting'};
-    if (candidates.length !== 1) return {state: 'unsafe'};
-    const basis = candidates[0];
-    // The Basis card is the largest container holding this radio but no other
-    // package, so another package's price can neither prove nor hide its own.
-    let card = basis;
-    while (card.parentElement && card.parentElement !== document.body
-        && !radios.some(element => element !== basis && card.parentElement.contains(element))) card = card.parentElement;
-    const cardText = text(card);
-    const freePrice = [...card.querySelectorAll('*')].some(element => visible(element)
-        && text(element) === 'Kostenlos' && ![...element.children].some(child => text(child) === 'Kostenlos'));
-    // Free means an explicit "Kostenlos" price and no amount anywhere in the card;
-    // marketing copy is deliberately not part of the check.
-    const free = freePrice && !/\d[\d.,]*\s*(?:€|EUR)/i.test(cardText);
-    if (!free || basis.disabled) return {state: 'unsafe'};
-    if (action === 'select' && basis.getAttribute('aria-checked') !== 'true') {
-        basis.click();
-        return {state: 'waiting'};
-    }
-    const selected = basis.getAttribute('aria-checked') === 'true';
-    if (selected && radios.some(element => element !== basis && element.getAttribute('aria-checked') === 'true')) {
-        return {state: 'unsafe'};
-    }
-    const buttons = [...document.querySelectorAll('button')].filter(element => visible(element)
-        && !element.disabled && text(element) === 'Anzeige aufgeben');
-    if (action === 'submit') {
-        // Recheck the chosen free option atomically with the final click.
-        if (!selected || buttons.length !== 1) return {state: 'unsafe'};
-        buttons[0].click();
-        return {state: 'submitted'};
-    }
-    return {state: 'ready', selected, submitReady: buttons.length === 1};
-})()
-"""
-
-
 async def _submit_free_basis_package(web:WebScrapingMixin) -> None:
     """Choose the verified free package, then submit once outside retry polling."""
     failure_message = _("The free Basis package could not be verified; the ad was not published")
@@ -254,7 +200,7 @@ async def _submit_free_basis_package(web:WebScrapingMixin) -> None:
             errors = await _get_form_validation_errors(web)
             if errors:
                 return {"errors": errors}
-            result = await web.web_execute(_FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps("inspect")))
+            result = await web.web_execute(page_scripts.call("free_basis_package", "inspect"))
             if not isinstance(result, dict):
                 return None
             if result.get("state") == "unsafe" or (
@@ -274,12 +220,12 @@ async def _submit_free_basis_package(web:WebScrapingMixin) -> None:
             raise AdFormValidationError(failure_message)
 
     await _wait_for_package()
-    result = await web.web_execute(_FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps("select")))
+    result = await web.web_execute(page_scripts.call("free_basis_package", "select"))
     if not isinstance(result, dict) or result.get("state") == "unsafe":
         raise AdFormValidationError(failure_message)
     await _wait_for_package(selected = True)
     try:
-        result = await web.web_execute(_FREE_BASIS_PACKAGE_SCRIPT.replace("ACTION", json.dumps("submit")))
+        result = await web.web_execute(page_scripts.call("free_basis_package", "submit"))
     except (TimeoutError, ProtocolException) as ex:
         # The final click may already have published the ad; never retry it.
         raise PublishSubmissionUncertainError(_("submission may have succeeded before failure")) from ex
@@ -316,83 +262,8 @@ async def _wait_for_manual_package_submission(web:WebScrapingMixin) -> None:
 
 async def _get_form_validation_errors(web:WebScrapingMixin) -> list[str]:
     """Read visible field errors from the ad form without collecting field values."""
-    result = await web.web_execute(r"""
-    (() => {
-        // The live editor (generic and vehicle categories) wraps #ad-title and all
-        // controls in one native <form>; without it there is nothing to inspect.
-        const form = document.getElementById('ad-title')?.closest('form');
-        if (!form) return [];
-        const visible = element => element && element.getClientRects().length > 0
-            && getComputedStyle(element).visibility !== 'hidden';
-        const text = element => (element?.innerText || '').replace(/\s+/g, ' ').trim();
-        const labels = [...form.querySelectorAll('label')];
-        const labelFor = element => {
-            let scope = element;
-            for (let depth = 0; depth < 6 && scope && scope !== form; depth++, scope = scope.parentElement) {
-                const controls = [scope, ...scope.querySelectorAll('input[id], select[id], textarea[id], button[id]')];
-                const matches = new Set();
-                for (const control of controls) {
-                    const label = labels.find(candidate => control.id && candidate.htmlFor === control.id);
-                    if (label && text(label)) matches.add(text(label));
-                }
-                if (matches.size === 1) return [...matches][0];
-                if (matches.size > 1) break;
-                const localLabels = scope.querySelectorAll('label');
-                if (localLabels.length === 1) return text(localLabels[0]);
-            }
-            return element.matches('input, select, textarea, button') ? element.getAttribute('name') || element.id || '' : '';
-        };
-        const errors = new Set();
-        const reportedElements = new Set();
-        const add = (element, message) => {
-            if (!message) return;
-            const label = labelFor(element);
-            errors.add(label ? `${label}: ${message}` : message);
-        };
-        for (const field of form.querySelectorAll('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid')) {
-            if (!visible(field)) continue;
-            const errorReferences = field.getAttribute('aria-errormessage');
-            const references = errorReferences
-                || (field.getAttribute('aria-invalid') === 'true' ? field.getAttribute('aria-describedby') : '') || '';
-            const messages = references.trim().split(/\s+/).map(id => document.getElementById(id))
-                .filter(element => element && form.contains(element) && visible(element))
-                // Descriptions can be hints; the live brand control marks its error text-critical.
-                .filter(element => errorReferences || element.matches('[id$="-error"], [role="alert"], [role="status"], .text-critical'))
-                .map(element => { reportedElements.add(element); return text(element); }).filter(Boolean);
-            if (!messages.length && !field.validationMessage && field.getAttribute('aria-invalid') === 'true') {
-                // Some fields expose an adjacent status without an ARIA reference.
-                // Only inspect a container holding this one input.
-                for (let scope = field.parentElement; scope && scope !== form; scope = scope.parentElement) {
-                    const controls = [...scope.querySelectorAll('input, select, textarea, button')].filter(visible);
-                    if (controls.length !== 1) break;
-                    const statuses = [...scope.querySelectorAll('[role="status"], [role="alert"]')].filter(visible);
-                    if (statuses.some(status => text(status))) {
-                        for (const status of statuses) {
-                            reportedElements.add(status);
-                            if (text(status)) messages.push(text(status));
-                        }
-                        break;
-                    }
-                }
-            }
-            add(field, messages.join(' ') || field.validationMessage);
-        }
-        // The redesigned category controls reuse id="attribute-error" and do not
-        // consistently mark their inputs aria-invalid. Read every visible error.
-        for (const error of form.querySelectorAll('[id$="-error"]')) {
-            if (visible(error) && !reportedElements.has(error)) add(error, text(error));
-        }
-        return [...errors];
-    })()
-    """)
+    result = await web.web_execute(page_scripts.call("form_validation_errors"))
     return [error for error in result if isinstance(error, str) and error.strip()] if isinstance(result, list) else []
-
-
-_NEXT_STEP_OUTCOME_SCRIPT:Final[str] = r"""
-window.location.pathname.startsWith('/p-anzeigentypauswahl/') ? 'package'
-    : [...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Ohne Bild veröffentlichen') ? 'hint'
-    : null
-"""
 
 
 async def _confirm_image_hint_before_package_page(web:WebScrapingMixin) -> None:
@@ -404,7 +275,7 @@ async def _confirm_image_hint_before_package_page(web:WebScrapingMixin) -> None:
     """
     try:
         outcome = await web.web_await(
-            lambda: web.web_execute(_NEXT_STEP_OUTCOME_SCRIPT),
+            lambda: web.web_execute(page_scripts.call("next_step_outcome")),
             timeout = web.timeout("page_load"),
         )
     except TimeoutError:

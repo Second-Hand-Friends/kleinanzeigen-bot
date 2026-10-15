@@ -69,8 +69,7 @@ dev = [
     "pytest-mock>=3.14.0",
     "jsonschema>=4.26.0",
     "actionlint-py>=1.7.12.24",
-    "nodejs-wheel-binaries>=24.19.0",
-    "deno>=2.9.7",
+    "deno>=2.9.7",  # lints, formats and type-checks src/kleinanzeigen_bot/resources/js
 ]
 
 [project.urls]

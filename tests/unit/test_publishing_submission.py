@@ -5,7 +5,7 @@
 
 import sys
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +14,7 @@ from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
+from kleinanzeigen_bot.utils import page_scripts
 from kleinanzeigen_bot.utils.exceptions import AdFormValidationError, ManualPackageSelectionRequiredError, PublishSubmissionUncertainError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 
@@ -68,7 +69,7 @@ def _idless_success_execute(root_url:str) -> Callable[[str], Awaitable[Any]]:
         # successful click so the submit step advances.
         if script in {publishing_submission._submit_button_script("inspect"), publishing_submission._submit_button_script("submit")}:
             return True
-        if "Geschafft!" in script:
+        if script == page_scripts.call("idless_success_page"):
             return True
         if "window.location.href" in script:
             return f"{root_url}/done"
@@ -858,3 +859,29 @@ async def test_next_step_confirms_image_hint_before_package_selection(test_bot:K
     ):
         await publishing_submission._click_submit_button(test_bot, package_selection = "BASIS")
     assert order == ["hint", "basis"]
+
+
+class TestConfigurablePackageSelection:
+    """Package choices propagate to the submit boundary without changing legacy forms."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("package_selection", [None, "BASIS", "MANUAL"])
+    async def test_submission_passes_the_configured_package_selection(
+        self, test_bot:KleinanzeigenBot, package_selection:Literal["BASIS", "MANUAL"] | None,
+    ) -> None:
+        """Forward the configured package preference and use MANUAL when it is omitted."""
+        selection_kwargs:dict[str, Any] = {} if package_selection is None else {"package_selection": package_selection}
+        with (
+            patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+            patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = ""),
+            patch("kleinanzeigen_bot.publishing_submission._click_submit_button", new_callable = AsyncMock,
+                  side_effect = AdFormValidationError("fixture stops before submission")) as submit,
+            pytest.raises(AdFormValidationError),
+        ):
+            await publishing_submission.submit_and_confirm_ad(
+                test_bot, "test.yaml", _make_min_ad(), AdUpdateStrategy.REPLACE,
+                captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+                **selection_kwargs,
+            )
+        submit.assert_awaited_once_with(test_bot, package_selection = package_selection or "MANUAL")
