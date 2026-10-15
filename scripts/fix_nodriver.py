@@ -3,19 +3,16 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Post-install fixes for installed nodriver.
 
-1. **Encoding fix** — ``cdp/network.py`` contains a lone ISO-8859-1 ``±``
-   byte (0xb1) without an encoding declaration. Python 3.12+ rejects this
-   at import time. The fix adds a ``# -*- coding: utf-8 -*-`` header and
-   replaces the byte with proper UTF-8.
+**Flat-mode session retry** — nodriver 0.50.3+ uses flat-mode CDP
+(browser-level WebSocket + per-target ``sessionId``). Chromium 148+
+rejects ``DOM.enable`` when sent to the browser target without a
+``sessionId``, and rejects stale-session commands with ``-32601``.
+Wraps ``Connection.send`` to re-attach and retry once on that code,
+switching ``_attach=True`` commands to include ``sessionId``.
 
-2. **Flat-mode session retry** — nodriver 0.50.3+ uses flat-mode CDP
-   (browser-level WebSocket + per-target ``sessionId``). Chromium 148+
-   rejects ``DOM.enable`` when sent to the browser target without a
-   ``sessionId``, and rejects stale-session commands with ``-32601``.
-   Wraps ``Connection.send`` to re-attach and retry once on that code,
-   switching ``_attach=True`` commands to include ``sessionId``.
+The former ``cdp/network.py`` encoding fix is obsolete since nodriver 0.50.6.
 
-Designed as a PDM ``post_install`` hook. All patches are idempotent.
+Designed as a PDM ``post_install`` hook. The patch is idempotent.
 """
 
 from __future__ import annotations
@@ -37,40 +34,6 @@ def _locate_file(relative:str) -> Path | None:
     except AttributeError:
         site_packages = Path(dist._path).parent  # type: ignore[attr-defined]  # noqa: SLF001
         return site_packages / relative
-
-
-# ── network.py encoding fix ────────────────────────────────────────────────
-
-def _fix_network_encoding(path:Path) -> str:
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        print(f"fix_nodriver: cannot read {path}: {exc}", file = sys.stderr)
-        sys.exit(1)
-
-    bad = b"(\xb1Inf)"
-    if bad not in raw:
-        try:
-            raw.decode("utf-8")
-            return "already-ok"
-        except UnicodeDecodeError as exc:
-            print(
-                f"fix_nodriver: {path}: unexpected content: {exc}",
-                file = sys.stderr,
-            )
-            sys.exit(1)
-
-    fixed = raw.replace(bad, b"(\xc2\xb1Inf)")
-    if not fixed.startswith(b"# -*- coding: utf-8 -*-"):
-        fixed = b"# -*- coding: utf-8 -*-\n" + fixed
-    fixed = fixed.replace(b"\r\n", b"\n")
-    try:
-        fixed.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        print(f"fix_nodriver: {path}: invalid UTF-8: {exc}", file = sys.stderr)
-        sys.exit(1)
-    path.write_bytes(fixed)
-    return "fixed"
 
 
 # ── connection.py flat-mode session retry ──────────────────────────────────
@@ -190,7 +153,6 @@ def _fix_connection_send(path:Path) -> str:
 
 def main() -> int:
     for rel, fix in [
-        ("nodriver/cdp/network.py", _fix_network_encoding),
         ("nodriver/core/connection.py", _fix_connection_send),
     ]:
         path = _locate_file(rel)
