@@ -20,6 +20,7 @@ from unittest.mock import ANY, AsyncMock, MagicMock, Mock, mock_open, patch
 import nodriver
 import psutil
 import pytest
+from nodriver import cdp
 from nodriver.core.connection import ProtocolException
 from nodriver.core.element import Element
 from nodriver.core.tab import Tab as Page
@@ -27,6 +28,7 @@ from nodriver.core.tab import Tab as Page
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.utils import browser_diagnostics, files, loggers
 from kleinanzeigen_bot.utils.browser_diagnostics import _format_url_host, _is_admin, _is_linux_container_without_sys_ptrace  # noqa: PLC2701
+from kleinanzeigen_bot.utils.exceptions import PageScriptError
 from kleinanzeigen_bot.utils.web_scraping_mixin import MIN_VIEWPORT_WIDTH, By, Is, WebScrapingMixin, _allocate_selector_group_budgets  # noqa: PLC2701
 
 
@@ -214,12 +216,10 @@ class TestWebScrapingErrorHandling:
     @pytest.mark.asyncio
     async def test_web_input_clear_failure(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
         """Test input clear failure in web_input."""
-        # Create a mock element whose _tab.send raises an error (simulating CDP failure)
+        # The page script that clears the input fails
         mock_element = AsyncMock(spec = Element)
-        mock_tab = AsyncMock()
-        mock_tab.send.side_effect = Exception("Cannot clear input")
-        mock_element._tab = mock_tab  # noqa: SLF001
         mock_page.query_selector.return_value = mock_element
+        web_scraper.web_apply = AsyncMock(side_effect = Exception("Cannot clear input"))  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
 
         # Test input clear failure
@@ -232,8 +232,8 @@ class TestWebScrapingErrorHandling:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {}
         input_field.send_keys = AsyncMock()
-        # apply is called once for verification: reads back the input value
-        input_field.apply = AsyncMock(return_value = "Option")
+        # the page script runs once for verification: reads back the input value
+        web_scraper.web_apply = AsyncMock(return_value = "Option")  # type: ignore[method-assign]
 
         # No aria-controls → first web_find returns input; second web_find for listbox also fails
         web_scraper.web_find = AsyncMock(side_effect = [input_field, TimeoutError("no listbox")])  # type: ignore[method-assign]
@@ -256,7 +256,7 @@ class TestWebScrapingErrorHandling:
         input_field.send_keys = AsyncMock()
 
         dropdown_elem = AsyncMock(spec = Element)
-        dropdown_elem.apply = AsyncMock(return_value = True)
+        web_scraper.web_apply = AsyncMock(return_value = True)  # type: ignore[method-assign]
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
@@ -267,7 +267,7 @@ class TestWebScrapingErrorHandling:
         assert result is dropdown_elem
         web_scraper._clear_input.assert_awaited_once_with(input_field)
         input_field.send_keys.assert_awaited_once_with("Visible Label")
-        dropdown_elem.apply.assert_awaited_once()
+        web_scraper.web_apply.assert_awaited_once_with(dropdown_elem, ANY)
         assert web_scraper.web_sleep.await_count == 2
 
     @pytest.mark.asyncio
@@ -288,12 +288,11 @@ class TestWebScrapingErrorHandling:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"} if has_aria_controls else {}
         input_field.send_keys = AsyncMock()
-        # apply is called once for verification: reads back a mismatching value
-        input_field.apply = AsyncMock(side_effect = ["Wrong Value"])
+        # page scripts: the dropdown finds no matching <li> (only with a dropdown), then the verification reads a mismatching value
+        web_scraper.web_apply = AsyncMock(side_effect = [False, "Wrong Value"] if has_aria_controls else ["Wrong Value"])  # type: ignore[method-assign]
 
         if has_aria_controls:
             dropdown_elem = AsyncMock(spec = Element)
-            dropdown_elem.apply = AsyncMock(return_value = False)
             web_find_results:list[Any] = [input_field, dropdown_elem]
         else:
             web_find_results = [input_field, second_find_result]
@@ -312,11 +311,10 @@ class TestWebScrapingErrorHandling:
         input_field = AsyncMock(spec = Element)
         input_field.attrs = {"aria-controls": "dropdown-id"}
         input_field.send_keys = AsyncMock()
-        # apply is called for verification: reads back the matching value
-        input_field.apply = AsyncMock(side_effect = ["Expected Value"])
+        # page scripts: no matching <li>, then the verification reads back the matching value
+        web_scraper.web_apply = AsyncMock(side_effect = [False, "Expected Value"])  # type: ignore[method-assign]
 
         dropdown_elem = AsyncMock(spec = Element)
-        dropdown_elem.apply = AsyncMock(return_value = False)
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
@@ -343,7 +341,7 @@ class TestWebScrapingErrorHandling:
         input_field.send_keys = AsyncMock()
 
         dropdown_elem = AsyncMock(spec = Element)
-        dropdown_elem.apply = AsyncMock(return_value = True)
+        web_scraper.web_apply = AsyncMock(return_value = True)  # type: ignore[method-assign]
 
         web_scraper.web_find = AsyncMock(side_effect = [input_field, dropdown_elem])  # type: ignore[method-assign]
         web_scraper.web_sleep = AsyncMock()  # type: ignore[method-assign]
@@ -357,7 +355,7 @@ class TestWebScrapingErrorHandling:
     async def test_web_select_by_value(self, web_scraper:WebScrapingMixin) -> None:
         """Test web_select successfully matches by option value."""
         select_elem = AsyncMock(spec = Element)
-        select_elem.apply = AsyncMock()
+        web_scraper.web_apply = AsyncMock()  # type: ignore[method-assign]
 
         web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
         web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
@@ -367,15 +365,16 @@ class TestWebScrapingErrorHandling:
         result = await web_scraper.web_select(By.ID, "select-id", "option-value")
 
         assert result is select_elem
-        select_elem.apply.assert_awaited_once()
+        web_scraper.web_apply.assert_awaited_once_with(select_elem, ANY)
         web_scraper.web_sleep.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_web_select_raises_on_missing_option(self, web_scraper:WebScrapingMixin) -> None:
         """Test web_select raises TimeoutError when option not found."""
         select_elem = AsyncMock(spec = Element)
-        # Simulate JS throwing an error when option not found
-        select_elem.apply = AsyncMock(side_effect = Exception("Option not found by value or displayed text: missing"))
+        # Simulate the page script throwing when the option is not found
+        script_error = PageScriptError("Error: Option not found by value or displayed text: missing")
+        web_scraper.web_apply = AsyncMock(side_effect = script_error)  # type: ignore[method-assign]
 
         web_scraper.web_check = AsyncMock(return_value = True)  # type: ignore[method-assign]
         web_scraper.web_await = AsyncMock(return_value = True)  # type: ignore[method-assign]
@@ -383,6 +382,43 @@ class TestWebScrapingErrorHandling:
 
         with pytest.raises(TimeoutError, match = "Option not found by value or displayed text"):
             await web_scraper.web_select(By.ID, "select-id", "missing-option")
+
+    @pytest.mark.asyncio
+    async def test_web_apply_returns_script_value(self, web_scraper:WebScrapingMixin) -> None:
+        """web_apply returns the value of the function called with the element."""
+        element = MagicMock(spec = Element)
+        element.backend_node_id = 7
+        element.tab = MagicMock()
+        element.tab.send = AsyncMock(side_effect = [
+            cdp.runtime.RemoteObject(type_ = "object", object_id = cdp.runtime.RemoteObjectId("node-7")),
+            (cdp.runtime.RemoteObject(type_ = "string", value = "hello"), None),
+        ])
+
+        assert await web_scraper.web_apply(element, "(elem) => 'hello'") == "hello"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("thrown", "expected"),
+        [
+            pytest.param(cdp.runtime.RemoteObject(type_ = "object", subtype = "error", description = "Error: boom"), "Error: boom", id = "error-object"),
+            pytest.param(None, "Uncaught", id = "no-error-object"),
+        ],
+    )
+    async def test_web_apply_raises_when_script_throws(
+        self, web_scraper:WebScrapingMixin, thrown:cdp.runtime.RemoteObject | None, expected:str
+    ) -> None:
+        """A script exception must not be swallowed the way Element.apply does."""
+        element = MagicMock(spec = Element)
+        element.backend_node_id = 7
+        element.tab = MagicMock()
+        details = cdp.runtime.ExceptionDetails(exception_id = 1, text = "Uncaught", line_number = 0, column_number = 0, exception = thrown)
+        element.tab.send = AsyncMock(side_effect = [
+            cdp.runtime.RemoteObject(type_ = "object", object_id = cdp.runtime.RemoteObjectId("node-7")),
+            (cdp.runtime.RemoteObject(type_ = "object", subtype = "error"), details),
+        ])
+
+        with pytest.raises(PageScriptError, match = expected):
+            await web_scraper.web_apply(element, "(elem) => { throw new Error('boom') }")
 
     @pytest.mark.asyncio
     async def test_web_input_success_returns_element(self, web_scraper:WebScrapingMixin, mock_page:TrulyAwaitableMockPage) -> None:
@@ -539,7 +575,7 @@ class TestWebScrapingErrorHandling:
         # Create a mock element that raises an error on attribute check
         mock_element = AsyncMock(spec = Element)
         mock_element.attrs = {}
-        mock_element.apply.side_effect = Exception("Attribute error")
+        web_scraper.web_apply = AsyncMock(side_effect = Exception("Attribute error"))  # type: ignore[method-assign]
         mock_page.query_selector.return_value = mock_element
 
         # Test attribute error
@@ -843,7 +879,7 @@ class TestTimeoutAndRetryHelpers:
     async def test_web_text_first_available_returns_text_and_index(self, web_scraper:WebScrapingMixin) -> None:
         """Text-group helper should return extracted text and the matched selector index."""
         mock_element = AsyncMock(spec = Element)
-        mock_element.apply = AsyncMock(return_value = "dummy-user")
+        web_scraper.web_apply = AsyncMock(return_value = "dummy-user")  # type: ignore[method-assign]
 
         with patch.object(web_scraper, "web_find_first_available", new_callable = AsyncMock, return_value = (mock_element, 1)):
             text, index = await web_scraper.web_text_first_available([(By.ID, "a"), (By.ID, "b")], key = "login_detection")
@@ -900,17 +936,18 @@ class TestTimeoutAndRetryHelpers:
         text_content.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_extract_text_content_returns_element_apply_result(self, web_scraper:WebScrapingMixin) -> None:
+    async def test_extract_text_content_returns_page_script_result(self, web_scraper:WebScrapingMixin) -> None:
         """Reading textContent runs in the page and returns the script result as string."""
         mock_element = AsyncMock(spec = Element)
-        mock_element.apply = AsyncMock(return_value = "angemeldet als: user@example.com")
+        web_scraper.web_apply = AsyncMock(return_value = "angemeldet als: user@example.com")  # type: ignore[method-assign]
 
         text = await web_scraper.extract_text_content(mock_element)
 
         assert text == "angemeldet als: user@example.com"
-        mock_element.apply.assert_awaited_once()
-        assert mock_element.apply.await_args is not None
-        script = mock_element.apply.await_args.args[0]
+        web_scraper.web_apply.assert_awaited_once()
+        assert web_scraper.web_apply.await_args is not None
+        assert web_scraper.web_apply.await_args.args[0] is mock_element
+        script = web_scraper.web_apply.await_args.args[1]
         assert "textContent" in script
         assert "title" not in script
 
@@ -1820,15 +1857,11 @@ class TestWebScrolling:
             if call_count["count"] == 2:
                 element = AsyncMock(spec = Element)
                 element.attrs = {}
-
-                async def apply_fn(*a:object, **kw:object) -> bool:
-                    return True
-
-                element.apply = AsyncMock(side_effect = apply_fn)
                 return element
             return None
 
         mock_page.query_selector.side_effect = query_selector
+        web_scraper.web_apply = AsyncMock(return_value = True)  # type: ignore[method-assign]
         result = await web_scraper.web_check(By.ID, "test-id", Is.DISPLAYED, timeout = 1.0)
         assert result is True
         assert call_count["count"] >= 2
@@ -3590,7 +3623,7 @@ class TestWebSelectButtonCombobox:
     async def test_web_select_button_combobox_selects_matching_option(self, web_scraper:WebScrapingMixin) -> None:
         """Happy path: clicking and selecting a matching option returns the listbox."""
         listbox = AsyncMock(spec = Element)
-        listbox.apply = AsyncMock(return_value = True)
+        web_scraper.web_apply = AsyncMock(return_value = True)  # type: ignore[method-assign]
 
         web_scraper.web_click = AsyncMock()  # type: ignore[method-assign]
         web_scraper.web_find = AsyncMock(return_value = listbox)  # type: ignore[method-assign]
@@ -3603,14 +3636,14 @@ class TestWebSelectButtonCombobox:
         web_scraper.web_find.assert_awaited_once_with(By.ID, "test-combo-menu", timeout = ANY)
         web_scraper.web_sleep.assert_awaited_once()
 
-        js_arg = listbox.apply.call_args[0][0]
+        js_arg = web_scraper.web_apply.call_args[0][1]
         assert json.dumps("Nur Abholung") in js_arg
 
     @pytest.mark.asyncio
     async def test_web_select_button_combobox_raises_when_no_matching_option(self, web_scraper:WebScrapingMixin) -> None:
         """Error path: raises TimeoutError when no matching option is found."""
         listbox = AsyncMock(spec = Element)
-        listbox.apply = AsyncMock(return_value = False)
+        web_scraper.web_apply = AsyncMock(return_value = False)  # type: ignore[method-assign]
 
         web_scraper.web_click = AsyncMock()  # type: ignore[method-assign]
         web_scraper.web_find = AsyncMock(return_value = listbox)  # type: ignore[method-assign]

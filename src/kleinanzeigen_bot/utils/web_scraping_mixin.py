@@ -9,7 +9,7 @@ from typing import Any, Final, cast, overload
 from urllib.parse import urlparse
 
 import nodriver, psutil  # isort: skip
-from nodriver.cdp import browser as cdp_browser, input_ as cdp_input  # isort: skip
+from nodriver.cdp import browser as cdp_browser, dom as cdp_dom, input_ as cdp_input, runtime as cdp_runtime  # isort: skip
 from typing import TYPE_CHECKING, TypeGuard
 
 from nodriver.core.browser import Browser
@@ -30,6 +30,7 @@ from .chrome_version_detector import (
     detect_chrome_version_from_binary,
     detect_chrome_version_from_remote_debugging,
 )
+from .exceptions import PageScriptError
 from .misc import T, ensure, truncate_for_log
 
 if TYPE_CHECKING:
@@ -547,12 +548,12 @@ class WebScrapingMixin:  # noqa: PLR0904
         ``display: none`` subtrees is returned as well. Selection-based extraction yields an
         empty string there.
         """
-        return str(await element.apply('function (elem) { return (elem.textContent || "").trim() }'))
+        return str(await self.web_apply(element, 'function (elem) { return (elem.textContent || "").trim() }'))
 
     async def extract_visible_text(self, element:Element) -> str:
         """Return visible text for a DOM element using user-selection extraction."""
         return str(
-            await element.apply(page_scripts.function("visible_text"))
+            await self.web_apply(element, page_scripts.function("visible_text"))
         )
 
     async def create_browser_session(self) -> None:
@@ -1264,7 +1265,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         async def is_displayed(elem:Element) -> bool:
             return cast(
                 bool,
-                await elem.apply(page_scripts.function("is_displayed")),
+                await self.web_apply(elem, page_scripts.function("is_displayed")),
             )
 
         elem:Element = await self.web_find(selector_type, selector_value, timeout = timeout)
@@ -1281,7 +1282,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             case Is.SELECTED:
                 return cast(
                     bool,
-                    await elem.apply(page_scripts.function("is_selected")),
+                    await self.web_apply(elem, page_scripts.function("is_selected")),
                 )
         raise AssertionError(_("Unsupported attribute: %s") % attr)
 
@@ -1296,6 +1297,31 @@ class WebScrapingMixin:  # noqa: PLR0904
         await elem.click()
         await self.web_sleep()
         return elem
+
+    async def web_apply(self, element:Element, js_function:str) -> Any:
+        """
+        Calls a JavaScript function with the element as its argument and returns its value.
+
+        Use this instead of ``Element.apply``: nodriver hands back ``None`` when the script
+        throws, so a failing script looks like a successful one.
+
+        :param js_function: function expression that receives the element
+        :return: The function's return value as a regular Python object
+        :raises PageScriptError: if the script threw an exception
+        """
+        tab = element.tab
+        remote_object = await tab.send(cdp_dom.resolve_node(backend_node_id = element.backend_node_id))
+        result, exception_details = await tab.send(cdp_runtime.call_function_on(
+            js_function,
+            object_id = remote_object.object_id,
+            arguments = [cdp_runtime.CallArgument(object_id = remote_object.object_id)],
+            return_by_value = True,
+            user_gesture = True,
+        ))
+        if exception_details is not None:
+            thrown = exception_details.exception
+            raise PageScriptError(_("Script in the page failed: %s") % ((thrown and thrown.description) or exception_details.text))
+        return result.value
 
     async def web_execute(self, jscode:str) -> Any:
         """
@@ -1859,7 +1885,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         elem = await self.web_find(selector_type, selector_value, timeout = timeout)
 
         try:
-            await elem.apply(page_scripts.function("select_option", selected_value))
+            await self.web_apply(elem, page_scripts.function("select_option", selected_value))
         except Exception as ex:
             # Normalize selection failures to TimeoutError
             raise TimeoutError(_("Option not found by value or displayed text: %s") % selected_value) from ex
@@ -1911,7 +1937,7 @@ class WebScrapingMixin:  # noqa: PLR0904
                 # Verify the selection matches the intended value (case-insensitive, whitespace-normalized).
                 # Collapse consecutive whitespace to match the dropdown path's normalize() behavior.
                 expected_str = " ".join(search_value.split()).lower()
-                actual_value = " ".join(str(await input_field.apply("(elem) => (elem.value || '').trim()") or "").split()).lower()
+                actual_value = " ".join(str(await self.web_apply(input_field, "(elem) => (elem.value || '').trim()") or "").split()).lower()
                 if actual_value != expected_str:
                     raise TimeoutError(
                         _("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value, "expected": expected_str}
@@ -1922,7 +1948,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         # leading/trailing spaces, collapsing multiple spaces, and converting underscores to spaces for matching.
         # Hyphens are preserved since they can be legitimate characters in brand names.
         # Matching is done case-insensitive.
-        ok = await dropdown_elem.apply(page_scripts.function("select_combobox_item", search_value))
+        ok = await self.web_apply(dropdown_elem, page_scripts.function("select_combobox_item", search_value))
 
         if not ok:
             LOG.warning("No matching option found in listbox for combobox '%s'. Falling back to ArrowDown + Enter.", selected_value)
@@ -1932,7 +1958,7 @@ class WebScrapingMixin:  # noqa: PLR0904
             # Verify the selection matches the intended value (case-insensitive, whitespace-normalized).
             # Collapse consecutive whitespace to match the dropdown path's normalize() behavior.
             expected_str = " ".join(search_value.split()).lower()
-            actual_value = " ".join(str(await input_field.apply("(elem) => (elem.value || '').trim()") or "").split()).lower()
+            actual_value = " ".join(str(await self.web_apply(input_field, "(elem) => (elem.value || '').trim()") or "").split()).lower()
             if actual_value != expected_str:
                 raise TimeoutError(_("Combobox selected '%(actual)s' instead of '%(expected)s'") % {"actual": actual_value, "expected": expected_str})
             LOG.info("Combobox fallback verified: '%s' confirmed.", actual_value)
@@ -1977,7 +2003,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         listbox_id = f"{elem_id}-menu"
         listbox = await self.web_find(By.ID, listbox_id, timeout = timeout)
 
-        ok = await listbox.apply(page_scripts.function("select_listbox_option", selected_value))
+        ok = await self.web_apply(listbox, page_scripts.function("select_listbox_option", selected_value))
 
         if not ok:
             raise TimeoutError(_("Option '%(value)s' not found in button combobox '%(id)s'") % {"value": selected_value, "id": elem_id})
@@ -2055,7 +2081,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         directly (even with dispatched ``input``/``change`` events), because frameworks can
         intercept and revert programmatic value mutations.
         """
-        await input_field.apply("(elem) => { elem.focus(); elem.select(); }")
+        await self.web_apply(input_field, "(elem) => { elem.focus(); elem.select(); }")
         await self.web_sleep(min_ms = 50, max_ms = 100)
         tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
         await tab.send(cdp_input.dispatch_key_event("keyDown", key = "Backspace", code = "Backspace"))
@@ -2070,7 +2096,7 @@ class WebScrapingMixin:  # noqa: PLR0904
 
         tab = input_field._tab  # noqa: SLF001 – nodriver Element exposes its CDP tab via _tab
         # Ensure the field is focused
-        await input_field.apply("(elem) => elem.focus()")
+        await self.web_apply(input_field, "(elem) => elem.focus()")
         await self.web_sleep(min_ms = 300, max_ms = 600)
         # ArrowDown to highlight the first autocomplete suggestion
         await tab.send(cdp_input.dispatch_key_event("keyDown", key = "ArrowDown", code = "ArrowDown"))

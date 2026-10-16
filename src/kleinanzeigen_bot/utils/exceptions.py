@@ -46,3 +46,7 @@ class CategoryResolutionError(KleinanzeigenBotError):
 
     def __init__(self, reason:str) -> None:
         super().__init__(reason)
+
+
+class PageScriptError(KleinanzeigenBotError):
+    """Raised when a JavaScript function run in the page throws an exception."""

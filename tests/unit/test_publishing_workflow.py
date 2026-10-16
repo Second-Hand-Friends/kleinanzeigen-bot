@@ -1312,10 +1312,6 @@ class TestAutoPriceReductionDispatch:
             return mock_response
 
         async def mock_web_probe(selector_type:Any, selector_value:str, **_kwargs:Any) -> Any:
-            if selector_value == "ad-category-path":
-                marker = MagicMock()
-                marker.apply = AsyncMock(return_value = "")
-                return marker
             return None
 
         with (

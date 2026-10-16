@@ -451,7 +451,7 @@ async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
         return None
 
     if city_element.local_name == "input":
-        live_value = await city_element.apply("(elem) => (elem.value || '').trim()")
+        live_value = await web.web_apply(city_element, "(elem) => (elem.value || '').trim()")
         if isinstance(live_value, str) and live_value.strip():
             return live_value
 
@@ -463,7 +463,7 @@ async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
         # #ad-city-selected-option may not exist in all DOM states; fall through to textContent
         pass
 
-    live_text = await city_element.apply("(elem) => (elem.textContent || '').trim()")
+    live_text = await web.web_apply(city_element, "(elem) => (elem.textContent || '').trim()")
     if isinstance(live_text, str) and live_text.strip():
         return live_text
 
