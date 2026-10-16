@@ -87,20 +87,14 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 1. [Docker](https://www.docker.com/) needs to be installed.
 
 The image contains Chromium with a full font set and the locales `de_DE`, `en_US` and `en_GB` (default `de_DE`, time zone `Europe/Berlin`), plus a browser desktop ([KasmVNC](https://github.com/kasmtech/KasmVNC)) you open in your own web browser.
-It runs as the non-root user `user` (UID 1000).
 
 **Running the docker image:**
-
-1. Make sure the data directory is writable for UID 1000:
-
-   ```bash
-   DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
-   chown -R 1000:1000 $DATA_DIR
-   ```
 
 1. Run the docker image:
 
    ```bash
+   DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
+
    # /mnt/data is the container's default working directory
    docker run --rm --interactive --tty --init \
      --shm-size=1g \
@@ -111,6 +105,10 @@ It runs as the non-root user `user` (UID 1000).
    ```
 
    Use `ghcr.io/second-hand-friends/kleinanzeigen-bot:preview` for the preview channel.
+
+   The bot runs as the unprivileged user `user` (UID 1000), or as the owner of the mounted data directory if that is not root. A new, empty data directory is handed over to `user` automatically.
+   Data directories of existing installations that contain root-owned files keep working: the bot then still runs as root and logs a hint. Run `chown -R 1000:1000 $DATA_DIR` to switch to the unprivileged user.
+   `docker run --user <uid>:<gid>` selects the account explicitly and `-e RUN_AS_ROOT=1` forces root.
 
 1. Open the browser desktop at <http://localhost:6080>. The login is `user` and the password is printed in the container log on the first start
    (`docker logs <container>`). It is saved to `$DATA_DIR/.vnc-password`.
@@ -128,7 +126,7 @@ It runs as the non-root user `user` (UID 1000).
 | `GPU_RENDER_NODE`   | Render node to use, default is the first `/dev/dri/renderD*`.                                                                            |
 
 **3D acceleration** depends on your host. Pass the GPU into the container with `--device /dev/dri --group-add $(getent group render | cut -d: -f3)` on Linux hosts with an Intel or AMD GPU.
-Without a GPU (VPS, Docker Desktop on Windows/macOS, NVIDIA's proprietary driver) the desktop is rendered in software and Chromium offers no WebGL.
+Without a GPU (VPS, Docker Desktop on Windows/macOS, NVIDIA's proprietary driver) the desktop is rendered in software and Chromium renders WebGL with SwiftShader, so WebGL stays available (slower, and the renderer name reveals SwiftShader).
 The startup log states which mode is used.
 
 ### Installation from source

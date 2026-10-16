@@ -15,6 +15,55 @@ set -o pipefail
 trap 'echo >&2 "$(date +%H:%M:%S) Error - exited with status $? at line $LINENO:"; pr -tn $0 | tail -n+$((LINENO - 3)) | head -n7' ERR
 
 ##############################
+# Privileges
+#
+# The image starts as root only to pick the account to run as, then re-executes
+# this script unprivileged (docker run --user skips this block):
+#   - /mnt/data owned by a non-root uid           -> run as that uid
+#   - /mnt/data empty (new installation)          -> give it to "user" and run as "user"
+#   - /mnt/data owned by root and has root-owned entries (installation created
+#     by older, root-only images)                 -> keep running as root
+#   RUN_AS_ROOT=1 forces root.
+##############################
+drop_privileges() {
+   local data=/mnt/data uid gid first_entry
+   if [ "${RUN_AS_ROOT:-0}" = 1 ]; then
+      return
+   fi
+   uid=$(stat -c %u "$data")
+   gid=$(stat -c %g "$data")
+   first_entry=$(find "$data" -mindepth 1 -maxdepth 1 -print -quit)
+   if [ "$uid" = 0 ]; then
+      if [ -z "$first_entry" ]; then
+         uid=$(id -u user)
+         gid=$(id -g user)
+         chown "$uid:$gid" "$data"
+      elif [ -n "$(find "$data" -mindepth 1 -maxdepth 1 -user 0 -print -quit)" ]; then
+         echo >&2 "WARN: [$data] is owned by root, so the bot keeps running as root like in earlier versions of this image."
+         echo >&2 "      Recommended: chown -R $(id -u user):$(id -g user) <your data directory> to run as the unprivileged user."
+         return
+      else
+         uid=$(stat -c %u "$first_entry")
+         gid=$(stat -c %g "$first_entry")
+      fi
+   fi
+   # keep supplementary groups passed via --group-add (e.g. render for the GPU), except root's
+   local groups group_args=(--clear-groups)
+   groups=$(id -G | tr ' ' '\n' | grep -vx 0 | paste -sd, || true)
+   if [ -n "$groups" ]; then
+      group_args=(--groups="$groups")
+   fi
+   export HOME=/tmp/home
+   mkdir -p "$HOME"
+   chown "$uid:$gid" "$HOME"
+   exec setpriv --reuid="$uid" --regid="$gid" "${group_args[@]}" bash "$0" "$@"
+}
+
+if [ "$(id -u)" = 0 ]; then
+   drop_privileges "$@"
+fi
+
+##############################
 # Browser desktop (KasmVNC + Openbox)
 #
 # Started unless DISPLAY is provided from outside (e.g. a host X11 server)
@@ -71,6 +120,7 @@ vnc_gpu_args() {
    if [ -n "$node" ] && [ -r "$node" ] && [ -w "$node" ]; then
       gpu_args=(-hw3d -drinode "$node")
       echo "Desktop rendering: GPU via [$node]"
+      return
    elif [ "$mode" = on ]; then
       echo >&2 "ERROR: GPU_ACCELERATION=on but no usable render node found (${node:-none in /dev/dri})."
       echo >&2 "       Pass the device and its group, e.g.: --device /dev/dri --group-add \$(getent group render | cut -d: -f3)"
@@ -96,6 +146,10 @@ start_desktop() {
 
    local gpu_args
    vnc_gpu_args
+   if [ "${#gpu_args[@]}" -eq 0 ]; then
+      # no GPU: let Chromium render WebGL in software (SwiftShader) instead of disabling it
+      export KLEINANZEIGEN_BOT_CHROMIUM_FLAGS="${KLEINANZEIGEN_BOT_CHROMIUM_FLAGS:-} --enable-unsafe-swiftshader"
+   fi
 
    printf '%s\n%s\n' "$vnc_password" "$vnc_password" | kasmvncpasswd -u "$VNC_USER" -w -o >/dev/null
 

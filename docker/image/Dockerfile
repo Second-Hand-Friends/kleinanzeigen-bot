@@ -92,9 +92,9 @@ EOF
 # Prefer the Noto faces so Chromium actually uses the installed fonts
 COPY docker/image/fontconfig-local.conf /etc/fonts/local.conf
 
-# Debian's chromium wrapper sources /etc/chromium.d/*: keep the sandbox whenever the
-# container allows user namespaces and fall back to --no-sandbox otherwise.
-COPY docker/image/chromium-sandbox.sh /etc/chromium.d/kleinanzeigen-bot-sandbox
+# Debian's chromium wrapper sources /etc/chromium.d/*: this keeps the sandbox whenever the
+# container allows user namespaces (--no-sandbox otherwise) and adds the flags chosen by run.sh.
+COPY docker/image/chromium-flags.sh /etc/chromium.d/kleinanzeigen-bot-flags
 
 ENV LANG=$DEFAULT_LANG \
     LANGUAGE=$DEFAULT_LANG \
@@ -176,8 +176,9 @@ LABEL \
 # https://stackoverflow.com/a/59812588/5116073
 ENV PYTHONUNBUFFERED=1
 
+# The container starts as root only so that run.sh can choose the account to run as
+# (unprivileged "user" unless an older root-owned data directory is detected).
 EXPOSE 6080
-USER user
 ENTRYPOINT ["/bin/bash", "/opt/run.sh"]
 
 ENV \
