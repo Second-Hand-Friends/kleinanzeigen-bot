@@ -557,6 +557,16 @@ browser:
   suppress_unsupported_flag_warning: false
 ```
 
+#### Docker image: browser desktop
+
+Unless `DISPLAY` is passed in or `VNC_DISABLE=1` is set, the Docker image starts a KasmVNC desktop and runs the bot (and its Chromium) on it. See [Installation using Docker](../README.md#installation-using-docker) for the setup.
+
+- **Cannot open http://localhost:6080**: publish the port (`-p 127.0.0.1:6080:6080`). Bind it to `127.0.0.1` and use an SSH tunnel (`ssh -L 6080:localhost:6080 host`) instead of exposing it to the internet; the connection is plain HTTP.
+- **Forgot the password**: `cat <data dir>/.vnc-password` (generated passwords only), or set `VNC_PASSWORD` / `VNC_PASSWORD_FILE` to choose your own (at least 6 characters).
+- **GPU**: the log line `Desktop rendering: ...` tells which mode is active. For hardware rendering pass `--device /dev/dri --group-add <render-gid>` (`getent group render`). `GPU_ACCELERATION=on` aborts if no usable render node exists, `off` forces software rendering. Without a GPU, Chromium has no WebGL.
+- **Permission errors on `/mnt/data`**: the image runs as the non-root user `user` (UID 1000, changeable with the build argument `USER_UID` or `docker run --user`). Make the mounted data directory writable for it, e.g. `chown -R 1000:1000 <data dir>`.
+- **Sandbox**: Chromium keeps its sandbox when the container allows user namespaces and is started with `--no-sandbox` automatically otherwise.
+
 ## Configuration Examples
 
 ### Basic working configuration
@@ -732,5 +742,5 @@ Device verification may first ask you to request a code ("Wir senden dir …", "
 then ask for an already sent code ("Wir haben dir gerade einen 6-stelligen Code …").
 Both stages require manual completion in the browser. The bot pauses for either stage;
 it does not click "Code senden" or read/submit SMS codes. Press ENTER in the terminal
-only after completing verification. For a server/container, use a visible browser via X11
-or the existing-browser setup above. A headless browser cannot display these controls.
+only after completing verification. For a server/container, use the Docker image's browser
+desktop (port 6080), a visible browser via X11 or the existing-browser setup above. A headless browser cannot display these controls.

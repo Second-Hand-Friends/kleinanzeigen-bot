@@ -349,6 +349,18 @@ jobs:
 
         docker run --rm second-hand-friends/kleinanzeigen-bot help
 
+        # the browser desktop must come up and require the password
+        cid=$(docker run -d --rm --init -e VNC_PASSWORD=smoke-test -p 127.0.0.1:6080:6080 \
+          --entrypoint /bin/bash second-hand-friends/kleinanzeigen-bot \
+          -c 'bash /opt/run.sh help >/tmp/run.log 2>&1 & sleep 300')
+        trap 'docker logs "$cid" || true; docker rm -f "$cid" >/dev/null' EXIT
+        for _ in $(seq 60); do
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:6080/)" = 401 ] && break
+          sleep 1
+        done
+        test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:6080/)" = 401
+        test "$(curl -s -o /dev/null -w '%{http_code}' -u user:smoke-test http://127.0.0.1:6080/vnc.html)" = 200
+
 
     - name: Publish Docker image
       if: github.repository_owner == 'Second-Hand-Friends' && (github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT

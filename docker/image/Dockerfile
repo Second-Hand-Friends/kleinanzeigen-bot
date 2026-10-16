@@ -11,10 +11,23 @@
 ######################
 # runtime image base
 ######################
-FROM debian:stable-slim as runtime-base-image
+FROM debian:trixie-slim AS runtime-base-image
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG LC_ALL=C
+ARG TARGETARCH
+
+# Locales generated into the image. Override when building the image yourself, e.g.
+#   bash docker/build-image.sh --build-arg LOCALES="fr_FR.UTF-8 de_DE.UTF-8"
+ARG LOCALES="de_DE.UTF-8 en_US.UTF-8 en_GB.UTF-8"
+ARG DEFAULT_LANG=de_DE.UTF-8
+ARG DEFAULT_TZ=Europe/Berlin
+ARG USER_UID=1000
+
+# KasmVNC release assets, see https://github.com/kasmtech/KasmVNC/releases
+ARG KASMVNC_VERSION=1.5.0
+ARG KASMVNC_SHA256_AMD64=80b241de7dfe53bba2b7e1cc5ac8c5246d72271efa16be2d4f76607f30fab1c4
+ARG KASMVNC_SHA256_ARM64=fbb11589958a2acccd2d67f67944be79ac1e8e3a1d6172c0e6db6dc59e55a919
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
@@ -25,14 +38,47 @@ RUN <<EOF
   echo "#################################################"
   echo "Installing root CAs..."
   echo "#################################################"
-  apt-get install --no-install-recommends -y ca-certificates
+  apt-get install --no-install-recommends -y ca-certificates curl
   update-ca-certificates
 
   echo "#################################################"
-  echo "Installing Chromium..."
+  echo "Installing Chromium, fonts, locales and desktop..."
   echo "#################################################"
-  apt-get install --no-install-recommends -y chromium
+  apt-get install --no-install-recommends -y \
+    chromium chromium-l10n chromium-sandbox \
+    fonts-dejavu-core fonts-liberation fonts-noto-core fonts-noto-color-emoji fonts-noto-mono \
+    libegl1 libgl1-mesa-dri libglx-mesa0 \
+    locales openbox tzdata ssl-cert x11-utils
 
+  for locale in $LOCALES; do
+    sed -i "s/^# *\($locale \)/\1/" /etc/locale.gen
+  done
+  locale-gen
+
+  echo "#################################################"
+  echo "Installing KasmVNC $KASMVNC_VERSION ($TARGETARCH)..."
+  echo "#################################################"
+  case "${TARGETARCH:-amd64}" in
+    amd64) kasm_arch=amd64; kasm_sha=$KASMVNC_SHA256_AMD64 ;;
+    arm64) kasm_arch=arm64; kasm_sha=$KASMVNC_SHA256_ARM64 ;;
+    *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;;
+  esac
+  curl -fsSL -o /tmp/kasmvnc.deb \
+    "https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_trixie_${KASMVNC_VERSION}_${kasm_arch}.deb"
+  echo "$kasm_sha  /tmp/kasmvnc.deb" | sha256sum -c -
+  apt-get install --no-install-recommends -y /tmp/kasmvnc.deb
+  test -x /usr/bin/Xvnc
+
+  # KasmVNC needs a TLS key that is readable for the unprivileged user
+  make-ssl-cert generate-default-snakeoil --force-overwrite
+  chmod 755 /etc/ssl/private
+  chmod 644 /etc/ssl/private/ssl-cert-snakeoil.key
+
+  useradd --uid "$USER_UID" --create-home --shell /bin/bash user
+  mkdir -p /mnt/data
+  chown user:user /mnt/data
+
+  apt-get purge -y curl
   apt-get clean autoclean
   apt-get autoremove --purge -y
   rm -rf \
@@ -42,6 +88,18 @@ RUN <<EOF
     /tmp/* /var/tmp/*
 
 EOF
+
+# Prefer the Noto faces so Chromium actually uses the installed fonts
+COPY docker/image/fontconfig-local.conf /etc/fonts/local.conf
+
+# Debian's chromium wrapper sources /etc/chromium.d/*: keep the sandbox whenever the
+# container allows user namespaces and fall back to --no-sandbox otherwise.
+COPY docker/image/chromium-sandbox.sh /etc/chromium.d/kleinanzeigen-bot-sandbox
+
+ENV LANG=$DEFAULT_LANG \
+    LANGUAGE=$DEFAULT_LANG \
+    LC_ALL=$DEFAULT_LANG \
+    TZ=$DEFAULT_TZ
 
 ######################
 # build image
@@ -117,8 +175,9 @@ LABEL \
 
 # https://stackoverflow.com/a/59812588/5116073
 ENV PYTHONUNBUFFERED=1
-ENV DISPLAY=0:0
 
+EXPOSE 6080
+USER user
 ENTRYPOINT ["/bin/bash", "/opt/run.sh"]
 
 ENV \
