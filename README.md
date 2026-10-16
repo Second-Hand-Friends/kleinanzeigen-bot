@@ -112,6 +112,8 @@ The image contains Chromium with a full font set and the locales `de_DE`, `en_US
 
 1. Open the browser desktop at <http://localhost:6080>. The login is `user` and the password is printed in the container log on the first start
    (`docker logs <container>`). It is saved to `$DATA_DIR/.vnc-password`.
+   The desktop adapts to the size of your browser window. The bot's own browser appears there while a command runs;
+   right-click the desktop background and choose *Chromium* to open an additional browser (with a separate profile) for manual use.
 
 **Settings** (all optional, pass with `-e NAME=value`):
 

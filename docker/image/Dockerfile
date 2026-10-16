@@ -92,6 +92,9 @@ EOF
 # Prefer the Noto faces so Chromium actually uses the installed fonts
 COPY docker/image/fontconfig-local.conf /etc/fonts/local.conf
 
+# Right-click menu of the desktop: Chromium for manual use
+COPY docker/image/openbox-menu.xml /etc/xdg/openbox/menu.xml
+
 # Debian's chromium wrapper sources /etc/chromium.d/*: this keeps the sandbox whenever the
 # container allows user namespaces (--no-sandbox otherwise) and adds the flags chosen by run.sh.
 COPY docker/image/chromium-flags.sh /etc/chromium.d/kleinanzeigen-bot-flags

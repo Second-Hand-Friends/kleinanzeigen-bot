@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SPDX-FileCopyrightText: © Sebastian Thomschke and contributors
+  SPDX-License-Identifier: AGPL-3.0-or-later
+  SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+
+  Right-click menu of the container desktop. The bot starts its own browser when it runs;
+  this entry opens an additional Chromium (separate profile) for manual use.
+-->
+<openbox_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="kleinanzeigen-bot">
+    <item label="Chromium">
+      <action name="Execute"><execute>chromium --no-first-run --start-maximized about:blank</execute></action>
+    </item>
+  </menu>
+</openbox_menu>
