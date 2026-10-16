@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import pytest
 from nodriver.core.connection import ProtocolException
 
+from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
@@ -1015,8 +1016,10 @@ class TestPublishAdPostSubmitUncertainty:
 
         def execute(script:str) -> Any:
             """Keep final-click responses separate from confirmation and referrer values."""
-            if "const action =" in script and "const labels =" in script:
-                return "submit" if 'const action = "inspect"' in script else True
+            if script == publishing_submission._submit_button_script("inspect"):
+                return "submit"
+            if script == publishing_submission._submit_button_script("submit"):
+                return True
             return next(scripted_responses) if scripted_responses is not None else None
 
         common_patches:list[Any] = [
@@ -1231,7 +1234,7 @@ class TestWantedShippingSelection:
                 return test_bot.page.url
             # _click_submit_button uses JS to find and click the <button>;
             # return True so the click is considered successful.
-            if "querySelectorAll('button')" in script:
+            if script in {publishing_submission._submit_button_script("inspect"), publishing_submission._submit_button_script("submit")}:
                 return True
             return None
 
@@ -1300,8 +1303,10 @@ class TestAutoPriceReductionDispatch:
 
         async def mock_web_execute_price_reduction(script:str) -> Any:
             """Return explicit button acknowledgement and stable confirmation data."""
-            if "const action =" in script and "const labels =" in script:
-                return "submit" if 'const action = "inspect"' in script else True
+            if script == publishing_submission._submit_button_script("inspect"):
+                return "submit"
+            if script == publishing_submission._submit_button_script("submit"):
+                return True
             if "window.location.href" in script:
                 return "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=12345"
             return mock_response

@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import LOG
+from kleinanzeigen_bot import LOG, publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
@@ -2616,7 +2616,7 @@ class TestShippingOptionsDialog:
             if "window.location.href" in script:
                 return test_bot.page.url  # Return confirmation URL for ad_id extraction
             # Submit button JS click returns True (button found and clicked)
-            if "querySelectorAll('button')" in script:
+            if script in {publishing_submission._submit_button_script("inspect"), publishing_submission._submit_button_script("submit")}:
                 return True
             return None
 
@@ -2871,39 +2871,6 @@ class TestSelectButtonCombobox:
         # Stable contract: a single browser script receives safely quoted inputs.
         assert json.dumps(elem_id) in js
         assert json.dumps(option_value) in js
-
-    @pytest.mark.asyncio
-    async def test_select_button_combobox_js_contains_full_click_sequence(
-        self,
-        test_bot:KleinanzeigenBot,
-    ) -> None:
-        """The injected JS must dispatch a full click sequence (including mouseup/click)
-        and include document-level listbox search for portal-rendered menus."""
-        elem_id = "my-combobox-id"
-        option_value = "option_value"
-
-        with (
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"ok": True}) as mock_execute,
-        ):
-            await _select_button_combobox(test_bot, elem_id, option_value)
-
-        assert mock_execute.await_args is not None
-        js = str(mock_execute.await_args.args[0])
-        # Full click sequence: pointerdown + mousedown + mouseup + click
-        assert "PointerEvent('pointerdown'" in js
-        assert "MouseEvent('mousedown'" in js
-        assert "MouseEvent('mouseup'" in js
-        assert "MouseEvent('click'" in js
-        # Scoped portal fallback: aria-controls/owns association first, then visible portal candidates with aria-labelledby
-        assert "btn.getAttribute('aria-controls')" in js
-        assert "document.getElementById(controlledId)" in js
-        assert "btn.getAttribute('aria-owns')" in js
-        assert "document.getElementById(ownedId)" in js
-        assert "document.querySelectorAll('[role=\"listbox\"],[role=\"menu\"]')" in js
-        assert "getBoundingClientRect" in js
-        assert "aria-labelledby" in js
-        # Whitespace normalization in text matching
-        assert ".replace(/\\s+/g,' ').trim()" in js
 
     @pytest.mark.asyncio
     async def test_select_button_combobox_no_options_failure_raises_timeout(

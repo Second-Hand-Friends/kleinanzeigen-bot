@@ -97,7 +97,7 @@
 *.css        text diff=css
 *.htm        text diff=html
 *.html       text diff=html
-*.js         text
+*.js         text eol=lf
 
 
 # https://git-scm.com/docs/gitattributes#_export_ignore

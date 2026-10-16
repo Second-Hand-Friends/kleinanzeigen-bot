@@ -29,6 +29,7 @@ from .model.ad_model import (
 )
 from .model.config_model import AdDefaults
 from .utils import loggers as _loggers
+from .utils import page_scripts
 from .utils.exceptions import CategoryResolutionError
 from .utils.i18n import pluralize
 from .utils.misc import ensure
@@ -829,100 +830,9 @@ async def _select_button_combobox(web:WebScrapingMixin, elem_id:str, value:str) 
     association, and finally falls back to visible document-level
     portal candidates with aria-labelledby matching.
     """
-    js_elem_id = json.dumps(elem_id)
-    js_value = json.dumps(value)
     # Use web.timeout("quick_dom") as the JS-side polling budget, converted to milliseconds.
     poll_deadline_ms = int(web.timeout("quick_dom") * 1000)
-    status = await web.web_execute(f"""(async function() {{
-    var btn = document.getElementById({js_elem_id});
-    if (!btn) return {{ok:false, reason:'button_not_found'}};
-    btn.dispatchEvent(new PointerEvent('pointerdown',{{bubbles:true,cancelable:true}}));
-    btn.dispatchEvent(new MouseEvent('mousedown',{{bubbles:true,cancelable:true}}));
-    btn.dispatchEvent(new MouseEvent('mouseup',{{bubbles:true,cancelable:true}}));
-    btn.dispatchEvent(new MouseEvent('click',{{bubbles:true,cancelable:true}}));
-    var listbox = null;
-    var options = null;
-    var pollDeadline = Date.now() + {poll_deadline_ms};
-    while (Date.now() < pollDeadline) {{
-        await new Promise(function(r){{setTimeout(r,20);}});
-        var candidate = document.getElementById({js_elem_id}+'-menu');
-        if (!candidate && btn.parentElement) {{
-            candidate = btn.parentElement.querySelector('[role="listbox"]');
-        }}
-        if (!candidate && btn.parentElement) {{
-            var m = btn.parentElement.querySelector('[role="menu"]');
-            if (m) candidate = m;
-        }}
-        /* Headless UI / React portals: try aria-controls/owns association first,
-           then visible document-level portal candidates with aria-labelledby. */
-        if (!candidate && btn.getAttribute) {{
-            var controlledId = btn.getAttribute('aria-controls');
-            if (controlledId) {{
-                candidate = document.getElementById(controlledId);
-            }}
-        }}
-        if (!candidate && btn.getAttribute) {{
-            var ownedId = btn.getAttribute('aria-owns');
-            if (ownedId) {{
-                candidate = document.getElementById(ownedId);
-            }}
-        }}
-        if (!candidate) {{
-            var portalCandidates = document.querySelectorAll('[role="listbox"],[role="menu"]');
-            for (var p = 0; p < portalCandidates.length; p++) {{
-                var pc = portalCandidates[p];
-                var rect = pc.getBoundingClientRect();
-                if (rect.width > 0 && rect.height > 0) {{
-                    var labelledby = pc.getAttribute('aria-labelledby');
-                    if (!labelledby || labelledby === btn.id) {{
-                        candidate = pc;
-                        break;
-                    }}
-                }}
-            }}
-        }}
-        if (candidate) {{
-            options = Array.from(candidate.querySelectorAll('[role="option"]'));
-            if (options.length > 0) break;
-        }}
-    }}
-    if (!options || options.length === 0) {{
-        return {{ok:false, reason:'no_options_after_opening', options:[]}};
-    }}
-    var optionInfo = options.map(function(o){{return o.textContent ? o.textContent.replace(/\\s+/g,' ').trim() : '';}});
-    var fiberKey = Object.keys(btn).find(function(k){{return k.startsWith('__reactFiber');}});
-    if (fiberKey) {{
-        var fiber = btn[fiberKey];
-        for (var j = 0; j < 20 && fiber; j++, fiber = fiber.return) {{
-            if (fiber.memoizedProps && fiber.memoizedProps.options) {{
-                var opts = fiber.memoizedProps.options;
-                for (var k = 0; k < opts.length; k++) {{
-                    if (opts[k].value === {js_value} && options[k]) {{
-                        options[k].click();
-                        return {{ok:true}};
-                    }}
-                }}
-                break;
-            }}
-        }}
-    }}
-    for (var k = 0; k < options.length; k++) {{
-        var o = options[k];
-        if (o.getAttribute('value') === {js_value} ||
-            o.getAttribute('data-value') === {js_value} ||
-            o.getAttribute('aria-label') === {js_value} ||
-            o.getAttribute('title') === {js_value}) {{
-            o.click();
-            return {{ok:true}};
-        }}
-        var text = (o.textContent || '').replace(/\\s+/g,' ').trim().toLowerCase();
-        if (text === ({js_value}+'').replace(/\\s+/g,' ').trim().toLowerCase()) {{
-            o.click();
-            return {{ok:true}};
-        }}
-    }}
-    return {{ok:false, reason:'option_not_found', requested:{js_value}, options:optionInfo}};
-}})()""")
+    status = await web.web_execute(page_scripts.call("select_button_combobox", elem_id, value, poll_deadline_ms))
     if not isinstance(status, dict) or not status.get("ok"):
         observed = status.get("options", []) if isinstance(status, dict) else []
         reason_code = status.get("reason", "unknown") if isinstance(status, dict) else "unknown"
@@ -1238,25 +1148,7 @@ async def _set_condition(web:WebScrapingMixin, condition_value:str) -> bool:
     # <label for*=".condition"> — they share a common ancestor div.
     # nodriver CSS doesn't support ::has() or complex sibling combinators reliably,
     # so use JS to locate the trigger.
-    trigger_info = await web.web_execute("""
-    (() => {
-        document.querySelectorAll('[data-kab-condition-trigger]').forEach(el => el.removeAttribute('data-kab-condition-trigger'));
-        const labels = document.querySelectorAll('label[for*=".condition"]');
-        for (const lbl of labels) {
-            // Walk up to find a common ancestor, then search for the button within it
-            let ancestor = lbl.parentElement;
-            for (let depth = 0; depth < 5 && ancestor; depth++) {
-                const btn = ancestor.querySelector('button[aria-haspopup="dialog"], button[aria-haspopup="true"]');
-                if (btn) {
-                    btn.setAttribute('data-kab-condition-trigger', 'true');
-                    return JSON.stringify({found: true, id: btn.id || '', ariaControls: btn.getAttribute('aria-controls') || ''});
-                }
-                ancestor = ancestor.parentElement;
-            }
-        }
-        return JSON.stringify({found: false});
-    })()
-    """)
+    trigger_info = await web.web_execute(page_scripts.call("condition_dialog_trigger"))
 
     try:
         ti = json.loads(trigger_info) if isinstance(trigger_info, str) else {}

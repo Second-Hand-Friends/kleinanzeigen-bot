@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "checkJs": true,
+    "lib": ["dom", "dom.iterable", "esnext"]
+  },
+  "fmt": { "lineWidth": 120 }
+}

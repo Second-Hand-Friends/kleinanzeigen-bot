@@ -180,6 +180,19 @@ All Python files must start with SPDX license headers:
 - Use `Final` for constants
 - Use `cast()` when type checker needs help
 
+### In-Page JavaScript
+
+Scripts the bot runs in the page (`web_execute`, `Element.apply`) live in `src/kleinanzeigen_bot/resources/js/`, except one-liners such as `document.referrer`.
+
+- Each file holds one parenthesized function expression, starts with the SPDX header (as `//` comments) and `// @ts-check`, and declares its parameter and return types with JSDoc.
+- Call it through `kleinanzeigen_bot.utils.page_scripts`: `call(name, *args)` for `web_execute`, `function(name, *bound)` for `Element.apply`. Arguments are passed as JSON; never splice values into script text.
+- `pdm run lint` runs `deno lint`, `deno fmt --check` and `deno check` (TypeScript checker with DOM types); `pdm run format` runs `deno fmt`.
+- New and changed scripts must pass all checks without suppressions: no `@ts-expect-error`, `@ts-ignore`, `@ts-nocheck` or `deno-lint-ignore`.
+  A JSDoc cast such as `/** @type {NodeListOf<HTMLButtonElement>} */ (...)` is only allowed where the selector or the preceding code proves the type.
+- `js-debt` is the one-off backlog from moving the existing scripts out of Python strings: findings whose fix would change behavior are marked with
+  `// @ts-expect-error js-debt: <reason>` or `// deno-lint-ignore <rule> -- js-debt: <reason>`. New debt is not accepted;
+  `tests/unit/test_page_scripts.py` fails on any marker beyond that backlog. A stale marker fails the lint, so a fixed item also removes its entry.
+
 ### Documentation
 
 #### Docstrings

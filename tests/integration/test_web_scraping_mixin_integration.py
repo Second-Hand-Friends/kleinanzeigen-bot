@@ -70,3 +70,14 @@ async def test_sms_verification_prompts_at_request_and_entry_stages(web:WebScrap
     ):
         await check_sms_verification(web)
     assert prompt.await_count == int(requires_verification)
+
+
+async def test_viewport_resize_applies_window_bounds(web:WebScrapingMixin) -> None:
+    """The randomized viewport is applied through CDP window bounds; headless sessions skip it at start, so test it directly."""
+    window_id, original = await web.page.get_window()
+    try:
+        assert await web._apply_viewport_size("1111x777") is True
+        _, bounds = await web.page.get_window()
+        assert (bounds.width, bounds.height) == (1111, 777)
+    finally:
+        await web.page.send(cdp.browser.set_window_bounds(window_id, bounds = cdp.browser.Bounds(width = original.width, height = original.height)))
