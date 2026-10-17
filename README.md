@@ -114,8 +114,8 @@ The image contains Chromium with a full font set and the locales `de_DE`, `en_US
    Data directories of existing installations that contain root-owned files keep working: the bot then still runs as root and logs a hint. Run `chown -R 1000:1000 $DATA_DIR` to switch to the unprivileged user.
    `docker run --user <uid>:<gid>` selects the account explicitly and `-e RUN_AS_ROOT=1` forces root.
 
-1. Open the browser desktop at <http://localhost:6080>. The login is `user` and the password is printed in the container log on the first start
-   (`docker logs <container>`). It is saved to `$DATA_DIR/.vnc-password`.
+1. Open the browser desktop at <http://localhost:6080>. The login is `user`. The password is generated on the first start, printed in the container log
+   and saved to `$DATA_DIR/.vnc-password`, so it is still available after the container has ended: `cat $DATA_DIR/.vnc-password`.
    The desktop adapts to the size of your browser window. The bot's own browser appears there while a command runs;
    right-click the desktop background and choose *Chromium* to open an additional browser (with a separate profile) for manual use.
 

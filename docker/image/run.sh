@@ -182,10 +182,11 @@ start_desktop() {
    case "$vnc_password_source" in
       generated)
          echo " Password:         $vnc_password"
-         echo " (generated on first start and saved to $VNC_PASSWORD_STORE;"
+         echo " (generated on first start and saved as .vnc-password in your data directory,"
+         echo "  so you can read it later even though this log is gone with the container;"
          echo "  set VNC_PASSWORD or VNC_PASSWORD_FILE to use your own)" ;;
       stored)
-         echo " Password:         stored in $VNC_PASSWORD_STORE" ;;
+         echo " Password:         stored as .vnc-password in your data directory" ;;
       *)
          echo " Password:         from $vnc_password_source" ;;
    esac
