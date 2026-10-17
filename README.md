@@ -118,6 +118,11 @@ The image contains Chromium with a full font set and the locales `de_DE`, `en_US
    The desktop adapts to the size of your browser window. The bot's own browser appears there while a command runs;
    right-click the desktop background and choose *Chromium* to open an additional browser (with a separate profile) for manual use.
 
+> [!WARNING]
+> The desktop gives full control over the bot's browser, including your logged-in Kleinanzeigen session, and the connection is plain HTTP (the password is sent unencrypted).
+> Publish the port on `127.0.0.1` only (`-p 127.0.0.1:6080:6080`) and use an SSH tunnel or an HTTPS reverse proxy for remote access.
+> Do not use `-p 6080:6080` or `--network host` on a machine reachable from untrusted networks, and choose a strong `VNC_PASSWORD`.
+
 **Settings** (all optional, pass with `-e NAME=value`):
 
 | Variable            | Meaning                                                                                                                                  |

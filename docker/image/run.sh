@@ -140,6 +140,8 @@ start_desktop() {
       *)
          echo " Password:         from $vnc_password_source" ;;
    esac
+   echo " WARNING: plain HTTP, full control of the bot's browser session. Publish the port"
+   echo "          on 127.0.0.1 only and use an SSH tunnel or HTTPS proxy for remote access."
    echo "################################################################"
 }
 
