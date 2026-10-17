@@ -32,7 +32,7 @@ jobs:
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
-        set -eu
+        set -euo pipefail
 
         pinned=$(sed -n 's/^ARG KASMVNC_VERSION=//p' docker/image/Dockerfile)
         latest=$(gh api repos/kasmtech/KasmVNC/releases/latest --jq .tag_name | sed 's/^v//')
