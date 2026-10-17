@@ -661,7 +661,8 @@ curl http://localhost:9222/json/version
 
 ## Manual login and SMS device verification
 
-Run `kleinanzeigen-bot login --config=/path/to/config.yaml` in an interactive terminal.
+Run `kleinanzeigen-bot login --config=/path/to/config.yaml --workspace-mode=portable` in an interactive terminal
+(or `--workspace-mode=xdg`; see the README if the mode cannot be inferred) and use the same mode for later runs.
 The command opens a visible browser with the same profile as subsequent bot runs.
 It requires a persistent, visible session and stops with an error otherwise: set `browser.use_private_window: false`
 and remove `--headless`, `--incognito`, `--guest` and `--inprivate` from `browser.arguments`.
@@ -697,10 +698,10 @@ browser:
 Open `http://localhost:6080`, sign in as `user` with the password from the container log (or `/mnt/data/.vnc-password`),
 and complete the login in the bot's Chromium. Then press ENTER in the container console. The container ends when the command completes.
 
-For Portainer, create a temporary container with the same data volume, port 6080 published, command `login`,
+For Portainer, create a temporary container with the same data volume, port 6080 published on the loopback address only (host IP `127.0.0.1`), command `login`,
 and "Interactive & TTY" enabled. Do not enable automatic restarts. Attach to its console, press ENTER there when the login is done,
 and remove the container afterwards while retaining the data volume.
-For a remote host, tunnel port 6080 over SSH or publish it only on a trusted LAN interface; the desktop connection is not encrypted.
+For a remote host, tunnel port 6080 over SSH or use an HTTPS reverse proxy; the desktop connection is not encrypted.
 
 ## Using an Existing Browser Window
 

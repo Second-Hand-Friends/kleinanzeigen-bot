@@ -363,6 +363,8 @@ async def test_manual_login_uses_persistent_visible_profile_and_verifies_account
     (False, ["--incognito"]),
     (False, ["--guest"]),
     (False, ["--inprivate"]),
+    (False, ["-inprivate"]),
+    (False, ["-headless=new"]),
 ])
 async def test_manual_login_rejects_config_without_persistent_visible_session(
     test_bot:KleinanzeigenBot, private:bool, arguments:list[str]

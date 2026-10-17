@@ -275,7 +275,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._bootstrap_runtime()
         _misc.ensure(
             not self.browser_config.use_private_window
-            and not any(arg.partition("=")[0] in {"--headless", "--incognito", "--guest", "--inprivate"} for arg in self.browser_config.arguments),
+            and not any(arg.lstrip("-").partition("=")[0] in {"headless", "incognito", "guest", "inprivate"} for arg in self.browser_config.arguments),
             _("Manual login needs a persistent, visible browser session. Set browser.use_private_window to false and remove "
               "--headless, --incognito, --guest and --inprivate from browser.arguments."),
         )
