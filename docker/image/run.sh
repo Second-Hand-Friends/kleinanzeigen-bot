@@ -24,6 +24,10 @@ trap 'echo >&2 "$(date +%H:%M:%S) Error - exited with status $? at line $LINENO:
 #   - /mnt/data contains root-owned files (installation created by older,
 #     root-only images)                           -> keep running as root
 #   RUN_AS_ROOT=1 forces root.
+#
+# This is a migration aid for installations created by older, root-only images. Do not add
+# further heuristics; the cases are covered by docker/image/test-startup.sh. Once old
+# installations are no longer a concern, the image can simply start as "user".
 ##############################
 drop_privileges() {
    local data=/mnt/data uid gid first_entry

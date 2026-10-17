@@ -361,6 +361,9 @@ jobs:
         test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:6080/)" = 401
         test "$(curl -s -o /dev/null -w '%{http_code}' -u user:smoke-test http://127.0.0.1:6080/vnc.html)" = 200
 
+        # account selection for existing data directories, restart after a kill, LANG override
+        bash docker/image/test-startup.sh second-hand-friends/kleinanzeigen-bot
+
 
     - name: Publish Docker image
       if: github.repository_owner == 'Second-Hand-Friends' && (github.ref_name == 'main' || github.ref_name == 'release') && matrix.PUBLISH_RELEASE && startsWith(matrix.os, 'ubuntu') && !env.ACT
