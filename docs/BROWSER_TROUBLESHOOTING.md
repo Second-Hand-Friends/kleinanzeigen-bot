@@ -659,6 +659,51 @@ pdm run app -v publish        # For source users
 curl http://localhost:9222/json/version
 ```
 
+## Manual login and SMS device verification
+
+Run `kleinanzeigen-bot login --config=/path/to/config.yaml` in an interactive terminal.
+The command opens a visible browser with the same profile as subsequent bot runs.
+It disables private/guest mode and headless arguments for this run, without changing the config file.
+Enter your credentials and complete any CAPTCHA, SMS request ("Code senden"), SMS code entry, or email verification in that browser.
+Then return to the terminal and press ENTER. The bot verifies the configured account and closes the browser to save the session.
+The command never fills credentials, sends SMS, downloads ads, or publishes ads.
+Your configured username must match the account you log into. Normal config validation still applies.
+
+For subsequent commands to reuse the session, set `browser.use_private_window: false` in your config
+and remove any `--incognito`, `--guest`, or `--inprivate` browser arguments. The login command changes
+these settings only for its own run and warns if your config would start a private session later.
+Keep the profile directory persistent and use that same directory for later commands.
+Stop other bot/browser processes using it before starting; Chromium cannot share a profile between simultaneous processes.
+If connecting to an externally managed browser via remote debugging, ensure that browser uses a persistent profile and close it yourself when finished.
+
+### Docker and Portainer
+
+The standard Docker image includes a browser desktop (see the README), so no extra image is needed.
+Stop scheduled bot runs first, mount the data directory containing your config and browser profile, and run `login` with an interactive terminal:
+
+```bash
+docker run --rm -it --shm-size=256m \
+  -p 127.0.0.1:6080:6080 \
+  -v /path/to/bot-data:/mnt/data \
+  ghcr.io/second-hand-friends/kleinanzeigen-bot:latest login
+```
+
+Keep the browser profile persistent and use the same data directory for later runs, for example:
+
+```yaml
+browser:
+  user_data_dir: /mnt/data/browser-profile
+  use_private_window: false
+```
+
+Open `http://localhost:6080`, sign in as `user` with the password from the container log (or `/mnt/data/.vnc-password`),
+and complete the login in the bot's Chromium. Then press ENTER in the container console. The container ends when the command completes.
+
+For Portainer, create a temporary container with the same data volume, port 6080 published, command `login`,
+and "Interactive & TTY" enabled. Do not enable automatic restarts. Attach to its console, press ENTER there when the login is done,
+and remove the container afterwards while retaining the data volume.
+For a remote host, tunnel port 6080 over SSH or publish it only on a trusted LAN interface; the desktop connection is not encrypted.
+
 ## Using an Existing Browser Window
 
 By default a new browser process will be launched. To reuse a manually launched browser window/process, follow these steps:
