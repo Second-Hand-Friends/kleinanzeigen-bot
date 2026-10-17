@@ -81,3 +81,30 @@ async def test_viewport_resize_applies_window_bounds(web:WebScrapingMixin) -> No
         assert (bounds.width, bounds.height) == (1111, 777)
     finally:
         await web.page.send(cdp.browser.set_window_bounds(window_id, bounds = cdp.browser.Bounds(width = original.width, height = original.height)))
+
+
+async def test_closing_a_session_persists_cookies_for_the_next_start(blank_site:str, tmp_path:Path) -> None:
+    """A login completed right before closing must still be in the profile when the browser starts again."""
+    def new_session() -> WebScrapingMixin:
+        session = WebScrapingMixin()
+        session.browser_config.use_private_window = False
+        session.browser_config.user_data_dir = str(tmp_path / "profile")
+        session.browser_config.arguments += ["--headless=new", "--no-sandbox"]
+        return session
+
+    first = new_session()
+    await first.create_browser_session()
+    try:
+        await first.web_open(blank_site)
+        await first.page.send(cdp.network.set_cookie("session", "kept", url = blank_site, expires = cdp.network.TimeSinceEpoch(4_000_000_000)))
+    finally:
+        await first.close_browser_session()
+
+    second = new_session()
+    await second.create_browser_session()
+    try:
+        await second.web_open(blank_site)
+        cookies = await second.page.send(cdp.network.get_cookies([blank_site]))
+        assert {cookie.name: cookie.value for cookie in cookies} == {"session": "kept"}
+    finally:
+        await second.close_browser_session()
