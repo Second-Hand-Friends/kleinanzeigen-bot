@@ -1320,7 +1320,8 @@ class WebScrapingMixin:  # noqa: PLR0904
         ))
         if exception_details is not None:
             thrown = exception_details.exception
-            raise PageScriptError(_("Script in the page failed: %s") % ((thrown and thrown.description) or exception_details.text))
+            reason = thrown.description if thrown is not None and thrown.description else exception_details.text
+            raise PageScriptError(_("Script in the page failed: %s") % reason)
         return result.value
 
     async def web_execute(self, jscode:str) -> Any:
