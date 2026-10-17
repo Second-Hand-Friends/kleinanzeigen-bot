@@ -84,32 +84,61 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 ### Installation using Docker
 
-1. The following components need to be installed:
-   1. [Docker](https://www.docker.com/)
-   1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
-   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. [Portable-X-Server](https://github.com/P-St/Portable-X-Server/releases/latest))
+1. [Docker](https://www.docker.com/) needs to be installed.
+
+The image contains Chromium with a full font set and the locales `de_DE`, `en_US` and `en_GB` (default `de_DE`, time zone `Europe/Berlin`), plus a browser desktop ([KasmVNC](https://github.com/kasmtech/KasmVNC)) you open in your own web browser.
 
 **Running the docker image:**
-
-1. Ensure the X11 Server is running
 
 1. Run the docker image:
 
    ```bash
-   X11_DISPLAY=192.168.50.34:0.0 # replace with IP address of workstation where X11 server is running
-
    DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
 
    # /mnt/data is the container's default working directory
-   docker run --rm --interactive --tty \
-     --shm-size=256m \
-     -e DISPLAY=$X11_DISPLAY \
+   docker run --rm --interactive --tty --init \
+     --shm-size=1g \
+     -p 127.0.0.1:6080:6080 \
      -v $DATA_DIR:/mnt/data \
      ghcr.io/second-hand-friends/kleinanzeigen-bot:latest \
-     --help
+     publish
    ```
 
    Use `ghcr.io/second-hand-friends/kleinanzeigen-bot:preview` for the preview channel.
+
+   The browser desktop exists while the command runs; the container (and the desktop) ends together with it.
+   Commands that only print something, like `--help`, finish immediately:
+   `docker run --rm ghcr.io/second-hand-friends/kleinanzeigen-bot:latest --help`.
+
+   The bot runs as the unprivileged user `user` (UID 1000), or as the owner of the mounted data directory if that is not root. A new, empty data directory is handed over to `user` automatically.
+   Data directories that contain root-owned files (existing installations) keep working: the bot then still runs as root and logs a hint. Run `chown -R 1000:1000 $DATA_DIR` to switch to the unprivileged user.
+   `docker run --user <uid>:<gid>` selects the account explicitly and `-e RUN_AS_ROOT=1` forces root.
+
+1. Open the browser desktop at <http://localhost:6080>. The login is `user`. The password is generated on the first start, printed in the container log
+   and saved to `$DATA_DIR/.vnc-password`, so it is still available after the container has ended: `cat $DATA_DIR/.vnc-password`.
+   The desktop adapts to the size of your browser window. The bot's own browser appears there while a command runs;
+   right-click the desktop background and choose *Chromium* to open an additional browser (with a separate profile) for manual use.
+
+> [!WARNING]
+> The desktop gives full control over the bot's browser, including your logged-in Kleinanzeigen session, and the connection is plain HTTP (the password is sent unencrypted).
+> Publish the port on `127.0.0.1` only (`-p 127.0.0.1:6080:6080`) and use an SSH tunnel or an HTTPS reverse proxy for remote access.
+> Do not use `-p 6080:6080` or `--network host` on a machine reachable from untrusted networks, and choose a strong `VNC_PASSWORD`.
+
+**Settings** (all optional, pass with `-e NAME=value`):
+
+| Variable            | Meaning                                                                                                                                  |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `VNC_PASSWORD`      | Your own desktop password (at least 6 characters). If unset, a password is generated.                                                                                               |
+| `VNC_DISABLE`       | `1` starts no desktop (use together with your own `DISPLAY`).                                                                            |
+| `DISPLAY`           | If set, the bot uses that X11 server (e.g. `192.168.50.34:0.0` on your workstation) and no desktop is started.                           |
+| `VNC_GEOMETRY`      | Desktop size, default `1440x900`.                                                                                                        |
+| `LANG`, `TZ`        | Locale and time zone of the browser, e.g. `en_US.UTF-8` and `America/New_York`. Only the locales listed above are installed.               |
+| `GPU_ACCELERATION`  | `auto` (default) uses the GPU if a render node is usable, `on` aborts if it is not, `off` forces software rendering.                    |
+| `GPU_RENDER_NODE`   | Render node to use, default is the first `/dev/dri/renderD*`.                                                                            |
+
+**3D acceleration** depends on your host. Pass the GPU into the container with `--device /dev/dri --group-add $(getent group render | cut -d: -f3)` on Linux hosts with an Intel or AMD GPU.
+Without a GPU (VPS, Docker Desktop on Windows/macOS, NVIDIA's proprietary driver) the desktop is rendered in software and Chromium renders WebGL with SwiftShader, so WebGL stays available (slower, and the renderer name reveals SwiftShader).
+The startup log states which mode is used.
 
 ### Installation from source
 
@@ -159,7 +188,6 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
    1. [Docker](https://www.docker.com/)
    1. [git client](https://git-scm.com/downloads)
    1. [Bash](https://www.gnu.org/software/bash/) (on Windows e.g. via [Cygwin](https://www.cygwin.com/), [MSys2](https://www.msys2.org/) or git)
-   1. [X11 - X Window System](https://en.wikipedia.org/wiki/X_Window_System) display server (on Windows e.g. [Portable-X-Server](https://github.com/P-St/Portable-X-Server/releases/latest))
 
 1. Clone the repo using
 
@@ -170,6 +198,12 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 1. Open the cloned directory in a Bash terminal window and navigate to the [docker](docker) subdirectory
 
 1. Execute `bash build-image.sh`
+
+   Additional arguments are passed to `docker build`. To choose the locales installed in the image, the default locale or the container user's UID, use e.g.:
+
+   ```bash
+   bash build-image.sh --build-arg LOCALES="fr_FR.UTF-8 en_US.UTF-8" --build-arg DEFAULT_LANG=fr_FR.UTF-8 --build-arg USER_UID=1001
+   ```
 
 1. Ensure the image is built:
 
@@ -182,23 +216,19 @@ Die Nutzung erfolgt auf eigenes Risiko. Jede rechtswidrige Verwendung ist unters
 
 **Running the docker image:**
 
-1. Ensure the X11 Server is running
+Run it as described in [Installation using Docker](#installation-using-docker), using the image name `second-hand-friends/kleinanzeigen-bot`:
 
-1. Run the docker image:
+```bash
+DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
 
-   ```bash
-   X11_DISPLAY=192.168.50.34:0.0 # replace with IP address of workstation where X11 server is running
-
-   DATA_DIR=/var/opt/data/kleinanzeigen-bot # path to config
-
-   # /mnt/data is the container's default working directory
-   docker run --rm --interactive --tty \
-     --shm-size=256m \
-     -e DISPLAY=$X11_DISPLAY \
-     -v $DATA_DIR:/mnt/data \
-     second-hand-friends/kleinanzeigen-bot \
-     --help
-   ```
+# /mnt/data is the container's default working directory
+docker run --rm --interactive --tty --init \
+  --shm-size=1g \
+  -p 127.0.0.1:6080:6080 \
+  -v $DATA_DIR:/mnt/data \
+  second-hand-friends/kleinanzeigen-bot \
+  publish
+```
 
 ## <a name="usage"></a>Usage
 
