@@ -177,8 +177,8 @@ LABEL \
 # https://stackoverflow.com/a/59812588/5116073
 ENV PYTHONUNBUFFERED=1
 
-# The container runs as root like in earlier images; "docker run --user 1000:1000" selects the
-# unprivileged account "user" (the owner of /mnt/data in the image).
+# The container starts as root only so that run.sh can choose the account to run as
+# (unprivileged "user" unless an older root-owned data directory is detected).
 EXPOSE 6080
 ENTRYPOINT ["/bin/bash", "/opt/run.sh"]
 
