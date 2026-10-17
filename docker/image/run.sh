@@ -154,6 +154,8 @@ start_desktop() {
    printf '%s\n%s\n' "$vnc_password" "$vnc_password" | kasmvncpasswd -u "$VNC_USER" -w -o >/dev/null
 
    mkdir -p /tmp/.X11-unix
+   # leftovers of a killed container (docker kill + docker start) would make Xvnc refuse to start
+   rm -f "/tmp/.X${VNC_DISPLAY#:}-lock" "/tmp/.X11-unix/X${VNC_DISPLAY#:}"
    Xvnc "$VNC_DISPLAY" \
       -geometry "${VNC_GEOMETRY:-1440x900}" -depth 24 \
       "${gpu_args[@]}" \
