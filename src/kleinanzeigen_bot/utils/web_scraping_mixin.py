@@ -1023,6 +1023,8 @@ class WebScrapingMixin:  # noqa: PLR0904
         # schedules this cleanup without awaiting it, which can leave pending tasks behind.
         cancelled_during_aclose = False
         try:
+            if isinstance(browser_process, asyncio.subprocess.Process):
+                await self._quit_browser_gracefully(browser, browser_process)
             await browser.aclose()
         except asyncio.CancelledError:
             cancelled_during_aclose = True
@@ -1043,6 +1045,18 @@ class WebScrapingMixin:  # noqa: PLR0904
                     self._kill_orphaned_browser_children(browser_pid)
                 finally:
                     self.browser = None  # pyright: ignore[reportAttributeAccessIssue]
+
+    async def _quit_browser_gracefully(self, browser:Browser, browser_process:asyncio.subprocess.Process) -> None:
+        """Let a self-started browser quit on its own, so it can flush cookies and the profile to disk.
+
+        ``Browser.stop()`` terminates it with SIGTERM, which can lose a login completed moments before.
+        """
+        try:
+            async with asyncio.timeout(_BROWSER_PROCESS_EXIT_TIMEOUT_SECONDS):
+                await browser.send(cdp_browser.close())
+        except Exception as exc:  # noqa: BLE001 - best effort: the connection ends together with the browser
+            LOG.debug("Browser.close did not complete cleanly: %s", exc)
+        await self._wait_for_browser_process_exit(browser_process)
 
     async def _wait_for_browser_process_exit(self, browser_process:asyncio.subprocess.Process) -> None:
         loop = asyncio.get_running_loop()

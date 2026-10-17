@@ -12,6 +12,7 @@ from ruamel.yaml import YAML as _YAML
 
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.app import KleinanzeigenBot
+from kleinanzeigen_bot.login_flow import LoginDetectionReason, LoginDetectionResult
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.runtime_config import RuntimeState
 from kleinanzeigen_bot.utils import xdg_paths
@@ -325,3 +326,85 @@ class TestKleinanzeigenBotAdManagement:
         with pytest.raises(SystemExit) as exc_info:
             await test_bot.run(["script.py", command, "--ads=invalid"])
         assert exc_info.value.code == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confirmed", [True, False])
+async def test_manual_login_uses_persistent_visible_profile_and_verifies_account(test_bot:KleinanzeigenBot, confirmed:bool, tmp_path:Path) -> None:
+    """Manual login never submits credentials and always closes the managed session."""
+    test_bot.browser_config.use_private_window = False
+    test_bot.browser_config.arguments = ["--disable-dev-shm-usage"]
+    reason = LoginDetectionReason.USER_INFO_MATCH if confirmed else LoginDetectionReason.CTA_MATCH
+    with (
+        patch("sys.stdin.isatty", return_value = True),
+        patch.object(test_bot, "_bootstrap_runtime"),
+        patch.object(test_bot, "create_browser_session", new_callable = AsyncMock) as create,
+        patch.object(test_bot, "close_browser_session", new_callable = AsyncMock) as close,
+        patch.object(test_bot, "login", new_callable = AsyncMock) as automatic_login,
+        patch.object(test_bot, "web_open", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.login_flow.click_gdpr_banner", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock),
+        patch.object(test_bot, "get_login_state", new_callable = AsyncMock, return_value = LoginDetectionResult(confirmed, reason)),
+    ):
+        if confirmed:
+            await test_bot.run(["app", "login", f"--config={tmp_path / 'config.yaml'}", "--workspace-mode=portable"])
+        else:
+            with pytest.raises(AssertionError, match = "Manual login could not be confirmed"):
+                await test_bot.run(["app", "login", f"--config={tmp_path / 'config.yaml'}", "--workspace-mode=portable"])
+        create.assert_awaited_once()
+        close.assert_awaited_once()
+        automatic_login.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("private", "arguments"), [
+    (True, []),
+    (False, ["--headless=new"]),
+    (False, ["--incognito"]),
+    (False, ["--guest"]),
+    (False, ["--inprivate"]),
+    (False, ["-inprivate"]),
+    (False, ["-headless=new"]),
+])
+async def test_manual_login_rejects_config_without_persistent_visible_session(
+    test_bot:KleinanzeigenBot, private:bool, arguments:list[str]
+) -> None:
+    test_bot.browser_config.use_private_window = private
+    test_bot.browser_config.arguments = arguments
+    with (
+        patch("sys.stdin.isatty", return_value = True),
+        patch.object(test_bot, "_bootstrap_runtime"),
+        patch.object(test_bot, "create_browser_session", new_callable = AsyncMock) as create,
+        pytest.raises(AssertionError, match = "persistent, visible browser session"),
+    ):
+        await test_bot._handle_login()
+    create.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_manual_login_checks_state_when_reload_times_out(test_bot:KleinanzeigenBot) -> None:
+    test_bot.browser_config.use_private_window = False
+    test_bot.browser_config.arguments = []
+    with (
+        patch("sys.stdin.isatty", return_value = True),
+        patch.object(test_bot, "_bootstrap_runtime"),
+        patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
+        patch.object(test_bot, "web_open", new_callable = AsyncMock, side_effect = [None, TimeoutError()]),
+        patch("kleinanzeigen_bot.login_flow.click_gdpr_banner", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock),
+        patch.object(test_bot, "get_login_state", new_callable = AsyncMock,
+                     return_value = LoginDetectionResult(True, LoginDetectionReason.USER_INFO_MATCH)) as state,
+    ):
+        await test_bot._handle_login()
+    state.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_manual_login_rejects_noninteractive_terminal(test_bot:KleinanzeigenBot) -> None:
+    with (
+        patch("sys.stdin.isatty", return_value = False),
+        patch.object(test_bot, "create_browser_session", new_callable = AsyncMock) as create,
+        pytest.raises(AssertionError, match = "interactive terminal"),
+    ):
+        await test_bot._handle_login()
+    create.assert_not_awaited()

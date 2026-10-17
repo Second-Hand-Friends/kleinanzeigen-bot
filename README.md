@@ -140,6 +140,8 @@ The image contains Chromium with a full font set and the locales `de_DE`, `en_US
 Without a GPU (VPS, Docker Desktop on Windows/macOS, NVIDIA's proprietary driver) the desktop is rendered in software and Chromium renders WebGL with SwiftShader, so WebGL stays available (slower, and the renderer name reveals SwiftShader).
 The startup log states which mode is used.
 
+To sign in manually (CAPTCHA, SMS verification), run the container with the `login` command and `-it`; see [Manual login](docs/BROWSER_TROUBLESHOOTING.md#manual-login-and-sms-device-verification).
+
 ### Installation from source
 
 1. The following components need to be installed:
@@ -244,6 +246,7 @@ Commands:
   extend   - extends ads within the 8-day window before expiry (keeps watchers/savers and does not count towards the monthly ad quota)
   reserve  - reserves ads: removes them from search results while keeping the ad ID, age, view count and watchers/savers
   activate - re-activates reserved ads
+  login    - opens a visible browser for manual login and device verification
   download - downloads one or multiple ads
   update-check - checks for available updates
   update-content-hash – recalculates each ad's content_hash based on the current ad_defaults;

@@ -1368,6 +1368,7 @@ class TestWebScrapingSessionManagement:
         stop_mock = scraper.browser.stop = MagicMock()
         wait_mock = AsyncMock()
         scraper._wait_for_browser_process_exit = wait_mock  # type: ignore[method-assign]
+        scraper._quit_browser_gracefully = AsyncMock()  # type: ignore[method-assign]
 
         with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.subprocess.Process", Process):
             task = asyncio.create_task(scraper.close_browser_session())
@@ -1380,6 +1381,21 @@ class TestWebScrapingSessionManagement:
         wait_mock.assert_not_awaited()
         assert process.killed
         assert scraper.browser is None
+
+    @pytest.mark.asyncio
+    async def test_quit_browser_gracefully_waits_for_exit_even_if_close_fails(self) -> None:
+        """A failing Browser.close must not skip waiting for the process, which is killed after its timeout."""
+        scraper = WebScrapingMixin()
+        browser = MagicMock()
+        browser.send = AsyncMock(side_effect = OSError("connection lost"))
+        wait_mock = AsyncMock()
+        scraper._wait_for_browser_process_exit = wait_mock  # type: ignore[method-assign]
+        process = MagicMock()
+
+        await scraper._quit_browser_gracefully(browser, process)
+
+        browser.send.assert_awaited_once()
+        wait_mock.assert_awaited_once_with(process)
 
     @pytest.mark.asyncio
     async def test_wait_for_browser_process_exit_kills_after_timeout(self) -> None:
