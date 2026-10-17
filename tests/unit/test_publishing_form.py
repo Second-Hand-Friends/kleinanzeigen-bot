@@ -43,7 +43,7 @@ from kleinanzeigen_bot.publishing_form import (
     set_special_attributes,
     upload_images,
 )
-from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
+from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PageScriptError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
 
@@ -80,6 +80,26 @@ class TestKleinanzeigenBotContactLocationHardening:
 
         assert selected == "Live City"
         web_text_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_read_city_selection_text_ignores_failing_page_scripts(self, test_bot:KleinanzeigenBot) -> None:
+        """A page script that throws must not abort the lookup; the selected option is still used."""
+        city_input = MagicMock(spec = Element)
+        city_input.local_name = "input"
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_apply", new_callable = AsyncMock, side_effect = PageScriptError("Error: element is gone")),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, return_value = "Selected City"),
+        ):
+            assert await read_city_selection_text(test_bot) == "Selected City"
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = city_input),
+            patch.object(test_bot, "web_apply", new_callable = AsyncMock, side_effect = PageScriptError("Error: element is gone")),
+            patch.object(test_bot, "web_text", new_callable = AsyncMock, side_effect = TimeoutError("missing")),
+        ):
+            assert await read_city_selection_text(test_bot) is None
 
     @pytest.mark.asyncio
     async def test_read_city_selection_text_uses_selected_option_text(self, test_bot:KleinanzeigenBot) -> None:
