@@ -10,20 +10,23 @@ on:
   workflow_dispatch:
     # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
 
-permissions:
-  contents: read
-  issues: write
+permissions: {}
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read  # checkout
+      issues: write  # create the update issue
     if: github.repository_owner == 'Second-Hand-Friends'
 
     steps:
     - name: Git checkout
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # https://github.com/actions/checkout
+      with:
+        persist-credentials: false
 
     - name: Compare pinned and latest version
       env:
@@ -35,12 +38,18 @@ jobs:
         latest=$(gh api repos/kasmtech/KasmVNC/releases/latest --jq .tag_name | sed 's/^v//')
         echo "pinned=$pinned latest=$latest"
 
+        if [ -z "$pinned" ] || [ -z "$latest" ]; then
+          echo "::error::Could not determine the pinned or the latest KasmVNC version"
+          exit 1
+        fi
+
         [ "$pinned" != "$latest" ] || exit 0
 
         title="Update KasmVNC in the Docker image to $latest"
-        if [ -n "$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[].number')" ]; then
-          exit 0
-        fi
+        # --search matches fuzzily, so compare the title exactly
+        existing=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
+          | jq -r --arg t "$title" '.[] | select(.title == $t) | .number')
+        [ -z "$existing" ] || exit 0
 
         gh issue create --title "$title" --label dependencies --body "KasmVNC $latest is available (the Docker image pins $pinned).
 
