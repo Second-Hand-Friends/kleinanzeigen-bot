@@ -111,7 +111,7 @@ The image contains Chromium with a full font set and the locales `de_DE`, `en_US
    `docker run --rm ghcr.io/second-hand-friends/kleinanzeigen-bot:latest --help`.
 
    The bot runs as the unprivileged user `user` (UID 1000), or as the owner of the mounted data directory if that is not root. A new, empty data directory is handed over to `user` automatically.
-   Data directories of existing installations that contain root-owned files keep working: the bot then still runs as root and logs a hint. Run `chown -R 1000:1000 $DATA_DIR` to switch to the unprivileged user.
+   Data directories that contain root-owned files (existing installations) keep working: the bot then still runs as root and logs a hint. Run `chown -R 1000:1000 $DATA_DIR` to switch to the unprivileged user.
    `docker run --user <uid>:<gid>` selects the account explicitly and `-e RUN_AS_ROOT=1` forces root.
 
 1. Open the browser desktop at <http://localhost:6080>. The login is `user`. The password is generated on the first start, printed in the container log

@@ -5,8 +5,9 @@
 # Sourced by Debian's /usr/bin/chromium wrapper, which resets CHROMIUM_FLAGS
 # before sourcing /etc/chromium.d/*, so flags must be added here.
 
-# Chromium's sandbox needs user namespaces, which many container runtimes block.
-if ! unshare --user true 2>/dev/null; then
+# Chromium's sandbox needs user namespaces, which many container runtimes block,
+# and it refuses to start as root at all.
+if [ "$(id -u)" = 0 ] || ! unshare --user true 2>/dev/null; then
   export CHROMIUM_FLAGS="${CHROMIUM_FLAGS:-} --no-sandbox"
 fi
 

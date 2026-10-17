@@ -100,8 +100,6 @@ COPY docker/image/openbox-menu.xml /etc/xdg/openbox/menu.xml
 COPY docker/image/chromium-flags.sh /etc/chromium.d/kleinanzeigen-bot-flags
 
 ENV LANG=$DEFAULT_LANG \
-    LANGUAGE=$DEFAULT_LANG \
-    LC_ALL=$DEFAULT_LANG \
     TZ=$DEFAULT_TZ
 
 ######################

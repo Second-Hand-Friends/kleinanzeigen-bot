@@ -21,8 +21,8 @@ trap 'echo >&2 "$(date +%H:%M:%S) Error - exited with status $? at line $LINENO:
 # this script unprivileged (docker run --user skips this block):
 #   - /mnt/data owned by a non-root uid           -> run as that uid
 #   - /mnt/data empty (new installation)          -> give it to "user" and run as "user"
-#   - /mnt/data owned by root and has root-owned entries (installation created
-#     by older, root-only images)                 -> keep running as root
+#   - /mnt/data contains root-owned files (installation created by older,
+#     root-only images)                           -> keep running as root
 #   RUN_AS_ROOT=1 forces root.
 ##############################
 drop_privileges() {
@@ -33,19 +33,19 @@ drop_privileges() {
    uid=$(stat -c %u "$data")
    gid=$(stat -c %g "$data")
    first_entry=$(find "$data" -mindepth 1 -maxdepth 1 -print -quit)
-   if [ "$uid" = 0 ]; then
-      if [ -z "$first_entry" ]; then
-         uid=$(id -u user)
-         gid=$(id -g user)
-         chown "$uid:$gid" "$data"
-      elif [ -n "$(find "$data" -mindepth 1 -maxdepth 1 -user 0 -print -quit)" ]; then
-         echo >&2 "WARN: [$data] is owned by root, so the bot keeps running as root like in earlier versions of this image."
-         echo >&2 "      Recommended: chown -R $(id -u user):$(id -g user) <your data directory> to run as the unprivileged user."
-         return
-      else
-         uid=$(stat -c %u "$first_entry")
-         gid=$(stat -c %g "$first_entry")
-      fi
+   if [ "$uid" = 0 ] && [ -z "$first_entry" ]; then
+      uid=$(id -u user)
+      gid=$(id -g user)
+      chown "$uid:$gid" "$data"
+   elif [ -n "$(find "$data" -mindepth 1 -user 0 -print -quit)" ]; then
+      echo >&2 "WARN: [$data] contains root-owned files, so the bot keeps running as root like in earlier versions of this image."
+      echo >&2 "      Recommended: chown -R $(id -u user):$(id -g user) <your data directory> to run as the unprivileged user."
+      return
+   elif [ "$uid" = 0 ]; then
+      # only user-owned entries: run as their owner, who also needs to write into the directory
+      uid=$(stat -c %u "$first_entry")
+      gid=$(stat -c %g "$first_entry")
+      chown "$uid:$gid" "$data"
    fi
    # keep supplementary groups passed via --group-add (e.g. render for the GPU), except root's
    local groups group_args=(--clear-groups)
@@ -158,6 +158,7 @@ start_desktop() {
       -geometry "${VNC_GEOMETRY:-1440x900}" -depth 24 \
       "${gpu_args[@]}" \
       -websocketPort "$VNC_PORT" -interface 0.0.0.0 -localhost no \
+      -PublicIP 127.0.0.1 \
       -SecurityTypes None -sslOnly 0 \
       -httpd /usr/share/kasmvnc/www >/tmp/xvnc.log 2>&1 &
    local xvnc_pid=$!
