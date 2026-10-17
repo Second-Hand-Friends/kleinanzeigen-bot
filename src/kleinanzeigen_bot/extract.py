@@ -20,6 +20,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, cast
 
+from nodriver.core.connection import ProtocolException
+
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from . import category_picker
@@ -54,6 +56,10 @@ _AD_ATTRIBUTES_RE:Final[re.Pattern[str]] = re.compile(r'"ad_attributes"\s*:\s*"(
 # ad_type as published in the dimensions; the anonymous ad page uses "OFFERED", BelenConf "OFFER"
 _AD_TYPE_DIMENSION_TO_API:Final[dict[str, str]] = {"OFFER": "OFFER", "OFFERED": "OFFER", "WANTED": "WANTED"}
 _AD_PAGE_URL_PREFIX:Final[str] = "https://www.kleinanzeigen.de/s-anzeige/"
+# Selected shipping options in the ad edit form: hidden inputs and the island prop.
+_EDIT_FORM_SHIPPING_INPUT_PATTERN:Final[re.Pattern[str]] = re.compile(r'name="shippingOptions\[\d+\]\.id"\s+value="([A-Z]+_\d{3})"')
+_EDIT_FORM_SHIPPING_ISLAND_PATTERN:Final[re.Pattern[str]] = re.compile(r"&quot;shippingOptions&quot;:\[1,\[(.*?)\]\]")
+_CARRIER_CODE_PATTERN:Final[re.Pattern[str]] = re.compile(r'"([A-Z]+_\d{3})"')
 _OWNED_AD_TITLE_DECORATION_PREFIXES:Final[tuple[str, ...]] = ("Gelöscht",)
 _OWNED_AD_TITLE_DECORATION_RE:Final[re.Pattern[str]] = re.compile(
     rf"^(?:{'|'.join(re.escape(prefix) for prefix in _OWNED_AD_TITLE_DECORATION_PREFIXES)})\s*•\s*"
@@ -917,6 +923,14 @@ class AdExtractor(WebScrapingMixin):
             info["special_attributes"]["schaden_s"] = info["special_attributes"]["schaden_s"].translate(str.maketrans({"t": "ja", "f": "nein"}))
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page(island_props = island_props)
         info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page(island_props = island_props)
+        if info["shipping_type"] == "SHIPPING":
+            # The ad page only shows "Versand ab x €" for the cheapest selected option, so the price
+            # match finds at most that one option, and none if the price is a promotional one. The
+            # edit form of an own ad knows the actual selection; the price match stays the fallback
+            # (e.g. for ads of other users, whose edit form is not accessible).
+            if edit_form_options := await self._extract_shipping_options_from_edit_form(ad_id):
+                info["shipping_options"] = edit_form_options
+                info["shipping_costs"] = None
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
         if info["sell_directly"] and not info["shipping_options"]:
             # Eligibility does not identify a carrier. Keep the extracted costs without
@@ -1484,6 +1498,38 @@ class AdExtractor(WebScrapingMixin):
             ship_type = "NOT_APPLICABLE"
 
         return ship_type, ship_costs, shipping_options
+
+    async def _extract_shipping_options_from_edit_form(self, ad_id:int) -> list[str] | None:
+        """Read the selected predefined shipping options from the ad's edit form (read only).
+
+        The edit form (``p-anzeige-bearbeiten.html``) is fetched with a plain GET request from the
+        current page context; nothing is clicked or saved. The selection is rendered as hidden inputs
+        ``shippingOptions[N].id`` carrying the carrier codes (e.g. ``HERMES_001``), with the
+        ``shippingOptions`` island prop as fallback.
+
+        :return: the bot's option names (e.g. ``["Hermes_Päckchen", "DHL_2"]``), or ``None`` if the
+                 form is unavailable or lists no known option
+        """
+        url = f"https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId={ad_id}"
+        try:
+            content = str((await self.web_request(url))["content"])
+        except (TimeoutError, AssertionError, ProtocolException, KeyError) as ex:
+            LOG.debug("Could not read shipping options from edit form of ad %s: %s", ad_id, ex)
+            return None
+
+        codes = _EDIT_FORM_SHIPPING_INPUT_PATTERN.findall(content)
+        if not codes and (island := _EDIT_FORM_SHIPPING_ISLAND_PATTERN.search(content)):
+            codes = _CARRIER_CODE_PATTERN.findall(html.unescape(island.group(1)))
+        options = [
+            OPTION_NAME_BY_CARRIER_CODE[code]
+            for code in dict.fromkeys(codes)
+            if code in OPTION_NAME_BY_CARRIER_CODE
+            and OPTION_NAME_BY_CARRIER_CODE[code] not in self.config.download.excluded_shipping_options
+        ]
+        if not options:
+            return None
+        LOG.info("Ad %s: shipping options read from edit form: %s", ad_id, ", ".join(options))
+        return options
 
     async def _extract_sell_directly_from_ad_page(self) -> bool | None:
         """

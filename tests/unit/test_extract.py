@@ -1350,6 +1350,7 @@ class TestAdExtractorContent:
             _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
             _extract_pricing_info_from_ad_page = AsyncMock(return_value = (10, "FIXED")),
             _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("SHIPPING", 4.99, options)),
+            _extract_shipping_options_from_edit_form = AsyncMock(return_value = None),
             _extract_sell_directly_from_ad_page = AsyncMock(return_value = eligible),
             _download_images_from_ad_page = AsyncMock(return_value = []),
             _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
@@ -1361,6 +1362,57 @@ class TestAdExtractorContent:
         assert ad_cfg.shipping_options == expected_options
         assert ("no predefined shipping option" in caplog.text) is warned
         assert ad_cfg.to_ad(test_extractor.config.ad_defaults).sell_directly is expected
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("matched", [None, ["Hermes_Päckchen"]], ids = ["no-price-match", "cheapest-only"])
+    async def test_extract_prefers_edit_form_options(
+        self, test_extractor:extract_module.AdExtractor, tmp_path:Path, caplog:pytest.LogCaptureFixture, matched:list[str] | None,
+    ) -> None:
+        """The edit form's selection replaces the price match, which finds at most the cheapest option."""
+        test_extractor.page = MagicMock(url = "https://www.kleinanzeigen.de/s-anzeige/test/12345")
+        edit_form = AsyncMock(return_value = ["Hermes_Päckchen", "Hermes_S", "DHL_2"])
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Original Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (10, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("SHIPPING", 0.99, matched)),
+            _extract_shipping_options_from_edit_form = edit_form,
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = True),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ), caplog.at_level("WARNING"):
+            ad_cfg, *_ = await test_extractor._extract_ad_page_info_with_directory_handling(tmp_path, 12345)
+        edit_form.assert_awaited_once_with(12345)
+        assert ad_cfg.shipping_options == ["Hermes_Päckchen", "Hermes_S", "DHL_2"]
+        assert ad_cfg.shipping_costs is None
+        assert ad_cfg.sell_directly is True
+        assert "no predefined shipping option" not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_extract_keeps_price_match_when_edit_form_unavailable(self, test_extractor:extract_module.AdExtractor, tmp_path:Path) -> None:
+        """Without an accessible edit form the price-based result is kept unchanged."""
+        test_extractor.page = MagicMock(url = "https://www.kleinanzeigen.de/s-anzeige/test/12345")
+        with patch.multiple(
+            test_extractor,
+            web_text = AsyncMock(side_effect = ["Test Title", "Original Description", "03.02.2025"]),
+            web_probe = AsyncMock(return_value = None),
+            web_execute = AsyncMock(return_value = {"universalAnalyticsOpts": {"dimensions": {"l3_category_id": "", "ad_attributes": ""}}}),
+            _extract_category_from_ad_page = AsyncMock(return_value = "160"),
+            _extract_special_attributes_from_ad_page = AsyncMock(return_value = {}),
+            _extract_pricing_info_from_ad_page = AsyncMock(return_value = (10, "FIXED")),
+            _extract_shipping_info_from_ad_page = AsyncMock(return_value = ("SHIPPING", 6.19, ["DHL_2"])),
+            _extract_shipping_options_from_edit_form = AsyncMock(return_value = None),
+            _extract_sell_directly_from_ad_page = AsyncMock(return_value = True),
+            _download_images_from_ad_page = AsyncMock(return_value = []),
+            _extract_contact_from_ad_page = AsyncMock(return_value = ContactPartial()),
+        ):
+            ad_cfg, *_ = await test_extractor._extract_ad_page_info_with_directory_handling(tmp_path, 12345)
+        assert ad_cfg.shipping_options == ["DHL_2"]
+        assert ad_cfg.shipping_costs == 6.19
 
     @pytest.mark.asyncio
     async def test_extract_ad_page_info_uses_css_selector_for_creation_date(
@@ -4304,3 +4356,48 @@ class TestAdExtractorAnonymousFallback:
             patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = None),
         ):
             assert await test_extractor._fetch_anonymous_ad_dimensions(12345) is None
+
+
+class TestShippingFromEditForm:
+    """Selected shipping options are read from the edit form when the price match fails."""
+
+    _FORM = (
+        '<input type="hidden" name="shippingOptions[0].id" value="HERMES_001">'
+        '<input type="hidden" name="shippingOptions[1].id" value="HERMES_002">'
+        '<input type="hidden" name="shippingOptions[2].id" value="DHL_001">'
+    )
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_reads_hidden_inputs(self, test_extractor:extract_module.AdExtractor) -> None:
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {"content": self._FORM}) as req:
+            options = await test_extractor._extract_shipping_options_from_edit_form(123)
+        assert options == ["Hermes_Päckchen", "Hermes_S", "DHL_2"]
+        req.assert_awaited_once_with("https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=123")
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_falls_back_to_island_prop(self, test_extractor:extract_module.AdExtractor) -> None:
+        island = "&quot;shippingOptions&quot;:[1,[[0,&quot;HERMES_001&quot;],[0,&quot;DHL_001&quot;]]],&quot;images&quot;:[1,[]]"
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {"content": island}):
+            assert await test_extractor._extract_shipping_options_from_edit_form(123) == ["Hermes_Päckchen", "DHL_2"]
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_respects_excluded_options(self, test_extractor:extract_module.AdExtractor) -> None:
+        test_extractor.config.download.excluded_shipping_options = ["DHL_2"]
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {"content": self._FORM}):
+            assert await test_extractor._extract_shipping_options_from_edit_form(123) == ["Hermes_Päckchen", "Hermes_S"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("failure", [TimeoutError("t"), AssertionError("404")])
+    # pylint: disable=protected-access
+    async def test_unavailable_form_returns_none(self, test_extractor:extract_module.AdExtractor, failure:Exception) -> None:
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, side_effect = failure):
+            assert await test_extractor._extract_shipping_options_from_edit_form(123) is None
+
+    @pytest.mark.asyncio
+    # pylint: disable=protected-access
+    async def test_unknown_or_missing_codes_return_none(self, test_extractor:extract_module.AdExtractor) -> None:
+        with patch.object(test_extractor, "web_request", new_callable = AsyncMock, return_value = {"content": "<form></form>"}):
+            assert await test_extractor._extract_shipping_options_from_edit_form(123) is None
