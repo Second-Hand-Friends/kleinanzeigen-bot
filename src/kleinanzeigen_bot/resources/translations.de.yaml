@@ -86,6 +86,7 @@ kleinanzeigen_bot/app.py:
     : "Die manuelle Anmeldung benötigt eine persistente, sichtbare Browser-Sitzung. browser.use_private_window auf false setzen und --headless, --incognito, --guest und --inprivate aus browser.arguments entfernen."
     "Manual login requires an interactive terminal.": "Die manuelle Anmeldung benötigt ein interaktives Terminal."
     "Complete login and any device verification in the browser, then return to this terminal.": "Anmeldung und gegebenenfalls Geräteverifizierung im Browser abschließen, dann zu diesem Terminal zurückkehren."
+    "Reloading the start page timed out. Checking the login state on the current page.": "Das Neuladen der Startseite hat zu lange gedauert. Der Anmeldestatus wird auf der aktuellen Seite geprüft."
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."
     "Manual login could not be confirmed. Check the account and try again.": "Die manuelle Anmeldung konnte nicht bestätigt werden. Konto prüfen und erneut versuchen."
     "Manual login confirmed. The browser session is saved in the configured profile.": "Manuelle Anmeldung bestätigt. Die Browsersitzung wird im konfigurierten Profil gespeichert."

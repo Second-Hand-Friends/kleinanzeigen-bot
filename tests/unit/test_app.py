@@ -382,6 +382,24 @@ async def test_manual_login_rejects_config_without_persistent_visible_session(
 
 
 @pytest.mark.asyncio
+async def test_manual_login_checks_state_when_reload_times_out(test_bot:KleinanzeigenBot) -> None:
+    test_bot.browser_config.use_private_window = False
+    test_bot.browser_config.arguments = []
+    with (
+        patch("sys.stdin.isatty", return_value = True),
+        patch.object(test_bot, "_bootstrap_runtime"),
+        patch.object(test_bot, "create_browser_session", new_callable = AsyncMock),
+        patch.object(test_bot, "web_open", new_callable = AsyncMock, side_effect = [None, TimeoutError()]),
+        patch("kleinanzeigen_bot.login_flow.click_gdpr_banner", new_callable = AsyncMock),
+        patch("kleinanzeigen_bot.utils.misc.ainput", new_callable = AsyncMock),
+        patch.object(test_bot, "get_login_state", new_callable = AsyncMock,
+                     return_value = LoginDetectionResult(True, LoginDetectionReason.USER_INFO_MATCH)) as state,
+    ):
+        await test_bot._handle_login()
+    state.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_manual_login_rejects_noninteractive_terminal(test_bot:KleinanzeigenBot) -> None:
     with (
         patch("sys.stdin.isatty", return_value = False),

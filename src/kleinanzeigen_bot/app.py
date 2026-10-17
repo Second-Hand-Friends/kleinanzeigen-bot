@@ -284,7 +284,10 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await _login_flow.click_gdpr_banner(self)
         LOG.info("Complete login and any device verification in the browser, then return to this terminal.")
         await _misc.ainput(_("Press ENTER when done..."))
-        await self.web_open(self.root_url, reload_if_already_open = True)
+        try:
+            await self.web_open(self.root_url, reload_if_already_open = True)
+        except TimeoutError:
+            LOG.warning("Reloading the start page timed out. Checking the login state on the current page.")
         detection = await self.get_login_state(capture_diagnostics = False)
         _misc.ensure(detection.is_logged_in, _("Manual login could not be confirmed. Check the account and try again."))
         LOG.info("Manual login confirmed. The browser session is saved in the configured profile.")
