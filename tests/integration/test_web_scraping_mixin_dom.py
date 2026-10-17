@@ -109,8 +109,6 @@ async def test_web_select_matches_value_then_text(
     assert await fast_web.web_execute("changes") == 1
 
 
-@pytest.mark.xfail(strict = True, reason = "existing bug #1351: Element.apply returns the script's exception instead of raising it, "
-                   "so web_select never reports a missing option")
 async def test_web_select_unknown_option_raises_timeout(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """An option that matches neither value nor text is a TimeoutError."""
     await show_html('<select id="s"><option value="a">A</option></select>')

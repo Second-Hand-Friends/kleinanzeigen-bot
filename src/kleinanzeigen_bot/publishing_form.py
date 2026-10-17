@@ -30,7 +30,7 @@ from .model.ad_model import (
 from .model.config_model import AdDefaults
 from .utils import loggers as _loggers
 from .utils import page_scripts
-from .utils.exceptions import CategoryResolutionError
+from .utils.exceptions import CategoryResolutionError, PageScriptError
 from .utils.i18n import pluralize
 from .utils.misc import ensure
 from .utils.web_scraping_mixin import By, Element, Is, WebScrapingMixin
@@ -451,7 +451,10 @@ async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
         return None
 
     if city_element.local_name == "input":
-        live_value = await city_element.apply("(elem) => (elem.value || '').trim()")
+        try:
+            live_value = await web.web_apply(city_element, "(elem) => (elem.value || '').trim()")
+        except PageScriptError:
+            live_value = None  # fall through to the selected option and textContent
         if isinstance(live_value, str) and live_value.strip():
             return live_value
 
@@ -463,7 +466,10 @@ async def read_city_selection_text(web:WebScrapingMixin) -> str | None:
         # #ad-city-selected-option may not exist in all DOM states; fall through to textContent
         pass
 
-    live_text = await city_element.apply("(elem) => (elem.textContent || '').trim()")
+    try:
+        live_text = await web.web_apply(city_element, "(elem) => (elem.textContent || '').trim()")
+    except PageScriptError:
+        live_text = None
     if isinstance(live_text, str) and live_text.strip():
         return live_text
 
