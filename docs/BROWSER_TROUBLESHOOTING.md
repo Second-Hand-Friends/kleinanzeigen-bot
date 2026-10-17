@@ -661,8 +661,7 @@ curl http://localhost:9222/json/version
 
 ## Manual login and SMS device verification
 
-Run `kleinanzeigen-bot login --config=/path/to/config.yaml --workspace-mode=portable` in an interactive terminal
-(or `--workspace-mode=xdg`; see the README if the mode cannot be inferred) and use the same mode for later runs.
+Run `kleinanzeigen-bot login --config=/path/to/config.yaml` in an interactive terminal.
 The command opens a visible browser with the same profile as subsequent bot runs.
 It requires a persistent, visible session and stops with an error otherwise: set `browser.use_private_window: false`
 and remove `--headless`, `--incognito`, `--guest` and `--inprivate` from `browser.arguments`.
