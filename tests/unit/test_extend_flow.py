@@ -317,6 +317,7 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
+            patch.object(extend_flow, "_has_extension_choice_dialog", new_callable = AsyncMock, return_value = False),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
@@ -371,6 +372,7 @@ class TestExtendAdMethod:
         dicts.save_dict(str(ad_file), base_ad_config_with_id)
 
         with (
+            patch.object(extend_flow, "_has_extension_choice_dialog", new_callable = AsyncMock, return_value = False),
             patch.object(test_bot, "web_find", new_callable = AsyncMock) as mock_find,
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
             patch("kleinanzeigen_bot.utils.misc.now") as mock_now,
@@ -411,6 +413,122 @@ class TestExtendAdMethod:
                     ad_file = str(ad_file), ad_cfg = ad_cfg,
                     ad_cfg_orig = base_ad_config_with_id,
                 )
+
+
+class FakeChoiceDialog:
+    """Minimal stand-in for the extension choice dialog, answering the flow's JS probes."""
+
+    def __init__(self, *, select_result:str = "selected", confirm_result:str = "clicked", after_confirm:str = "closed") -> None:
+        self.select_result = select_result
+        self.confirm_result = confirm_result
+        self.after_confirm = after_confirm
+        self.confirmed = False
+        self.scripts:list[str] = []
+
+    async def execute(self, js:str) -> str:
+        self.scripts.append(js)
+        if js == extend_flow._choice_dialog_script("select"):  # recognize the exact page script call
+            return self.select_result
+        if js == extend_flow._choice_dialog_script("confirm"):
+            self.confirmed = self.confirm_result == "clicked"
+            return self.confirm_result
+        if js == extend_flow._choice_dialog_script("state"):
+            return self.after_confirm if self.confirmed else "pending"
+        raise AssertionError(f"unexpected script: {js[:80]}")
+
+
+async def _await_once(condition:Callable[[], Awaitable[Any]], **_kwargs:Any) -> Any:
+    """web_await replacement: evaluate once, time out if the condition is not met."""
+    result = await condition()
+    if not result:
+        raise TimeoutError("condition not met")
+    return result
+
+
+class TestExtendChoiceDialog:
+    """Tests for the choice dialog introduced with the Astro redesign (free vs. paid extension)."""
+
+    @pytest.mark.asyncio
+    async def test_extend_ad_confirms_free_option(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
+        """The free option is selected and confirmed instead of closing the dialog."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        ad_file = tmp_path / "test_ad.yaml"
+        dicts.save_dict(str(ad_file), base_ad_config_with_id)
+        dialog = FakeChoiceDialog()
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = AsyncMock()),
+            patch.object(test_bot, "web_execute", side_effect = dialog.execute),
+            patch.object(test_bot, "web_await", side_effect = _await_once),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            result = await extend_flow._extend_ad(
+                web = test_bot, page_num = 1, ad_file = str(ad_file), ad_cfg = ad_cfg, ad_cfg_orig = base_ad_config_with_id,
+            )
+
+        assert result is True
+        assert dialog.confirmed is True
+        mock_click.assert_not_called()  # the dialog must not be dismissed via "Schließen"
+        assert dicts.load_dict(str(ad_file))["updated_on"] != "2024-12-10T15:20:00"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("select_result", "confirm_result"), [
+        ("free-option-not-unique:0/2", "clicked"),
+        ("paid-option-selected", "clicked"),
+        ("selected", "confirm-button-disabled"),
+        ("selected", "selection-changed"),
+    ])
+    async def test_extend_ad_fails_when_free_option_cannot_be_confirmed(
+        self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path, select_result:str, confirm_result:str,
+    ) -> None:
+        """Any doubt about the selected option aborts without confirming and reports failure."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        ad_file = tmp_path / "test_ad.yaml"
+        dicts.save_dict(str(ad_file), base_ad_config_with_id)
+        dialog = FakeChoiceDialog(select_result = select_result, confirm_result = confirm_result)
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = AsyncMock()),
+            patch.object(test_bot, "web_execute", side_effect = dialog.execute),
+            patch.object(test_bot, "web_await", side_effect = _await_once),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock) as mock_click,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            result = await extend_flow._extend_ad(
+                web = test_bot, page_num = 1, ad_file = str(ad_file), ad_cfg = ad_cfg, ad_cfg_orig = base_ad_config_with_id,
+            )
+
+        assert result is False
+        assert dialog.confirmed is False
+        mock_click.assert_called_once()  # dialog closed after giving up
+        assert dicts.load_dict(str(ad_file))["updated_on"] == "2024-12-10T15:20:00"
+
+    @pytest.mark.asyncio
+    async def test_extend_ad_fails_when_dialog_stays_open(self, test_bot:KleinanzeigenBot, base_ad_config_with_id:dict[str, Any], tmp_path:Path) -> None:
+        """A confirmation that does not close the dialog is not reported as success."""
+        ad_cfg = Ad.model_validate(base_ad_config_with_id)
+        ad_file = tmp_path / "test_ad.yaml"
+        dicts.save_dict(str(ad_file), base_ad_config_with_id)
+        dialog = FakeChoiceDialog(after_confirm = "pending")
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, return_value = AsyncMock()),
+            patch.object(test_bot, "web_execute", side_effect = dialog.execute),
+            patch.object(test_bot, "web_await", side_effect = _await_once),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            result = await extend_flow._extend_ad(
+                web = test_bot, page_num = 1, ad_file = str(ad_file), ad_cfg = ad_cfg, ad_cfg_orig = base_ad_config_with_id,
+            )
+
+        assert result is False
+
+    def test_choice_dialog_script_receives_labels_as_arguments(self) -> None:
+        """Labels are passed as JSON arguments, never spliced into the script text."""
+        script = extend_flow._choice_dialog_script("select")
+        assert script.endswith('("select", "Nur verl\\u00e4ngern", "Anzeige verl\\u00e4ngern")')
 
 
 class TestExtendEdgeCases:

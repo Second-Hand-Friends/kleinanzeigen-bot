@@ -4,6 +4,7 @@
 """Bulk commands traverse simulated overview pages without a browser or network."""
 
 import re
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -72,6 +73,12 @@ class Overview:
 
         return MagicMock(click = click)
 
+    @staticmethod
+    async def await_condition(condition:Callable[[], Awaitable[Any]], **_kwargs:Any) -> Any:
+        if result := await condition():
+            return result
+        raise TimeoutError("Condition not met")
+
     def published(self, ad_ids:list[int]) -> list[dict[str, Any]]:
         initial_state = "paused" if self.action == "activate" else "active"
         resulting_state = "paused" if self.action == "reserve" else "active"
@@ -117,6 +124,9 @@ async def test_bulk_command_visits_each_needed_page_once(
         patch.object(test_bot, "web_find_all", side_effect = overview.find_all),
         patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
         patch.object(test_bot, "web_click", new_callable = AsyncMock),
+        # legacy overview without the extension choice dialog
+        patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "closed"),
+        patch.object(test_bot, "web_await", side_effect = overview.await_condition),
         patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep,
         patch("kleinanzeigen_bot.published_ads.fetch_published_ads", side_effect = fetch),
     ):

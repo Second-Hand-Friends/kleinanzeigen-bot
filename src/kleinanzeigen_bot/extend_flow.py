@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 from . import bulk_ad_actions, published_ads
 from .published_ads import ad_matches_id
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from .published_ads import PublishedAd
 from .utils import loggers as _loggers
 from .utils import misc as _misc
+from .utils import page_scripts
 from .utils.i18n import pluralize
 from .utils.web_scraping_mixin import By, WebScrapingMixin
 
@@ -117,18 +118,23 @@ async def _extend_ad(
         LOG.info("Found extend button on page %s", page_num)
         await extend_button.click()
 
-        # Handle confirmation dialog
-        # After clicking "Verlängern", a dialog appears with:
-        # - Title: "Vielen Dank!"
-        # - Message: "Deine Anzeige ... wurde erfolgreich verlängert."
-        # - Paid bump-up option (skipped by closing dialog)
-        # Simply close the dialog with the X button (aria-label="Schließen")
-        try:
-            dialog_close_timeout = web.timeout("quick_dom")
-            await web.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = dialog_close_timeout)
-            LOG.debug(" -> Closed confirmation dialog")
-        except TimeoutError:
-            LOG.warning(" -> No confirmation dialog found, extension may have completed directly")
+        if await _has_extension_choice_dialog(web):
+            # Since the Astro redesign, "Verlängern" opens a choice dialog
+            # ("Wie möchtest du deine Anzeige verlängern?") offering the free
+            # "Nur verlängern" option and a paid bump-up option. The extension only
+            # happens after selecting an option and confirming with "Anzeige verlängern".
+            if not await _confirm_free_extension(web):
+                await _close_open_dialog(web)
+                LOG.error(" -> FAILED: Could not confirm the free extension option for ad ID %s", ad_cfg.id)
+                return False
+        else:
+            # Legacy flow: the click extends directly and shows a "Vielen Dank!" dialog.
+            try:
+                dialog_close_timeout = web.timeout("quick_dom")
+                await web.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = dialog_close_timeout)
+                LOG.debug(" -> Closed confirmation dialog")
+            except TimeoutError:
+                LOG.warning(" -> No confirmation dialog found, extension may have completed directly")
 
         # Update metadata in YAML file
         # Update updated_on to track when ad was extended
@@ -144,3 +150,82 @@ async def _extend_ad(
     except OSError as ex:
         LOG.error(" -> FAILED: Could not persist extension for ad '%s': %s", ad_cfg.title, ex)
         return False
+
+
+# Text of the free option in the extension choice dialog. The paid option
+# ("Verlängern & Hochschieben für 2,99 €", value "extend-bumpup") must never be
+# selected; resources/js/extend_choice_dialog.js matches the free option by its
+# value ("extend-only") or its own label text and rejects any priced option.
+_FREE_OPTION_TEXT:Final[str] = "Nur verlängern"
+_CONFIRM_BUTTON_TEXT:Final[str] = "Anzeige verlängern"
+
+
+def _choice_dialog_script(action:str) -> str:
+    return page_scripts.call("extend_choice_dialog", action, _FREE_OPTION_TEXT, _CONFIRM_BUTTON_TEXT)
+
+
+async def _choice_dialog_state(web:WebScrapingMixin) -> str:
+    return str(await web.web_execute(_choice_dialog_script("state")))
+
+
+async def _has_extension_choice_dialog(web:WebScrapingMixin) -> bool:
+    """Return True when the choice dialog with the free extension option is open."""
+    try:
+        await web.web_await(
+            lambda: _dialog_is_open(web),
+            timeout = web.timeout("quick_dom"),
+            timeout_error_message = "Extension choice dialog did not appear",
+        )
+    except TimeoutError:
+        return False
+    return True
+
+
+async def _dialog_is_open(web:WebScrapingMixin) -> bool:
+    return await _choice_dialog_state(web) == "pending"
+
+
+async def _confirm_free_extension(web:WebScrapingMixin) -> bool:
+    """Select the free option, confirm, and wait for the dialog to finish.
+
+    Never selects the paid option: every step re-checks that exactly one free option
+    is selected and nothing else, otherwise it gives up without confirming.
+    """
+    selection = str(await web.web_execute(_choice_dialog_script("select")))
+    if selection != "selected":
+        LOG.warning(" -> Extension choice dialog not handled (%s)", selection)
+        return False
+    LOG.debug(" -> Selected free extension option")
+    await web.web_sleep()
+
+    confirm = str(await web.web_execute(_choice_dialog_script("confirm")))
+    if confirm != "clicked":
+        LOG.warning(" -> Extension choice dialog not handled (%s)", confirm)
+        return False
+    LOG.debug(" -> Confirmed free extension")
+
+    try:
+        result = await web.web_await(
+            lambda: _extension_result(web),
+            timeout = web.timeout("publishing_confirmation"),
+            timeout_error_message = "Extension was not confirmed",
+        )
+    except TimeoutError:
+        LOG.warning(" -> Extension choice dialog not handled (%s)", "no-confirmation")
+        return False
+    if result == "success-dialog":
+        await _close_open_dialog(web)
+    return True
+
+
+async def _extension_result(web:WebScrapingMixin) -> str | None:
+    state = await _choice_dialog_state(web)
+    return None if state == "pending" else state
+
+
+async def _close_open_dialog(web:WebScrapingMixin) -> None:
+    try:
+        await web.web_click(By.CSS_SELECTOR, 'button[aria-label="Schließen"]', timeout = web.timeout("quick_dom"))
+        LOG.debug(" -> Closed confirmation dialog")
+    except TimeoutError:
+        LOG.debug(" -> No dialog to close")
