@@ -675,7 +675,7 @@ Keep the profile directory persistent and use that same directory for later comm
 Stop other bot/browser processes using it before starting; Chromium cannot share a profile between simultaneous processes.
 If connecting to an externally managed browser via remote debugging, ensure that browser uses a persistent profile and close it yourself when finished.
 
-### Docker and Portainer
+### Docker
 
 The standard Docker image includes a browser desktop (see the README), so no extra image is needed.
 Stop scheduled bot runs first, mount the data directory containing your config and browser profile, and run `login` with an interactive terminal:
@@ -698,9 +698,7 @@ browser:
 Open `http://localhost:6080`, sign in as `user` with the password from the container log (or `/mnt/data/.vnc-password`),
 and complete the login in the bot's Chromium. Then press ENTER in the container console. The container ends when the command completes.
 
-For Portainer, create a temporary container with the same data volume, port 6080 published on the loopback address only (host IP `127.0.0.1`), command `login`,
-and "Interactive & TTY" enabled. Do not enable automatic restarts. Attach to its console, press ENTER there when the login is done,
-and remove the container afterwards while retaining the data volume.
+The container needs an interactive terminal (`-it`) to read ENTER; do not run it with an automatic restart policy.
 For a remote host, tunnel port 6080 over SSH or use an HTTPS reverse proxy; the desktop connection is not encrypted.
 
 ## Using an Existing Browser Window
