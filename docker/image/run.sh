@@ -15,60 +15,11 @@ set -o pipefail
 trap 'echo >&2 "$(date +%H:%M:%S) Error - exited with status $? at line $LINENO:"; pr -tn $0 | tail -n+$((LINENO - 3)) | head -n7' ERR
 
 ##############################
-# Privileges
-#
-# The image starts as root only to pick the account to run as, then re-executes
-# this script unprivileged (docker run --user skips this block):
-#   - /mnt/data owned by a non-root uid           -> run as that uid
-#   - /mnt/data empty (new installation)          -> give it to "user" and run as "user"
-#   - /mnt/data contains root-owned files (installation created by older,
-#     root-only images)                           -> keep running as root
-#   RUN_AS_ROOT=1 forces root.
-##############################
-drop_privileges() {
-   local data=/mnt/data uid gid first_entry
-   if [ "${RUN_AS_ROOT:-0}" = 1 ]; then
-      return
-   fi
-   uid=$(stat -c %u "$data")
-   gid=$(stat -c %g "$data")
-   first_entry=$(find "$data" -mindepth 1 -maxdepth 1 -print -quit)
-   if [ "$uid" = 0 ] && [ -z "$first_entry" ]; then
-      uid=$(id -u user)
-      gid=$(id -g user)
-      chown "$uid:$gid" "$data"
-   elif [ -n "$(find "$data" -mindepth 1 -user 0 -print -quit)" ]; then
-      echo >&2 "WARN: [$data] contains root-owned files, so the bot keeps running as root like in earlier versions of this image."
-      echo >&2 "      Recommended: chown -R $(id -u user):$(id -g user) <your data directory> to run as the unprivileged user."
-      return
-   elif [ "$uid" = 0 ]; then
-      # only user-owned entries: run as their owner, who also needs to write into the directory
-      uid=$(stat -c %u "$first_entry")
-      gid=$(stat -c %g "$first_entry")
-      chown "$uid:$gid" "$data"
-   fi
-   # keep supplementary groups passed via --group-add (e.g. render for the GPU), except root's
-   local groups group_args=(--clear-groups)
-   groups=$(id -G | tr ' ' '\n' | grep -vx 0 | paste -sd, || true)
-   if [ -n "$groups" ]; then
-      group_args=(--groups="$groups")
-   fi
-   export HOME=/tmp/home
-   mkdir -p "$HOME"
-   chown "$uid:$gid" "$HOME"
-   exec setpriv --reuid="$uid" --regid="$gid" "${group_args[@]}" bash "$0" "$@"
-}
-
-if [ "$(id -u)" = 0 ]; then
-   drop_privileges "$@"
-fi
-
-##############################
 # Browser desktop (KasmVNC + Openbox)
 #
 # Started unless DISPLAY is provided from outside (e.g. a host X11 server)
-# or VNC_DISABLE=1. Environment variables:
-#   VNC_PASSWORD_FILE  file containing the password (e.g. a Docker secret)
+# or VNC_DISABLE=1. Runs as root unless started with docker run --user.
+# Environment variables:
 #   VNC_PASSWORD       the password
 #   VNC_GEOMETRY       screen size, default 1440x900
 #   GPU_ACCELERATION   auto (default) | on | off
@@ -81,11 +32,7 @@ VNC_PASSWORD_STORE=/mnt/data/.vnc-password
 
 vnc_resolve_password() {
    local pw=""
-   if [ -n "${VNC_PASSWORD_FILE:-}" ]; then
-      [ -r "$VNC_PASSWORD_FILE" ] || { echo >&2 "ERROR: VNC_PASSWORD_FILE [$VNC_PASSWORD_FILE] is not readable."; exit 1; }
-      pw=$(<"$VNC_PASSWORD_FILE")
-      vnc_password_source="VNC_PASSWORD_FILE"
-   elif [ -n "${VNC_PASSWORD:-}" ]; then
+   if [ -n "${VNC_PASSWORD:-}" ]; then
       pw=$VNC_PASSWORD
       vnc_password_source="VNC_PASSWORD"
    elif [ -s "$VNC_PASSWORD_STORE" ]; then
@@ -187,7 +134,7 @@ start_desktop() {
          echo " Password:         $vnc_password"
          echo " (generated on first start and saved as .vnc-password in your data directory,"
          echo "  so you can read it later even though this log is gone with the container;"
-         echo "  set VNC_PASSWORD or VNC_PASSWORD_FILE to use your own)" ;;
+         echo "  set VNC_PASSWORD to use your own)" ;;
       stored)
          echo " Password:         stored as .vnc-password in your data directory" ;;
       *)
