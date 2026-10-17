@@ -193,6 +193,49 @@ def _submit_button_script(action:Literal["inspect", "submit", "next"]) -> str:
     return page_scripts.call("submit_button", action, _SUBMIT_LABELS)
 
 
+_DRAFT_LABEL:Final[str] = "Entwurf speichern"
+_DRAFT_CONFIRMATION:Final[str] = "Entwurf gespeichert"
+
+
+def _draft_button_script(action:Literal["inspect", "click", "confirmed"]) -> str:
+    """Script that inspects or clicks the editor's "Entwurf speichern" button, or reads the confirmation."""
+    return page_scripts.call("draft_button", action, _DRAFT_LABEL, _DRAFT_CONFIRMATION)
+
+
+async def submit_draft(web:WebScrapingMixin, ad_cfg:Ad, *, captcha_config:CaptchaConfig) -> None:
+    """Save the filled ad form as a draft. Never publishes and clicks at most once.
+
+    Raises:
+        TimeoutError: The draft button was not found exactly once; nothing was clicked.
+        PublishSubmissionUncertainError: The click happened but no confirmation appeared.
+            The draft may exist, so the caller must not retry (a retry creates a duplicate draft).
+    """
+    await captcha_flow.check_and_wait_for_captcha(web, captcha_config, is_login_page = False, page_context = "draft operation")
+    # Same React re-render workaround as submit_and_confirm_ad(): set the title last.
+    await web.web_set_input_value("ad-title", ad_cfg.title)
+
+    async def _inspect() -> bool:
+        """Read-only: True once exactly one draft button is available."""
+        return bool(await web.web_execute(_draft_button_script("inspect")) == "draft")
+
+    await web.web_await(_inspect, timeout_error_message = str(_("Could not find draft button")))
+    # The single click runs outside polling.
+    try:
+        clicked = await web.web_execute(_draft_button_script("click"))
+    except (TimeoutError, ProtocolException) as ex:
+        raise PublishSubmissionUncertainError(_("draft may have been saved; check your drafts before retrying")) from ex
+    if clicked != "clicked":
+        raise TimeoutError(_("Could not find draft button"))
+
+    async def _confirmed() -> bool:
+        return await web.web_execute(_draft_button_script("confirmed")) is True
+
+    try:
+        await web.web_await(_confirmed, timeout = web.timeout("publishing_confirmation"))
+    except (TimeoutError, ProtocolException) as ex:
+        raise PublishSubmissionUncertainError(_("draft may have been saved; check your drafts before retrying")) from ex
+
+
 async def _find_submit_button(web:WebScrapingMixin) -> object:
     """Wait for a submit control without performing any click inside polling."""
     async def _inspect() -> object:

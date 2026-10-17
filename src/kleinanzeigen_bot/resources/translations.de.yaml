@@ -103,6 +103,11 @@ kleinanzeigen_bot/app.py:
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
     "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, due, changed) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, due, changed) oder numerische IDs."
 
+  _handle_draft:
+    "############################################": "############################################"
+    "DONE: No new ads found.": "FERTIG: Keine neuen Anzeigen gefunden."
+    "Invalid --ads selector for draft: \"%s\". Valid values: new.": "Ungültiger --ads-Selektor für draft: \"%s\". Gültiger Wert: new."
+
   _handle_update:
     "############################################": "############################################"
     "DONE: No changed ads found.": "FERTIG: Keine geänderten Anzeigen gefunden."
@@ -196,6 +201,21 @@ kleinanzeigen_bot/publishing_workflow.py:
     "Could not reach edit form for ad %s through the ad overview": "Das Bearbeitungsformular für Anzeige %s konnte über die Anzeigenübersicht nicht erreicht werden"
 
 #################################################
+
+  save_ad_draft:
+    "Saving draft for ad '%s'...": "Speichere Entwurf für Anzeige '%s'..."
+
+  save_ad_drafts:
+    "Processing %s/%s: '%s' from [%s]...": "Verarbeite %s/%s: '%s' aus [%s]..."
+    " -> SKIPPED: drafts are only created for new ads, '%s' already has an id": " -> ÜBERSPRUNGEN: Entwürfe werden nur für neue Anzeigen erstellt, '%s' hat bereits eine ID"
+    "Draft for '%s' may have been saved (%s). Check your drafts before retrying.": "Der Entwurf für '%s' wurde möglicherweise gespeichert (%s). Prüfe deine Entwürfe, bevor du es erneut versuchst."
+    "Could not save draft for '%s': %s": "Entwurf für '%s' konnte nicht gespeichert werden: %s"
+    " -> SUCCESS: draft saved for '%s'": " -> ERFOLG: Entwurf für '%s' gespeichert"
+    "############################################": "############################################"
+    "DONE: saved %s (%s failed)": "FERTIG: %s gespeichert (%s fehlgeschlagen)"
+    "DONE: saved %s": "FERTIG: %s gespeichert"
+    "Failed to save %s": "Speichern von %s fehlgeschlagen"
+    "draft": "Entwurf"
 
   publish_ad:
     "Publishing ad '%s'...": "Veröffentliche Anzeige '%s'..."
@@ -440,6 +460,10 @@ kleinanzeigen_bot/publishing_persistence.py:
 #################################################
 kleinanzeigen_bot/publishing_submission.py:
 #################################################
+  submit_draft:
+    "Could not find draft button": "Schaltfläche „Entwurf speichern“ nicht gefunden"
+    "draft may have been saved; check your drafts before retrying": "Entwurf wurde möglicherweise gespeichert; prüfe deine Entwürfe, bevor du es erneut versuchst"
+
   _try_recover_ad_id_from_published_ads:
     "Published-ad ID recovery skipped because the pre-submit list was incomplete": "Wiederherstellung der Anzeigen-ID übersprungen, weil die Liste vor dem Absenden unvollständig war"
     "Published-ad ID recovery was ambiguous for '%s'; refusing candidate IDs: %s": "Wiederherstellung der Anzeigen-ID für '%s' war mehrdeutig; mögliche IDs werden abgelehnt: %s"

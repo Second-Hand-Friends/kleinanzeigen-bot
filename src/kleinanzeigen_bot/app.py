@@ -145,6 +145,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self._handle_list()
                 case "publish":
                     await self._handle_publish()
+                case "draft":
+                    await self._handle_draft()
                 case "update":
                     await self._handle_update()
                 case "delete":
@@ -318,6 +320,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         else:
             LOG.info("############################################")
             LOG.info("DONE: No new/outdated ads found.")
+            LOG.info("############################################")
+
+    async def _handle_draft(self) -> None:
+        """Save new ads as Kleinanzeigen drafts without publishing them."""
+        self._bootstrap_runtime()
+        self._check_for_updates()
+
+        # Drafts are always new ads (no id), so numeric ids or other keywords make no sense here.
+        if self.ads_selector != "new":
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector for draft: "%s". Valid values: new.', self.ads_selector)
+                sys.exit(2)
+            self.ads_selector = "new"
+
+        if ads := self.load_ads():
+            await self._open_logged_in_browser()
+            await _publishing_workflow.save_ad_drafts(self, ads, root_url = self.root_url, config = self.config)
+        else:
+            LOG.info("############################################")
+            LOG.info("DONE: No new ads found.")
             LOG.info("############################################")
 
     async def _handle_update(self) -> None:

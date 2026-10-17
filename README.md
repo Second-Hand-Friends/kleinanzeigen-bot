@@ -240,6 +240,7 @@ Usage: kleinanzeigen-bot COMMAND [OPTIONS]
 
 Commands:
   publish  - (re-)publishes ads
+  draft    - saves new ads as drafts without publishing them
   verify   - verifies the configuration files and ad integrity
   delete   - deletes ads
   update   - updates published ads
@@ -268,6 +269,7 @@ Options:
         * changed: only publish ads that have been modified since last publication
         * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
         * Combinations: You can combine multiple selectors with commas, e.g. "--ads=changed,due" to publish both changed and due ads
+  --ads=new (draft) - saves new ads (without id) as drafts (DEFAULT: new). The ad YAML is not modified.
   --ads=all|new|drafts|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
         Possible values:
         * all: downloads all ads from your profile
