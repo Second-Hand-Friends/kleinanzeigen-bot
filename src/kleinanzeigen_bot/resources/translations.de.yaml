@@ -82,7 +82,8 @@ kleinanzeigen_bot/app.py:
     "Timing collector flush failed: %s": "Zeitmessdaten konnten nicht gespeichert werden: %s"
 
   _handle_login:
-    "To reuse this session, disable private/guest mode in your browser configuration for subsequent commands.": "Damit diese Sitzung wiederverwendet wird, den Privat-/Gastmodus in der Browserkonfiguration für spätere Befehle deaktivieren."
+    ? "Manual login needs a persistent, visible browser session. Set browser.use_private_window to false and remove --headless, --incognito, --guest and --inprivate from browser.arguments."
+    : "Die manuelle Anmeldung benötigt eine persistente, sichtbare Browser-Sitzung. browser.use_private_window auf false setzen und --headless, --incognito, --guest und --inprivate aus browser.arguments entfernen."
     "Manual login requires an interactive terminal.": "Die manuelle Anmeldung benötigt ein interaktives Terminal."
     "Complete login and any device verification in the browser, then return to this terminal.": "Anmeldung und gegebenenfalls Geräteverifizierung im Browser abschließen, dann zu diesem Terminal zurückkehren."
     "Press ENTER when done...": "EINGABETASTE drücken, wenn erledigt..."

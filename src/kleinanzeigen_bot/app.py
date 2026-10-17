@@ -273,15 +273,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         """Let the user authenticate in the configured persistent browser profile."""
         _misc.ensure(sys.stdin.isatty(), _("Manual login requires an interactive terminal."))
         self._bootstrap_runtime()
-        if self.browser_config.use_private_window or any(
-            arg.partition("=")[0] in {"--incognito", "--guest", "--inprivate"} for arg in self.browser_config.arguments
-        ):
-            LOG.warning("To reuse this session, disable private/guest mode in your browser configuration for subsequent commands.")
-        self.browser_config.use_private_window = False
-        self.browser_config.arguments = [
-            arg for arg in self.browser_config.arguments
-            if arg.partition("=")[0] not in {"--headless", "--incognito", "--guest", "--inprivate"}
-        ]
+        _misc.ensure(
+            not self.browser_config.use_private_window
+            and not any(arg.partition("=")[0] in {"--headless", "--incognito", "--guest", "--inprivate"} for arg in self.browser_config.arguments),
+            _("Manual login needs a persistent, visible browser session. Set browser.use_private_window to false and remove "
+              "--headless, --incognito, --guest and --inprivate from browser.arguments."),
+        )
         await self.create_browser_session()
         await self.web_open(self.root_url)
         await _login_flow.click_gdpr_banner(self)

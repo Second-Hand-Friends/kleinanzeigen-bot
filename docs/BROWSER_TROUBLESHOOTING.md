@@ -663,15 +663,13 @@ curl http://localhost:9222/json/version
 
 Run `kleinanzeigen-bot login --config=/path/to/config.yaml` in an interactive terminal.
 The command opens a visible browser with the same profile as subsequent bot runs.
-It disables private/guest mode and headless arguments for this run, without changing the config file.
+It requires a persistent, visible session and stops with an error otherwise: set `browser.use_private_window: false`
+and remove `--headless`, `--incognito`, `--guest` and `--inprivate` from `browser.arguments`.
 Enter your credentials and complete any CAPTCHA, SMS request ("Code senden"), SMS code entry, or email verification in that browser.
 Then return to the terminal and press ENTER. The bot verifies the configured account and closes the browser to save the session.
 The command never fills credentials, sends SMS, downloads ads, or publishes ads.
 Your configured username must match the account you log into. Normal config validation still applies.
 
-For subsequent commands to reuse the session, set `browser.use_private_window: false` in your config
-and remove any `--incognito`, `--guest`, or `--inprivate` browser arguments. The login command changes
-these settings only for its own run and warns if your config would start a private session later.
 Keep the profile directory persistent and use that same directory for later commands.
 Stop other bot/browser processes using it before starting; Chromium cannot share a profile between simultaneous processes.
 If connecting to an externally managed browser via remote debugging, ensure that browser uses a persistent profile and close it yourself when finished.
