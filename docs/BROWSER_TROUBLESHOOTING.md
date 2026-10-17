@@ -564,7 +564,7 @@ Unless `DISPLAY` is passed in or `VNC_DISABLE=1` is set, the Docker image starts
 - **Cannot open http://localhost:6080**: publish the port (`-p 127.0.0.1:6080:6080`). Bind it to `127.0.0.1` and use an SSH tunnel (`ssh -L 6080:localhost:6080 host`) instead of exposing it to the internet; the connection is plain HTTP.
 - **Forgot the password**: `cat <data dir>/.vnc-password` (generated passwords only), or set `VNC_PASSWORD` / `VNC_PASSWORD_FILE` to choose your own (at least 6 characters).
 - **GPU**: the log line `Desktop rendering: ...` tells which mode is active. For hardware rendering pass `--device /dev/dri --group-add <render-gid>` (`getent group render`). `GPU_ACCELERATION=on` aborts if no usable render node exists, `off` forces software rendering. Without a GPU, Chromium renders WebGL with SwiftShader.
-- **Permission errors on `/mnt/data`**: the bot runs as the owner of the data directory (`user`, UID 1000, for a new empty one) and as root only for existing root-owned data directories (the log says so). With `docker run --user <uid>:<gid>` make sure that user can write the directory, e.g. `chown -R 1000:1000 <data dir>`.
+- **Permission errors on `/mnt/data`**: the bot runs as the owner of the data directory (`user`, UID 1000, for a new empty one) and as root only for existing root-owned data directories (the log says so). With `docker run --user <uid>:<gid>` make sure that user can write the directory, e.g. `chown -R <uid>:<gid> <data dir>` with the same IDs as in `--user` (`1000:1000` is the built-in `user`).
 - **Sandbox**: Chromium keeps its sandbox when the container allows user namespaces and is started with `--no-sandbox` automatically otherwise.
 
 ## Configuration Examples

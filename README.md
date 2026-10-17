@@ -101,10 +101,14 @@ The image contains Chromium with a full font set and the locales `de_DE`, `en_US
      -p 127.0.0.1:6080:6080 \
      -v $DATA_DIR:/mnt/data \
      ghcr.io/second-hand-friends/kleinanzeigen-bot:latest \
-     --help
+     publish
    ```
 
    Use `ghcr.io/second-hand-friends/kleinanzeigen-bot:preview` for the preview channel.
+
+   The browser desktop exists while the command runs; the container (and the desktop) ends together with it.
+   Commands that only print something, like `--help`, finish immediately:
+   `docker run --rm ghcr.io/second-hand-friends/kleinanzeigen-bot:latest --help`.
 
    The bot runs as the unprivileged user `user` (UID 1000), or as the owner of the mounted data directory if that is not root. A new, empty data directory is handed over to `user` automatically.
    Data directories of existing installations that contain root-owned files keep working: the bot then still runs as root and logs a hint. Run `chown -R 1000:1000 $DATA_DIR` to switch to the unprivileged user.
@@ -218,7 +222,7 @@ docker run --rm --interactive --tty --init \
   -p 127.0.0.1:6080:6080 \
   -v $DATA_DIR:/mnt/data \
   second-hand-friends/kleinanzeigen-bot \
-  --help
+  publish
 ```
 
 ## <a name="usage"></a>Usage
