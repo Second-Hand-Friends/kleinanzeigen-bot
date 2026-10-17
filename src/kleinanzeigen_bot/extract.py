@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, cast
 
+from kleinanzeigen_bot.ebay_store import restore_download_metadata
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
@@ -374,9 +375,14 @@ class AdExtractor(WebScrapingMixin):
     ) -> None:
         """Preserve local-only settings from an existing downloaded ad YAML into ad_cfg.
 
-        No-op unless config.download.preserve_local_settings is enabled and
-        the final directory contains an existing ad YAML.
+        eBay identity and settings are always retained. Other local-only fields
+        require config.download.preserve_local_settings and an existing ad YAML.
         """
+        ebay_metadata = await asyncio.to_thread(restore_download_metadata, ad_id, final_dir.parent, existing_directory = final_dir)
+        if ebay_metadata:
+            candidate = AdPartial.model_validate({**ad_cfg.model_dump(), **ebay_metadata})
+            ad_cfg.ebay_source_id = candidate.ebay_source_id
+            ad_cfg.ebay = candidate.ebay
         if self.config.download.preserve_local_settings and await files.exists(final_dir):
             existing_yaml_path = final_dir / f"{ad_file_stem}.yaml"
             # Fall back to glob if the rendered stem does not match (e.g. title changed)
@@ -448,7 +454,10 @@ class AdExtractor(WebScrapingMixin):
         final_yaml_path = final_dir / f"{ad_file_stem}.yaml"
         backup_created_by_us = False
         try:
-            await asyncio.to_thread(lambda: dicts.save_dict(str(ad_file_path), ad_cfg.model_dump(mode = "json"), header = header_string))
+            absent_ebay_fields = {field for field in ("ebay", "ebay_source_id") if getattr(ad_cfg, field) is None}
+            await asyncio.to_thread(lambda: dicts.save_dict(
+                str(ad_file_path), ad_cfg.model_dump(mode = "json", exclude = absent_ebay_fields), header = header_string,
+            ))
 
             if await files.exists(backup_dir):
                 raise FileExistsError(_("Backup directory %s already exists. Aborting download for ad %s to avoid data loss.") % (backup_dir, ad_id))

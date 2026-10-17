@@ -579,6 +579,239 @@
       "title": "DownloadConfig",
       "type": "object"
     },
+    "EbayConfig": {
+      "properties": {
+        "environment": {
+          "default": "sandbox",
+          "description": "Separate eBay API environment; sandbox is the default",
+          "enum": [
+            "sandbox",
+            "production"
+          ],
+          "title": "Environment",
+          "type": "string"
+        },
+        "account": {
+          "default": "",
+          "description": "Actual eBay seller username, checked against the authorized account before network commands",
+          "title": "Account",
+          "type": "string"
+        },
+        "client_id": {
+          "default": "",
+          "description": "Public eBay application client ID for this environment; never put the client secret here",
+          "title": "Client Id",
+          "type": "string"
+        },
+        "redirect_uri": {
+          "default": "",
+          "description": "eBay developer application's redirect URL name (RuName)",
+          "title": "Redirect Uri",
+          "type": "string"
+        },
+        "site_id": {
+          "default": 77,
+          "description": "Trading API site ID (77 = Germany)",
+          "minimum": 0,
+          "title": "Site Id",
+          "type": "integer"
+        },
+        "currency": {
+          "default": "EUR",
+          "description": "Source and fee currency; no currency conversion is performed",
+          "maxLength": 3,
+          "minLength": 3,
+          "title": "Currency",
+          "type": "string"
+        },
+        "defaults": {
+          "$ref": "#/$defs/EbayListing",
+          "description": "Default eBay listing settings, overridden by an ad's ebay section"
+        }
+      },
+      "title": "EbayConfig",
+      "type": "object"
+    },
+    "EbayListing": {
+      "properties": {
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "eBay leaf category ID; never inferred from the Kleinanzeigen category",
+          "title": "Category Id"
+        },
+        "condition_id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "eBay condition ID supported by the selected category",
+          "title": "Condition Id"
+        },
+        "aspects": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "Category-specific item specifics, with one or more values per name",
+          "title": "Aspects",
+          "type": "object"
+        },
+        "listing_format": {
+          "default": "fixed",
+          "description": "Buy It Now (fixed) or auction",
+          "enum": [
+            "fixed",
+            "auction"
+          ],
+          "title": "Listing Format",
+          "type": "string"
+        },
+        "best_offer": {
+          "default": false,
+          "description": "Enable Best Offer for fixed-price listings",
+          "title": "Best Offer",
+          "type": "boolean"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit eBay price override; required for wanted/giveaway/nonpositive-price sources",
+          "title": "Price"
+        },
+        "auction_start_price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit auction starting price; source price is never used for auctions",
+          "title": "Auction Start Price"
+        },
+        "auction_duration": {
+          "anyOf": [
+            {
+              "enum": [
+                "Days_3",
+                "Days_5",
+                "Days_7",
+                "Days_10"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit auction duration",
+          "title": "Auction Duration"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "Number of identical items; auctions require one",
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "shipping_profile_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seller's eBay shipping business policy ID",
+          "title": "Shipping Profile Id"
+        },
+        "return_profile_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seller's eBay return business policy ID",
+          "title": "Return Profile Id"
+        },
+        "payment_profile_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seller's eBay payment business policy ID",
+          "title": "Payment Profile Id"
+        },
+        "postal_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Item location postal code",
+          "title": "Postal Code"
+        },
+        "country": {
+          "default": "DE",
+          "description": "Item location country code",
+          "maxLength": 2,
+          "minLength": 2,
+          "title": "Country",
+          "type": "string"
+        }
+      },
+      "title": "EbayListing",
+      "type": "object"
+    },
     "HumanizationConfig": {
       "description": "Controls browser pacing, typing jitter, and viewport behavior.\n\n``enabled`` controls whether optional humanization extras are active while baseline\nworkflow pacing (``web_sleep``) remains unchanged. Optional typing jitter and viewport\nrandomization are controlled by explicit options.",
       "properties": {
@@ -948,6 +1181,10 @@
       "minItems": 1,
       "title": "Ad Files",
       "type": "array"
+    },
+    "ebay": {
+      "$ref": "#/$defs/EbayConfig",
+      "description": "Optional eBay CLI configuration; existing Kleinanzeigen commands are unaffected"
     },
     "ad_defaults": {
       "$ref": "#/$defs/AdDefaults",

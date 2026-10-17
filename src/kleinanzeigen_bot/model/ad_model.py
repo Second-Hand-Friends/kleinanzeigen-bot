@@ -16,6 +16,7 @@ from typing import Annotated, Any, Final, Literal, Self
 from pydantic import AfterValidator, Field, field_validator, model_validator
 
 from kleinanzeigen_bot.model.config_model import AdDefaults, AutoPriceReductionConfig  # noqa: TC001 Move application import into a type-checking block
+from kleinanzeigen_bot.model.ebay_model import EbayListing  # noqa: TC001 - runtime Pydantic model
 from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.misc import parse_datetime, parse_decimal
 from kleinanzeigen_bot.utils.pydantics import ContextualModel
@@ -197,6 +198,12 @@ class AdPartial(ContextualModel):
     contact:ContactPartial | None = _OPTIONAL()
     republication_interval:int | None = _OPTIONAL()
 
+    ebay:EbayListing | None = Field(default = None, description = "eBay-only overrides; excluded from the Kleinanzeigen content hash")
+    ebay_source_id:str | None = Field(
+        default = None,
+        pattern = r"^[0-9a-fA-F]{32}$",
+        description = "Stable cross-platform source identity; keep on rename, republish, and redownload")
+
     id:int | None = _OPTIONAL()
     created_on:datetime | None = _ISO_DATETIME()
     updated_on:datetime | None = _ISO_DATETIME()
@@ -274,6 +281,8 @@ class AdPartial(ContextualModel):
                 "created_on",
                 "updated_on",
                 "content_hash",
+                "ebay",
+                "ebay_source_id",
                 "repost_count",
                 "price_reduction_count",
             },
@@ -310,6 +319,9 @@ class AdPartial(ContextualModel):
         Raises `ValidationError` when, after merging with `ad_defaults`, not all fields required by `Ad` are populated.
         """
         ad_cfg = self.model_dump()
+        if self.ebay is not None:
+            # Retain the explicitly set fields for main-config eBay defaults.
+            ad_cfg["ebay"] = self.ebay
         dicts.apply_defaults(
             target = ad_cfg,
             defaults = ad_defaults.model_dump(),

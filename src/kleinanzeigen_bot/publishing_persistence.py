@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from . import local_path_renaming as _local_path_renaming
+from .ebay_store import remember_republished_source
 from .model.ad_model import Ad, AdPartial, AdUpdateStrategy
 from .model.config_model import Config
 from .utils import dicts as _dicts
@@ -116,6 +117,8 @@ def persist_published_ad(
         LOG.info(" -> SUCCESS: ad updated with ID %s", ad_id)
 
     try:
+        if source_id := ad_cfg_orig.get("ebay_source_id"):
+            remember_republished_source(ad_id, str(source_id))
         _dicts.save_dict(ad_file, ad_cfg_orig)
     except Exception:  # noqa: BLE001 — intentional broad catch for image rename rollback on save failure
         for old_path, new_path in image_result.renamed_paths:

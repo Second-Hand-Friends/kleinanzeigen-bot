@@ -38,6 +38,7 @@ VALID_COMMANDS:Final[frozenset[str]] = frozenset({
     "update-check", "update-content-hash",
     "publish", "status", "list", "update", "delete", "extend", "download",
     "reserve", "activate",
+    "ebay-login", "ebay-prepare", "ebay-verify", "ebay-publish", "ebay-status",
 })
 
 

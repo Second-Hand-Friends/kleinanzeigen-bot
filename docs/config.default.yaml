@@ -8,6 +8,73 @@ ad_files:
   - ./**/ad_*.{json,yml,yaml}
 
 # ################################################################################
+# Optional eBay CLI configuration; existing Kleinanzeigen commands are unaffected
+ebay:
+
+  # Separate eBay API environment; sandbox is the default
+  environment: sandbox
+
+  # Actual eBay seller username, checked against the authorized account before network commands
+  account: ''
+
+  # Public eBay application client ID for this environment; never put the client secret here
+  client_id: ''
+
+  # eBay developer application's redirect URL name (RuName)
+  redirect_uri: ''
+
+  # Trading API site ID (77 = Germany)
+  site_id: 77
+
+  # Source and fee currency; no currency conversion is performed
+  currency: EUR
+
+  # Default eBay listing settings, overridden by an ad's ebay section
+  defaults:
+
+    # eBay leaf category ID; never inferred from the Kleinanzeigen category
+    category_id:
+
+    # eBay condition ID supported by the selected category
+    condition_id:
+
+    # Category-specific item specifics, with one or more values per name
+    aspects: {}
+
+    # Buy It Now (fixed) or auction
+    listing_format: fixed
+
+    # Enable Best Offer for fixed-price listings
+    best_offer: false
+
+    # Explicit eBay price override; required for wanted/giveaway/nonpositive-price sources
+    price:
+
+    # Explicit auction starting price; source price is never used for auctions
+    auction_start_price:
+
+    # Explicit auction duration
+    auction_duration:
+
+    # Number of identical items; auctions require one
+    quantity: 1
+
+    # Seller's eBay shipping business policy ID
+    shipping_profile_id:
+
+    # Seller's eBay return business policy ID
+    return_profile_id:
+
+    # Seller's eBay payment business policy ID
+    payment_profile_id:
+
+    # Item location postal code
+    postal_code:
+
+    # Item location country code
+    country: DE
+
+# ################################################################################
 # Default values for ads, can be overwritten in each ad configuration file
 ad_defaults:
 

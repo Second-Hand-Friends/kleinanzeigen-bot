@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, published_ads, reserve_flow
+from . import ad_loading, ad_status, delete_flow, download_flow, ebay_workflow, extend_flow, published_ads, reserve_flow
 from . import login_flow as _login_flow
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
@@ -122,6 +122,14 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         try:
             # When adding/removing a case, also update runtime_config.VALID_COMMANDS.
             match self.command:
+                case "ebay-login" | "ebay-prepare" | "ebay-verify" | "ebay-publish" | "ebay-status":
+                    self.file_log = _runtime_config.configure_file_logging(
+                        self.log_file_path, self.workspace, self.file_log, self.get_version(),
+                    )
+                    await asyncio.to_thread(
+                        ebay_workflow.run, Path(self.config_file_path), self.command, self.ads_selector,
+                        dry_run = parsed.dry_run, refresh = parsed.refresh, fee_limit = parsed.fee_limit,
+                    )
                 case "help":
                     _cli.show_help()
                     return

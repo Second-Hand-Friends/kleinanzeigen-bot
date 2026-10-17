@@ -159,6 +159,186 @@
       },
       "title": "ContactPartial",
       "type": "object"
+    },
+    "EbayListing": {
+      "properties": {
+        "category_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "eBay leaf category ID; never inferred from the Kleinanzeigen category",
+          "title": "Category Id"
+        },
+        "condition_id": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "eBay condition ID supported by the selected category",
+          "title": "Condition Id"
+        },
+        "aspects": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": "Category-specific item specifics, with one or more values per name",
+          "title": "Aspects",
+          "type": "object"
+        },
+        "listing_format": {
+          "default": "fixed",
+          "description": "Buy It Now (fixed) or auction",
+          "enum": [
+            "fixed",
+            "auction"
+          ],
+          "title": "Listing Format",
+          "type": "string"
+        },
+        "best_offer": {
+          "default": false,
+          "description": "Enable Best Offer for fixed-price listings",
+          "title": "Best Offer",
+          "type": "boolean"
+        },
+        "price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit eBay price override; required for wanted/giveaway/nonpositive-price sources",
+          "title": "Price"
+        },
+        "auction_start_price": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit auction starting price; source price is never used for auctions",
+          "title": "Auction Start Price"
+        },
+        "auction_duration": {
+          "anyOf": [
+            {
+              "enum": [
+                "Days_3",
+                "Days_5",
+                "Days_7",
+                "Days_10"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit auction duration",
+          "title": "Auction Duration"
+        },
+        "quantity": {
+          "default": 1,
+          "description": "Number of identical items; auctions require one",
+          "minimum": 1,
+          "title": "Quantity",
+          "type": "integer"
+        },
+        "shipping_profile_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seller's eBay shipping business policy ID",
+          "title": "Shipping Profile Id"
+        },
+        "return_profile_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seller's eBay return business policy ID",
+          "title": "Return Profile Id"
+        },
+        "payment_profile_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Seller's eBay payment business policy ID",
+          "title": "Payment Profile Id"
+        },
+        "postal_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Item location postal code",
+          "title": "Postal Code"
+        },
+        "country": {
+          "default": "DE",
+          "description": "Item location country code",
+          "maxLength": 2,
+          "minLength": 2,
+          "title": "Country",
+          "type": "string"
+        }
+      },
+      "title": "EbayListing",
+      "type": "object"
     }
   },
   "properties": {
@@ -394,6 +574,32 @@
       ],
       "default": null,
       "title": "Republication Interval"
+    },
+    "ebay": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/EbayListing"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "eBay-only overrides; excluded from the Kleinanzeigen content hash"
+    },
+    "ebay_source_id": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-fA-F]{32}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Stable cross-platform source identity; keep on rename, republish, and redownload",
+      "title": "Ebay Source Id"
     },
     "id": {
       "anyOf": [

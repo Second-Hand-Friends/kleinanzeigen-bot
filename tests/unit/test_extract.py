@@ -18,6 +18,7 @@ from jsonschema import Draft202012Validator
 from ruamel.yaml import YAML
 
 import kleinanzeigen_bot.extract as extract_module
+from kleinanzeigen_bot import ebay_store
 from kleinanzeigen_bot.model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, ContactPartial
 from kleinanzeigen_bot.model.config_model import Config, DownloadConfig
 from kleinanzeigen_bot.utils import dicts
@@ -2316,7 +2317,7 @@ class TestAdExtractorDownload:
             actual_call = mock_save_dict.call_args
             actual_path = Path(actual_call[0][0])
             assert actual_path == staging_yaml_path
-            assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode = "json")
+            assert actual_call[0][1] == mock_extract_with_dir.return_value[0].model_dump(mode = "json", exclude = {"ebay", "ebay_source_id"})
             assert final_dir.exists()
             assert not staging_dir.exists()
 
@@ -4277,3 +4278,26 @@ class TestAdExtractorAnonymousFallback:
             patch.object(extract_module.AdExtractor, "_fetch_page_source_sync", return_value = None),
         ):
             assert await test_extractor._fetch_anonymous_ad_dimensions(12345) is None
+
+
+@pytest.mark.asyncio
+async def test_download_preserves_ebay_identity_even_when_local_defaults_reset(
+    test_extractor:extract_module.AdExtractor, tmp_path:Path, monkeypatch:pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ebay_store, "default_state_path", lambda: tmp_path / "absent.sqlite3")
+    base = tmp_path / "downloads"
+    final_dir = base / "camera"
+    staging = base / ".tmp-camera"
+    final_dir.mkdir(parents = True)
+    staging.mkdir()
+    previous = _create_test_ad_partial(id = 42, repost_count = 9, ebay_source_id = "A" * 32, ebay = {"category_id": "123"})
+    dicts.save_dict(final_dir / "ad_42.yaml", previous.model_dump(mode = "json"))
+    test_extractor.config.download.preserve_local_settings = False
+    test_extractor.download_dir = base
+    with patch.object(test_extractor, "_extract_ad_page_info_with_directory_handling", new_callable = AsyncMock) as extract_info:
+        extract_info.return_value = (_create_test_ad_partial(id = 42), staging, final_dir, "ad_42")
+        await test_extractor.download_ad(42)
+    saved = dicts.load_dict(str(final_dir / "ad_42.yaml"), "ad")
+    assert saved["ebay_source_id"] == "A" * 32
+    assert saved["ebay"]["category_id"] == "123"
+    assert saved["repost_count"] == 0

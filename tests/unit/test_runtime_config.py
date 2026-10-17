@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-import re
+import ast
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
@@ -313,7 +313,10 @@ def _extract_match_cases() -> frozenset[str]:
     """Parse case statements from KleinanzeigenBot.run() in app.py."""
     app_path = Path(__file__).resolve().parent.parent.parent / "src" / "kleinanzeigen_bot" / "app.py"
     source = app_path.read_text()
-    return frozenset(re.findall(r'^\s+case\s+"([^"]+)"', source, flags = re.MULTILINE))
+    return frozenset(
+        node.value.value for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.MatchValue) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)
+    )
 
 
 def test_valid_commands_matches_dispatch_cases() -> None:
