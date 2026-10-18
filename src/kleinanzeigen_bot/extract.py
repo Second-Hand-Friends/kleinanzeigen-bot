@@ -1188,14 +1188,15 @@ class AdExtractor(WebScrapingMixin):
     def _parse_ad_attributes(ad_attributes:str) -> dict[str, str]:
         """Parse the ``ad_attributes`` tracking string into API key/value pairs.
 
-        ``versand_s`` is dropped because shipping is modelled separately.
+        ``versand_s`` is dropped because shipping is modelled separately, ``seller_badges_s`` because
+        it is tracking data without a corresponding form field.
 
         :param ad_attributes: e.g. ``"art_s:lautsprecher_kopfhoerer|condition_s:like_new|versand_s:t"``
         :return: a dictionary (possibly empty) mapping attribute names to their values
         """
         # split once only: a value may itself contain a colon
         parsed = dict(item.split(":", 1) for item in ad_attributes.split("|") if ":" in item)
-        return {key: value for key, value in parsed.items() if not key.endswith(".versand_s") and key != "versand_s"}
+        return {key: value for key, value in parsed.items() if key.rsplit(".", 1)[-1] not in {"versand_s", "seller_badges_s"}}
 
     async def _extract_special_attributes_from_ad_page(
         self,

@@ -4148,13 +4148,15 @@ class TestAdExtractorAnonymousFallback:
         [
             ("versand_s:t|condition_s:alright", {"condition_s": "alright"}),
             ("wohnzimmer.versand_s:f|art_s:tische", {"art_s": "tische"}),
+            ("condition_s:new|seller_badges_s:none|versand_s:t", {"condition_s": "new"}),
+            ("haushalt.seller_badges_s:none|art_s:tische", {"art_s": "tische"}),
             ("", {}),
             ("malformed", {}),
             ("note_s:size:large|art_s:tische", {"note_s": "size:large", "art_s": "tische"}),
         ],
     )
     def test_parse_ad_attributes(self, ad_attributes:str, expected:dict[str, str]) -> None:
-        """Shipping keys are dropped and values may themselves contain a colon."""
+        """Shipping and seller badge keys are dropped and values may themselves contain a colon."""
         assert extract_module.AdExtractor._parse_ad_attributes(ad_attributes) == expected
 
     def test_parse_ad_dimensions_recovers_attributes_from_truncated_object(self) -> None:
