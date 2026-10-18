@@ -275,7 +275,7 @@ class TestKleinanzeigenBotAdOperations:
             assert test_bot.command == "delete"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("args", [["delete"], ["delete", "--ads=bogus"]])
+    @pytest.mark.parametrize("args", [["delete"], ["delete", "--ads=bogus"], ["delete", "--ads=all,due"]])
     async def test_run_delete_command_requires_valid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None, args:list[str]) -> None:  # pylint: disable=unused-argument
         """Delete is irreversible: missing or invalid --ads must abort before loading ads."""
         with patch.object(test_bot, "load_ads") as load_ads, pytest.raises(SystemExit) as exc:
