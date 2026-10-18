@@ -112,6 +112,7 @@ kleinanzeigen_bot/app.py:
   _handle_delete:
     "############################################": "############################################"
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
+    "Missing or invalid --ads selector: \"%s\". Valid values: all, due or comma-separated numeric IDs.": "Fehlender oder ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, due oder kommagetrennte numerische IDs."
 
   _handle_extend:
     "############################################": "############################################"

@@ -40,6 +40,16 @@ Full documentation for `config.yaml` including all options, timeouts, browser se
 
 Description values can be multiline. See <https://yaml-multiline.info/> for YAML syntax examples.
 
+#### `active`
+
+`active: false` tells the bot to leave this ad file alone. It does not say whether the ad is online.
+
+- Selector keywords (`--ads=all`, `due`, `new`, `changed`) skip inactive ads.
+- `publish` and `update` also skip inactive ads when they are named by ID.
+- `delete`, `extend`, `reserve` and `activate` act on ads that are already online, so an ad named explicitly by ID (e.g. `--ads=1,2,3`) is processed even if `active: false`.
+- `download` ignores the flag and sets it according to the ad's state on the website.
+- `after_delete: DISABLE` sets `active: false` after a successful delete.
+
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Second-Hand-Friends/kleinanzeigen-bot/main/schemas/ad.schema.json
 active: true

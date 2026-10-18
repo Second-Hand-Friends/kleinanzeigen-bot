@@ -74,7 +74,7 @@ class TestKleinanzeigenBotInitialization:
             patch.object(test_bot, "close_browser_session", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.update_checker.UpdateChecker", DummyUpdateChecker),
         ):
-            await test_bot.run(["app", command])
+            await test_bot.run(["app", command, *(["--ads=all"] if command == "delete" else [])])
 
         expected_state_path = (tmp_path / "config.yaml").resolve().parent / ".temp" / "update_check_state.json"
         assert update_checker_calls == [(test_bot.config, expected_state_path)]
@@ -272,8 +272,17 @@ class TestKleinanzeigenBotAdOperations:
     async def test_run_delete_command_no_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
         """Test running delete command with no ads."""
         with patch.object(test_bot, "load_ads", return_value = []):
-            await test_bot.run(["script.py", "delete"])
+            await test_bot.run(["script.py", "delete", "--ads=all"])
             assert test_bot.command == "delete"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("args", [["delete"], ["delete", "--ads=bogus"], ["delete", "--ads=all,due"]])
+    async def test_run_delete_command_requires_valid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None, args:list[str]) -> None:  # pylint: disable=unused-argument
+        """Delete is irreversible: missing or invalid --ads must abort before loading ads."""
+        with patch.object(test_bot, "load_ads") as load_ads, pytest.raises(SystemExit) as exc:
+            await test_bot.run(["script.py", *args])
+        assert exc.value.code == 2
+        load_ads.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_run_publish_command_no_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
