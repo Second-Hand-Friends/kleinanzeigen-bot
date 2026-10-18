@@ -316,6 +316,12 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
     async def _handle_delete(self) -> None:
         self._bootstrap_runtime()
         self._check_for_updates()
+
+        # Deleting is irreversible, so never fall back to a default selector
+        if not self._ads_selector_explicit or not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "due"}):
+            LOG.error('Missing or invalid --ads selector: "%s". Valid values: all, due or comma-separated numeric IDs.', self.ads_selector)
+            sys.exit(2)
+
         if ads := self.load_ads():
             await self._open_logged_in_browser()
             await delete_flow.delete_ads(

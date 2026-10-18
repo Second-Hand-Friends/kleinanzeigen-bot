@@ -285,6 +285,11 @@ Options:
         * all: switch all eligible ads
         * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
         * Note: ads already in the target state are skipped.
+  --ads=all|due|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
+        Possible values:
+        * all: delete all ads
+        * due: delete all ads whose republication_interval has elapsed
+        * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
   --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)

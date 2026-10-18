@@ -197,6 +197,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * all: Stellt alle passenden Anzeigen um
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
                     * Hinweis: Anzeigen, die bereits im Zielzustand sind, werden übersprungen.
+              --ads=all|due|<id(s)> (delete) - Gibt an, welche Anzeigen gelöscht werden sollen (ERFORDERLICH)
+                    Mögliche Werte:
+                    * all: Löscht alle Anzeigen
+                    * due: Löscht alle Anzeigen, deren republication_interval abgelaufen ist
+                    * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --preserve-local-settings - Erzwingt das Beibehalten lokaler Einstellungen bei erneutem Download (überschreibt config-Wert false)
@@ -261,6 +266,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * all: switch all eligible ads
                 * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
                 * Note: ads already in the target state are skipped.
+          --ads=all|due|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
+                Possible values:
+                * all: delete all ads
+                * due: delete all ads whose republication_interval has elapsed
+                * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication
           --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
