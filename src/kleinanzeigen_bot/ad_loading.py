@@ -382,6 +382,9 @@ def load_ad_configs(
     return result
 
 
+_ONLINE_AD_COMMANDS = frozenset({"delete", "extend", "reserve", "activate"})
+
+
 def load_ads(
     *,
     config_file_path:str,
@@ -421,9 +424,11 @@ def load_ads(
     ads:list[tuple[str, Ad, dict[str, Any]]] = []
     for ad_file, ad_file_relative, ad_cfg, ad_cfg_orig in loaded:
 
-        # Inactive check runs before numeric ID filtering — an inactive ad
-        # with a matching numeric ID will still be skipped.
-        if ignore_inactive and not ad_cfg.active:
+        # Keywords never select inactive ads. Commands acting on already-online ads
+        # (delete, extend, reserve, activate) honour explicitly named IDs regardless
+        # of ``active``; for publish/update, ``active: false`` still wins.
+        explicit_id_overrides = ids is not None and command in _ONLINE_AD_COMMANDS
+        if ignore_inactive and not ad_cfg.active and not explicit_id_overrides:
             LOG.info(" -> SKIPPED: inactive ad [%s]", ad_file_relative)
             continue
 

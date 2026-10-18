@@ -778,10 +778,23 @@ def test_load_ads_with_numeric_ids_includes_only_specified(
             assert ads[0][1].id == 101
 
 
-def test_load_ads_skips_inactive_before_numeric_id(
-    base_ad_config:dict[str, Any], test_bot_config:Config
+@pytest.mark.parametrize(
+    ("command", "selector", "expected"),
+    [
+        ("publish", "101", 0),
+        ("update", "101", 0),
+        ("delete", "101", 1),
+        ("extend", "101", 1),
+        ("reserve", "101", 1),
+        ("activate", "101", 1),
+        ("delete", "all", 0),
+        ("delete", "due", 0),
+    ],
+)
+def test_load_ads_inactive_handling_by_command(
+    base_ad_config:dict[str, Any], test_bot_config:Config, command:str, selector:str, expected:int
 ) -> None:
-    """Inactive ads are skipped even when their numeric ID matches the selector."""
+    """Keywords skip inactive ads; explicit IDs only override ``active`` for commands acting on online ads."""
     ad_defaults = test_bot_config.with_values({"ad_defaults": {"description": {"prefix": "", "suffix": ""}}}).ad_defaults
 
     inactive_ad = Ad.model_validate(base_ad_config | {
@@ -803,11 +816,10 @@ def test_load_ads_skips_inactive_before_numeric_id(
                 ad_file_patterns = ["ads/*.yaml"],
                 ad_defaults = ad_defaults,
                 categories = {},
-                ads_selector = "101",
-                command = "publish",
+                ads_selector = selector,
+                command = command,
             )
-            # Inactive check happens before numeric ID filtering
-            assert len(ads) == 0
+            assert len(ads) == expected
 
 
 def test_skipped_ads_do_not_validate_description_or_images(
