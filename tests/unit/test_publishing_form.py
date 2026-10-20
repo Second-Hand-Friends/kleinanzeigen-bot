@@ -2449,10 +2449,12 @@ class TestShippingOptionsDialog:
         checked = {"HERMES_004": True, "DHL_003": True, "DHL_004": False, "DHL_005": False}
 
         def make_checkbox(code:str) -> MagicMock:
+            """Build a checkbox mock whose click toggles the shared selection state."""
             el = MagicMock()
             el.attrs = {"checked": ""} if checked[code] else {}
 
             async def click() -> None:
+                """Toggle this carrier's selection state."""
                 checked[code] = not checked[code]
 
             el.click = AsyncMock(side_effect = click)
