@@ -1110,7 +1110,9 @@ async def set_shipping_options(web:WebScrapingMixin, ad_cfg:Ad, mode:AdUpdateStr
         LOG.debug("Using state-based shipping option sync for mode '%s'", mode)
         LOG.debug("Processing %d packages for size '%s'", len(all_codes_for_size), shipping_size)
 
-        for carrier_code in all_codes_for_size:
+        # Select wanted carriers before deselecting unwanted ones: the redesigned dialog
+        # clears its carrier list as soon as no carrier is selected.
+        for carrier_code in sorted(all_codes_for_size, key = lambda code: code not in wanted_codes):
             checkbox = await _find_in_dialog(
                 web,
                 f'input[type="checkbox"][value="{carrier_code}"]',
