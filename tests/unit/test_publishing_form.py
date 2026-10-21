@@ -2431,6 +2431,60 @@ class TestShippingOptionsDialog:
         assert checkbox_mocks["HERMES_003"].click.await_count == 0
 
     @pytest.mark.asyncio
+    async def test_replace_mode_selects_wanted_before_deselecting_defaults(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        """The dialog clears its carrier list once nothing is selected, so wanted carriers must be selected first."""
+        ad_cfg = self._make_ad_with_options(base_ad_config, ["DHL_20"])
+
+        radio_mock = self._mock_interactable_checkbox(checked = True)
+        weiter_mock = MagicMock()
+        weiter_mock.click = AsyncMock()
+        fertig_mock = MagicMock()
+        fertig_mock.click = AsyncMock()
+
+        # Live LARGE defaults: Hermes L-Paket and DHL Paket 10 kg are pre-selected.
+        checked = {"HERMES_004": True, "DHL_003": True, "DHL_004": False, "DHL_005": False}
+
+        def make_checkbox(code:str) -> MagicMock:
+            """Build a checkbox mock whose click toggles the shared selection state."""
+            el = MagicMock()
+            el.attrs = {"checked": ""} if checked[code] else {}
+
+            async def click() -> None:
+                """Toggle this carrier's selection state."""
+                checked[code] = not checked[code]
+
+            el.click = AsyncMock(side_effect = click)
+            return el
+
+        async def find_side_effect(selector_type:By, selector_value:str, **_:Any) -> MagicMock:
+            """Async side effect for mocking web_find calls."""
+            if selector_type == By.CSS_SELECTOR and "radio" in selector_value:
+                return radio_mock
+            if selector_type == By.TEXT and selector_value == "Weiter":
+                return weiter_mock
+            if selector_type == By.TEXT and selector_value == "Fertig":
+                return fertig_mock
+            if selector_type == By.CSS_SELECTOR and "checkbox" in selector_value:
+                if not any(checked.values()):
+                    raise TimeoutError("carrier list cleared")
+                code = selector_value.rsplit('"', 2)[-2]
+                return make_checkbox(code)
+            return MagicMock()
+
+        with (
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = find_side_effect),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await set_shipping_options(test_bot, ad_cfg, mode = AdUpdateStrategy.REPLACE)
+
+        assert checked == {"HERMES_004": False, "DHL_003": False, "DHL_004": False, "DHL_005": True}
+        fertig_mock.click.assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_modify_mode_toggles_carriers(
         self,
         test_bot:KleinanzeigenBot,
