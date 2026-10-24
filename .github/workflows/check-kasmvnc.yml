@@ -1,59 +1,83 @@
-# https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
-name: Check KasmVNC release
-
-# The Docker image pins KasmVNC (version + sha256) in docker/image/Dockerfile, which Dependabot
-# cannot update. This opens an issue when upstream has published a newer release.
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+name: Update KasmVNC
 
 on:
   schedule:
-    - cron: '0 6 * * 1'
+    - cron: '17 6 * * *'
   workflow_dispatch:
-    # https://github.blog/changelog/2020-07-06-github-actions-manual-triggers-with-workflow_dispatch/
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
-  check:
+  update:
+    if: github.repository == 'Second-Hand-Friends/kleinanzeigen-bot'
+    # The merge job shares this lock so it cannot merge while this job replaces the PR head.
+    concurrency:
+      group: kasmvnc-update
+      cancel-in-progress: false
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read  # checkout
-      issues: write  # create the update issue
-    if: github.repository_owner == 'Second-Hand-Friends'
-
+    timeout-minutes: 10
     steps:
-    - name: Git checkout
-      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # https://github.com/actions/checkout
+    - name: Generate update token
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      id: token
       with:
+        client-id: ${{ vars.DEPS_UPDATER_CLIENT_ID }}
+        private-key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+
+    - name: Check out current main
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: main
+        token: ${{ steps.token.outputs.token }}
         persist-credentials: false
 
-    - name: Compare pinned and latest version
+    - name: Update pinned release assets
+      id: update
       env:
         GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
+        gh api repos/kasmtech/KasmVNC/releases/latest > "$RUNNER_TEMP/kasmvnc-release.json"
+        version=$(python3 scripts/update_kasmvnc.py "$RUNNER_TEMP/kasmvnc-release.json")
+        echo "version=$version" >> "$GITHUB_OUTPUT"
 
-        pinned=$(sed -n 's/^ARG KASMVNC_VERSION=//p' docker/image/Dockerfile)
-        latest=$(gh api repos/kasmtech/KasmVNC/releases/latest --jq .tag_name | sed 's/^v//')
-        echo "pinned=$pinned latest=$latest"
+    - name: Create or update the KasmVNC PR
+      uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v7.0.5
+      with:
+        token: ${{ steps.token.outputs.token }}
+        base: main
+        branch: chore/update-kasmvnc
+        delete-branch: true
+        add-paths: docker/image/Dockerfile
+        author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+        committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+        commit-message: "chore: update KasmVNC to ${{ steps.update.outputs.version }}"
+        title: "chore: update KasmVNC to ${{ steps.update.outputs.version }}"
+        body: |
+          ## ℹ️ Description
+          Update the Docker desktop to KasmVNC ${{ steps.update.outputs.version }}.
+          Release: https://github.com/kasmtech/KasmVNC/releases/tag/v${{ steps.update.outputs.version }}
+          Related issues: none.
 
-        if [ -z "$pinned" ] || [ -z "$latest" ]; then
-          echo "::error::Could not determine the pinned or the latest KasmVNC version"
-          exit 1
-        fi
+          ## 📋 Changes Summary
+          - Update the version, download URLs and SHA-256 pins together for AMD64 and ARM64.
+          - Keep a single update PR; a newer release replaces the pending update.
+          - The merge workflow checks the current commit's full Build result and repository rules.
 
-        [ "$pinned" != "$latest" ] || exit 0
+          ### ⚙️ Type of Change
+          - [x] 🐞 Bug fix (dependency update)
+          - [ ] ✨ New feature
+          - [ ] 💥 Breaking change
 
-        title="Update KasmVNC in the Docker image to $latest"
-        # --search matches fuzzily, so compare the title exactly
-        existing=$(gh issue list --state open --search "\"$title\" in:title" --json number,title \
-          | jq -r --arg t "$title" '.[] | select(.title == $t) | .number')
-        [ -z "$existing" ] || exit 0
+          ## ✅ Checklist
+          - [x] Release assets and the scope of generated changes have been validated.
+          - [ ] Tests pass (`pdm run test`); CI must verify this commit, including both Docker architectures.
+          - [ ] Formatting passes (`pdm run format`); verified by CI.
+          - [ ] Lint passes (`pdm run lint`); verified by CI.
+          - [x] No user-facing configuration or documentation changes are required.
 
-        gh issue create --title "$title" --label dependencies --body "KasmVNC $latest is available (the Docker image pins $pinned).
-
-        Update \`KASMVNC_VERSION\` and the \`KASMVNC_SHA256_AMD64\` / \`KASMVNC_SHA256_ARM64\` build args in \`docker/image/Dockerfile\`
-        (assets: https://github.com/kasmtech/KasmVNC/releases/tag/v$latest, \`kasmvncserver_trixie_*\`), then run \`bash docker/image/test-startup.sh\`.
-
-        Opened by the \`Check KasmVNC release\` workflow."
+          By submitting this pull request, I confirm that you can use, modify, copy, and redistribute this contribution, under the terms of your choice.

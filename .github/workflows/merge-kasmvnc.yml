@@ -1,0 +1,55 @@
+# SPDX-FileCopyrightText: © Jens Bergmann and contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
+name: Merge KasmVNC update
+
+on:
+  workflow_run:
+    workflows: [Build]
+    types: [completed]
+  schedule:
+    # Retry after a required review or another check has finished.
+    - cron: '37 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: read
+  statuses: read
+
+jobs:
+  merge:
+    if: >-
+      github.repository == 'Second-Hand-Friends/kleinanzeigen-bot' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name == github.repository &&
+        github.event.workflow_run.head_branch == 'chore/update-kasmvnc' &&
+        github.event.workflow_run.conclusion == 'success'))
+    concurrency:
+      group: kasmvnc-update
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+    # workflow_run has secrets: execute only trusted main, never PR code or artifacts.
+    - name: Check out trusted merge gate
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: main
+        persist-credentials: false
+
+    - name: Generate merge token
+      uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      id: token
+      with:
+        client-id: ${{ vars.DEPS_UPDATER_CLIENT_ID }}
+        private-key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+
+    - name: Merge the tested PR commit when repository rules allow it
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_MERGE_TOKEN: ${{ steps.token.outputs.token }}
+      run: python3 scripts/merge_kasmvnc.py
