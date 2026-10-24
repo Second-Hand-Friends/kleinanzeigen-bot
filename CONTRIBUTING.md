@@ -87,6 +87,22 @@ This section provides quick reference commands for common development tasks. See
     - Add unit tests for new components
     - Add integration tests for external dependencies
 
+### KasmVNC Docker updates
+
+`Update KasmVNC` checks upstream daily and maintains one PR from `chore/update-kasmvnc` to `main`.
+The Dockerfile pins the version, upstream download URLs and SHA-256 checksums for both AMD64 and ARM64.
+Missing or ambiguous assets, changed same-version assets and downgrades stop the update without changing the pins.
+
+`Merge KasmVNC update` automatically merges eligible updates after the full PR `Build` succeeds for the current head,
+all reported checks finish successfully, and the required review is approved. It runs after `Build` and retries hourly
+for later reviews or checks. It accepts only pin changes from the existing dependency updater App, shares a lock with
+the updater, and merges with an expected commit SHA. A newer release updates the same PR and requires fresh checks;
+an already merged update is followed by a new PR. Repository review requirements are never bypassed.
+
+Both workflows reuse `DEPS_UPDATER_CLIENT_ID` and `DEPS_UPDATER_PRIVATE_KEY`. They run only in the upstream repository
+after these workflow files are merged to `main`. The existing publication policy applies: `main` publishes `preview`,
+and `release` publishes `latest`. Neither workflow updates running containers or promotes `main` to `release`.
+
 ### Commit Messages
 
 Use clear, descriptive commit messages that explain:

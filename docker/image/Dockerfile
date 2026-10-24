@@ -25,9 +25,11 @@ ARG DEFAULT_TZ=Europe/Berlin
 ARG USER_UID=1000
 
 # KasmVNC release assets, see https://github.com/kasmtech/KasmVNC/releases
-ARG KASMVNC_VERSION=1.5.0
-ARG KASMVNC_SHA256_AMD64=80b241de7dfe53bba2b7e1cc5ac8c5246d72271efa16be2d4f76607f30fab1c4
-ARG KASMVNC_SHA256_ARM64=fbb11589958a2acccd2d67f67944be79ac1e8e3a1d6172c0e6db6dc59e55a919
+ARG KASMVNC_VERSION=1.5.2
+ARG KASMVNC_SHA256_AMD64=6ed957163275088a5ce52b525f82f145014e3289699d576ce26745a4249407f8
+ARG KASMVNC_SHA256_ARM64=904615b506c517242f3da3ff2eacd349013fc8cdb2dc205e5e4dad4ec6f62fa9
+ARG KASMVNC_URL_AMD64=https://github.com/kasmtech/KasmVNC/releases/download/v1.5.2/kasmvncserver_debian_trixie_1.5.2_amd64.deb
+ARG KASMVNC_URL_ARM64=https://github.com/kasmtech/KasmVNC/releases/download/v1.5.2/kasmvncserver_debian_trixie_1.5.2_arm64.deb
 
 SHELL ["/bin/bash", "-euo", "pipefail", "-c"]
 
@@ -59,12 +61,11 @@ RUN <<EOF
   echo "Installing KasmVNC $KASMVNC_VERSION ($TARGETARCH)..."
   echo "#################################################"
   case "${TARGETARCH:-amd64}" in
-    amd64) kasm_arch=amd64; kasm_sha=$KASMVNC_SHA256_AMD64 ;;
-    arm64) kasm_arch=arm64; kasm_sha=$KASMVNC_SHA256_ARM64 ;;
+    amd64) kasm_url=$KASMVNC_URL_AMD64; kasm_sha=$KASMVNC_SHA256_AMD64 ;;
+    arm64) kasm_url=$KASMVNC_URL_ARM64; kasm_sha=$KASMVNC_SHA256_ARM64 ;;
     *) echo "unsupported TARGETARCH=$TARGETARCH" >&2; exit 1 ;;
   esac
-  curl -fsSL -o /tmp/kasmvnc.deb \
-    "https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_trixie_${KASMVNC_VERSION}_${kasm_arch}.deb"
+  curl -fsSL -o /tmp/kasmvnc.deb "$kasm_url"
   echo "$kasm_sha  /tmp/kasmvnc.deb" | sha256sum -c -
   apt-get install --no-install-recommends -y /tmp/kasmvnc.deb
   test -x /usr/bin/Xvnc
