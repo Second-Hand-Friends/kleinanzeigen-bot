@@ -59,11 +59,22 @@ def eligible() -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any
 
 
 @pytest.mark.parametrize("login", ["app/kleinanzeigen-bot-tu", "kleinanzeigen-bot-tu[bot]"])
+@pytest.mark.parametrize("line_ending", ["\n", "\r\n"])
 def test_accepts_reviewed_pin_update_with_successful_current_head_build(
-    eligible:tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]], login:str,
+    eligible:tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]], login:str, line_ending:str,
 ) -> None:
     eligible[0]["author"]["login"] = login
+    eligible[2][0]["patch"] = eligible[2][0]["patch"].replace("\n", line_ending)
     assert merge_kasmvnc.merge_block_reason(*eligible) is None
+
+
+@pytest.mark.parametrize("separator", ["\r", "\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"])
+def test_rejects_control_characters_hiding_extra_pin_content(
+    eligible:tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]], separator:str,
+) -> None:
+    changed = eligible[2][0]
+    changed["patch"] = changed["patch"].replace("+ARG KASMVNC_VERSION=1.6.0", f"+ARG KASMVNC_VERSION=1.6.0{separator}extra")
+    assert merge_kasmvnc.merge_block_reason(*eligible) is not None
 
 
 @pytest.mark.parametrize(("field", "value"), [

@@ -28,7 +28,8 @@ def _pins_only(files:list[dict[str, Any]]) -> bool:
         return False
     pins:dict[str, dict[str, str]] = {"+": {}, "-": {}}
     counts = {"+": 0, "-": 0}
-    for line in patch.splitlines():
+    for raw_line in patch.split("\n"):
+        line = raw_line.removesuffix("\r")
         if not line.startswith(("+", "-")):
             continue
         sign = line[0]
