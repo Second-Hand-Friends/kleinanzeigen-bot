@@ -47,6 +47,8 @@ jobs:
       with:
         client-id: ${{ vars.DEPS_UPDATER_CLIENT_ID }}
         private-key: ${{ secrets.DEPS_UPDATER_PRIVATE_KEY }}
+        permission-contents: write
+        permission-pull-requests: write
 
     - name: Merge the tested PR commit when repository rules allow it
       env:

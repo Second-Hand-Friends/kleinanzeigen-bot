@@ -24,7 +24,7 @@ pytestmark = pytest.mark.unit
 def eligible() -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     pr = {
         "number": 42,
-        "author": {"login": merge_kasmvnc.AUTHOR},
+        "author": {"is_bot": True, "login": "app/kleinanzeigen-bot-tu"},
         "headRefName": merge_kasmvnc.BRANCH,
         "headRefOid": "a" * 40,
         "baseRefName": "main",
@@ -58,7 +58,11 @@ def eligible() -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any
     return pr, runs, files
 
 
-def test_accepts_reviewed_pin_update_with_successful_current_head_build(eligible:tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]) -> None:
+@pytest.mark.parametrize("login", ["app/kleinanzeigen-bot-tu", "kleinanzeigen-bot-tu[bot]"])
+def test_accepts_reviewed_pin_update_with_successful_current_head_build(
+    eligible:tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]], login:str,
+) -> None:
+    eligible[0]["author"]["login"] = login
     assert merge_kasmvnc.merge_block_reason(*eligible) is None
 
 
@@ -88,6 +92,8 @@ def test_uses_latest_build_even_if_previous_build_succeeded(eligible:tuple[dict[
 
 @pytest.mark.parametrize(("field", "value"), [
     ("author", {"login": "someone"}),
+    ("author", {"login": "kleinanzeigen-bot-tu"}),
+    ("author", {"login": "app/someone"}),
     ("headRefName", "other"),
     ("headRefOid", "b" * 40),
     ("headRefOid", ""),

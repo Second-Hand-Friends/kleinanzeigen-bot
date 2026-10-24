@@ -13,7 +13,8 @@ from typing import Any
 REPOSITORY = "Second-Hand-Friends/kleinanzeigen-bot"
 BRANCH = "chore/update-kasmvnc"
 BASE = "main"
-AUTHOR = "app/kleinanzeigen-bot-tu"
+# GitHub CLI versions expose App authors as bot logins or app/slug.
+AUTHORS = {"kleinanzeigen-bot-tu[bot]", "app/kleinanzeigen-bot-tu"}
 DOCKERFILE = "docker/image/Dockerfile"
 _VERSION = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
 
@@ -57,7 +58,7 @@ def _pins_only(files:list[dict[str, Any]]) -> bool:
 
 def merge_block_reason(pr:dict[str, Any], runs:list[dict[str, Any]], files:list[dict[str, Any]]) -> str | None:
     """Fail closed on identity, scope, reviews, checks, and the latest PR Build."""
-    if (pr.get("author", {}).get("login") != AUTHOR or pr.get("headRefName") != BRANCH
+    if (pr.get("author", {}).get("login") not in AUTHORS or pr.get("headRefName") != BRANCH
             or pr.get("baseRefName") != BASE or pr.get("isCrossRepository") is not False or pr.get("isDraft") is not False):
         return "PR identity or branch is not eligible"
     if not _pins_only(files):
