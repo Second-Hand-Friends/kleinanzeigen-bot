@@ -1603,7 +1603,8 @@ class TestWebScrolling:
             call_count["count"] += 1
             return call_count["count"] >= 3
 
-        result:bool = await web_scraper.web_await(condition, timeout = 1.1)
+        with patch("kleinanzeigen_bot.utils.web_scraping_mixin.asyncio.sleep", new_callable = AsyncMock):
+            result:bool = await web_scraper.web_await(condition)
         assert result is True
         assert call_count["count"] >= 3
 
