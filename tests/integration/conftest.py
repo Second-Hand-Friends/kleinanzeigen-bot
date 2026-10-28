@@ -8,8 +8,6 @@ The tests only load offline HTML and emulate viewport widths via CDP, so they sh
 session and reset the per-test state instead.
 """
 
-import asyncio
-import contextlib
 import json
 import os
 import platform
@@ -22,9 +20,7 @@ import pytest_asyncio
 from nodriver import cdp
 
 from kleinanzeigen_bot.utils.web_scraping_mixin import WebScrapingMixin
-
-_BROWSER_START_ATTEMPTS = 5
-_BROWSER_START_RETRY_DELAY = 10  # seconds, as the former per-test reruns
+from tests.browser_startup import start_browser_session
 
 
 @pytest_asyncio.fixture(scope = "session", loop_scope = "session")
@@ -39,17 +35,7 @@ async def browser_session() -> AsyncIterator[WebScrapingMixin]:
         # required for Ubuntu 24.04 or newer
         web.browser_config.arguments.append("--no-sandbox")
 
-    for attempt in range(1, _BROWSER_START_ATTEMPTS + 1):
-        try:
-            await web.create_browser_session()
-            break
-        except Exception as ex:  # noqa: BLE001 - nodriver raises a bare Exception
-            if "Failed to connect to browser" not in str(ex) or attempt == _BROWSER_START_ATTEMPTS:
-                raise
-            # best effort: a failing cleanup must neither hide the connection error nor stop the retries
-            with contextlib.suppress(Exception):
-                await web.close_browser_session()
-            await asyncio.sleep(_BROWSER_START_RETRY_DELAY)
+    await start_browser_session(web)
     try:
         yield web
     finally:

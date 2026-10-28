@@ -2767,7 +2767,10 @@ class TestShippingOptionsDialog:
             mock_find.side_effect = mock_find_side_effect
 
             # Mock web_check to return True for radio button checked state
-            with patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check:
+            with (
+                patch.object(test_bot, "web_check", new_callable = AsyncMock) as mock_check,
+                patch.object(publishing_submission, "submit_and_confirm_ad", new_callable = AsyncMock, return_value = 12345),
+            ):
                 mock_check.return_value = True
 
                 # Test through the public interface by publishing an ad
