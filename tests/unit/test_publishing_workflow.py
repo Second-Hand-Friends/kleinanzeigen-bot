@@ -20,13 +20,14 @@ from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
-from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
+from kleinanzeigen_bot.model.ad_model import Ad, AdPartial, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import (
     AutoPriceReductionConfig,
     DiagnosticsConfig,
 )
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
 from kleinanzeigen_bot.publishing_workflow import SUBMISSION_MAX_RETRIES, PostPublishPersistenceError, delete_old_ad_if_needed, open_ad_for_edit
+from kleinanzeigen_bot.utils import page_scripts
 from kleinanzeigen_bot.utils.exceptions import (
     AdBatchError,
     AdFormValidationError,
@@ -36,6 +37,13 @@ from kleinanzeigen_bot.utils.exceptions import (
 )
 from kleinanzeigen_bot.utils.web_scraping_mixin import By
 from tests.conftest import build_published_ads, build_update_ad
+
+
+async def _await_condition(condition:Any, **_:Any) -> Any:
+    result = await condition()
+    if not result:
+        raise TimeoutError("confirmation not observed")
+    return result
 
 
 @pytest.fixture
@@ -1020,7 +1028,19 @@ class TestPublishAdPostSubmitUncertainty:
                 return "submit"
             if script == publishing_submission._submit_button_script("submit"):
                 return True
-            return next(scripted_responses) if scripted_responses is not None else None
+            if script == "({pageType: window.pageType, referrer: document.referrer})" or script == page_scripts.call("idless_success_page"):
+                return None
+            if script in {"document.referrer", "window.location.href", "[...document.querySelectorAll('script')].map(s => s.textContent).join('\\n')"}:
+                return next(scripted_responses) if scripted_responses is not None else None
+            return None
+
+        async def await_condition(condition:Any, **_:Any) -> Any:
+            result = await condition()
+            if not result:
+                if web_await_side_effect is not None:
+                    raise web_await_side_effect
+                raise TimeoutError("confirmation not observed")
+            return result
 
         common_patches:list[Any] = [
             patch("kleinanzeigen_bot.publishing_workflow.open_ad_for_edit", new_callable = AsyncMock),
@@ -1041,7 +1061,7 @@ class TestPublishAdPostSubmitUncertainty:
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(
                 test_bot, "web_await", new_callable = AsyncMock,
-                side_effect = [True, web_await_side_effect] if web_await_side_effect is not None else None,
+                side_effect = await_condition,
             ),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ]
@@ -1124,7 +1144,7 @@ class TestPublishAdPostSubmitUncertainty:
                 test_bot,
                 mock_page,
                 web_await_side_effect = TimeoutError("confirmation timeout"),
-                web_execute_side_effect = [stale_confirmation_url, stale_confirmation_url, "var x = 42;"],
+                web_execute_side_effect = [stale_confirmation_url, "https://www.kleinanzeigen.de/edit", stale_confirmation_url, "var x = 42;"],
                 mock_redirect_recovery = False,
             ),
             patch("kleinanzeigen_bot.publishing_persistence.persist_published_ad") as mock_persist,
@@ -1136,26 +1156,26 @@ class TestPublishAdPostSubmitUncertainty:
         assert ad_cfg_orig["id"] is None
 
     @pytest.mark.asyncio
-    async def test_publish_ad_confirmation_fallback_when_redirect_happens_after_url_poll(
+    async def test_publish_ad_retains_confirmation_when_redirect_happens_after_url_poll(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
     ) -> None:
-        """When the confirmation URL was observed by polling but the page redirected before extraction, the fallback should recover the ad ID."""
+        """Persist the ID observed during polling even if the next URL read would redirect."""
         ad_cfg, ad_cfg_orig = self._build_publish_ad_cfg(base_ad_config)
-
-        # web_await succeeds (confirmation URL was seen during polling), but the page
-        # redirects before submit_and_confirm_ad can extract the URL, causing IndexError
-        # in the extraction which falls into the except block and triggers the fallback.
+        expected_hash = AdPartial.model_validate(ad_cfg_orig).update_content_hash().content_hash
         with self._mock_post_submit_dependencies(
             test_bot, mock_page,
-            redirect_recovery_return = 55667788,
+            web_execute_side_effect = ["", "https://www.kleinanzeigen.de/p-anzeige-aufgeben-bestaetigung.html?adId=55667788"],
             include_success_mocks = True,
-        ):
+        ), patch("kleinanzeigen_bot.publishing_submission._try_recover_ad_id_from_redirect", new_callable = AsyncMock) as recovery:
             await test_bot.publish_ad("ad.yaml", ad_cfg, ad_cfg_orig, [], AdUpdateStrategy.MODIFY)
 
         assert ad_cfg_orig["id"] == 55667788
+        assert ad_cfg_orig["updated_on"]
+        assert ad_cfg_orig["content_hash"] == expected_hash
+        recovery.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_publish_ad_confirmation_fallback_from_tracking_raises_uncertain_when_not_found(
@@ -1253,7 +1273,7 @@ class TestWantedShippingSelection:
             patch.object(test_bot, "_web_find_all_once", new_callable = AsyncMock, return_value = []),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(test_bot, "web_execute", side_effect = execute_side_effect),
             patch.object(test_bot, "web_check", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
@@ -1324,7 +1344,7 @@ class TestAutoPriceReductionDispatch:
             patch.object(test_bot, "web_open", new_callable = AsyncMock),
             patch.object(test_bot, "web_select", new_callable = AsyncMock),
             patch.object(test_bot, "web_check", new_callable = AsyncMock, return_value = False),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch.object(test_bot, "web_execute", side_effect = mock_web_execute_price_reduction),
             patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = mock_response),

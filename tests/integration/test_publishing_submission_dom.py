@@ -527,3 +527,15 @@ async def test_next_step_outcome_tells_hint_from_package_page(
     """After "Nächster Schritt" the script names the no-image hint or the package page, else nothing yet."""
     await show_html(body, path)
     assert await web.web_execute(page_scripts.call("next_step_outcome")) == expected
+
+
+@pytest.mark.parametrize("marker", ["EditAdSuccess", "EditAd"])
+async def test_update_success_snapshot_in_browser(
+    web:WebScrapingMixin, show_html:ShowHtml, blank_site:str, marker:str,
+) -> None:
+    """Read the native marker and real navigation referrer together on a local page."""
+    await show_html('<a href="/done">Continue</a>', "/p-anzeige-bearbeiten.html?adId=777")
+    await web.web_execute("document.querySelector('a').click()")
+    await web.web_await(lambda: web.web_execute("window.location.pathname === '/done'"))
+    await web.web_execute(f"window.pageType = {json.dumps(marker)}")
+    assert await publishing_submission._is_update_success_page(web, root_url = blank_site, ad_id = 777) is (marker == "EditAdSuccess")

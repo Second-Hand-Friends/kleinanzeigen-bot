@@ -471,6 +471,7 @@ kleinanzeigen_bot/publishing_submission.py:
     "Press a key to continue...": "Eine Taste drücken, um fortzufahren..."
 
   submit_and_confirm_ad:
+    "Post-submit confirmation failed (%s): %s; attempting success-page and tracking recovery": "Bestätigung nach dem Absenden fehlgeschlagen (%s): %s; Wiederherstellung über Erfolgsseite und Trackingdaten wird versucht"
     "Ad form validation failed: %s": "Validierung des Anzeigenformulars fehlgeschlagen: %s"
     "Confirmation page redirected too fast; extracted ad ID %s from page tracking data": "Bestätigungsseite wurde zu schnell weitergeleitet; Anzeigen-ID %s aus Seiten-Trackingdaten extrahiert"
     "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list": "Bestätigungsseite enthielt keine Anzeigen-ID; Anzeigen-ID %s aus der Liste veröffentlichter Anzeigen wiederhergestellt"

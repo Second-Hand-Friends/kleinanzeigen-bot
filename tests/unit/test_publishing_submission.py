@@ -42,6 +42,13 @@ def _make_min_ad() -> Ad:
     })
 
 
+async def _await_condition(condition:Any, **_:Any) -> Any:
+    result = await condition()
+    if not result:
+        raise TimeoutError("confirmation not observed")
+    return result
+
+
 def _confirmation_execute(url:str) -> Callable[[str], Awaitable[Any]]:
     """Return a successful final click and the requested confirmation URL."""
     async def execute(script:str) -> Any:
@@ -232,7 +239,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock) as mock_set_title,
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
@@ -272,7 +279,7 @@ class TestSubmitAndConfirmAd:
             # (imprint, no-image hint, payment form) return None.
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [upsell_element, None, None, None]),
             patch.object(test_bot, "_web_find_once", side_effect = find_once),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
@@ -304,7 +311,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, no_image_element, None]),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock),
@@ -331,7 +338,7 @@ class TestSubmitAndConfirmAd:
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None, None, None, payment_element]),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = _confirmation_execute(confirmation_url)),
             patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock) as mock_scroll,
             patch("kleinanzeigen_bot.publishing_submission.ainput", new_callable = AsyncMock) as mock_ainput,
@@ -509,15 +516,12 @@ class TestPublishedAdsRecovery:
         """Submit recovers the ad ID after an explicit id-less success response."""
         ad = _make_min_ad()
 
-        async def await_condition(condition:Any, **_:object) -> bool:
-            return bool(await condition())
-
         with (
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(
                 test_bot,
                 "web_execute",
@@ -560,21 +564,18 @@ class TestPublishedAdsRecovery:
         ad = _make_min_ad()
         ad.id = 777
 
-        async def await_condition(condition:Any, **_:object) -> bool:
-            return bool(await condition())
-
         with (
             patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(
                 test_bot,
                 "web_execute",
                 new_callable = AsyncMock,
-                side_effect = ["", "submit", True, f"{test_bot.root_url}/done"],
+                side_effect = ["", "submit", True, f"{test_bot.root_url}/done", {"pageType": None, "referrer": ""}],
             ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
@@ -603,17 +604,17 @@ class TestPublishedAdsRecovery:
         """An update cannot recover safely if its configured ID is unexpectedly absent."""
         ad = _make_min_ad()
 
-        async def await_condition(condition:Any, **_:object) -> bool:
-            return bool(await condition())
-
         with (
             patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", "submit", True, f"{test_bot.root_url}/done"]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
+            patch.object(
+                test_bot, "web_execute", new_callable = AsyncMock,
+                side_effect = ["", "submit", True, f"{test_bot.root_url}/done", {"pageType": None, "referrer": ""}],
+            ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
                 new_callable = AsyncMock,
@@ -635,16 +636,13 @@ class TestPublishedAdsRecovery:
         """An unrecognized confirmation page retains the existing tracking fallback."""
         ad = _make_min_ad()
 
-        async def await_condition(condition:Any, **_:object) -> bool:
-            return bool(await condition())
-
         with (
             patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(
                 test_bot,
                 "web_execute",
@@ -679,17 +677,17 @@ class TestPublishedAdsRecovery:
         """An ID-less publish confirmation remains uncertain without one new exact-title ad."""
         ad = _make_min_ad()
 
-        async def await_condition(condition:Any, **_:object) -> bool:
-            return bool(await condition())
-
         with (
             patch("kleinanzeigen_bot.publishing_submission._get_form_validation_errors", new_callable = AsyncMock, return_value = []),
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
-            patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = ["", "submit", True, f"{test_bot.root_url}/done"]),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
+            patch.object(
+                test_bot, "web_execute", new_callable = AsyncMock,
+                side_effect = ["", "submit", True, f"{test_bot.root_url}/done", {"pageType": None, "referrer": ""}],
+            ),
             patch(
                 "kleinanzeigen_bot.publishing_submission._is_idless_publish_success_page",
                 new_callable = AsyncMock,
@@ -720,15 +718,12 @@ class TestPublishedAdsRecovery:
         """Submit fails closed when published-ads recovery itself raises an exception."""
         ad = _make_min_ad()
 
-        async def await_condition(condition:Any, **_:object) -> bool:
-            return bool(await condition())
-
         with (
             patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
             patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = [None] * 4),
-            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+            patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = _await_condition),
             patch.object(
                 test_bot,
                 "web_execute",
@@ -936,3 +931,100 @@ class TestConfigurablePackageSelection:
             pytest.raises(PublishSubmissionUncertainError),
         ):
             await publishing_submission._wait_for_manual_package_submission(test_bot)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("marker", "referrer", "ad_id", "expected"), [
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=777", 777, True),
+    (None, "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=777", 777, False),
+    ("EditAdSuccess", "https://[invalid/p-anzeige-bearbeiten.html?adId=777", 777, False),
+    ("EditAdSuccess", "https://other.invalid/p-anzeige-bearbeiten.html?adId=777", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/other?adId=777", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=777&adId=777", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=invalid", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=778", 777, False),
+    ("EditAdSuccess", "https://www.kleinanzeigen.de/p-anzeige-bearbeiten.html?adId=777", None, False),
+])
+async def test_update_success_requires_marker_and_matching_edit_referrer(
+    test_bot:KleinanzeigenBot, marker:str | None, referrer:str, ad_id:int | None, expected:bool,
+) -> None:
+    with patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = {"pageType": marker, "referrer": referrer}):
+        assert await publishing_submission._is_update_success_page(test_bot, root_url = test_bot.root_url, ad_id = ad_id) is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure_stage", [None, "prompts", "poll"])
+@pytest.mark.parametrize("evidence", ["native", "dom"])
+async def test_confirmed_update_survives_post_submit_protocol_failure(
+    test_bot:KleinanzeigenBot, failure_stage:str | None, evidence:str,
+) -> None:
+    ad = _make_min_ad()
+    ad.id = 777
+    referrer = f"{test_bot.root_url}/p-anzeige-bearbeiten.html?adId=777"
+
+    async def execute(script:str) -> Any:
+        if script == "document.referrer":
+            return referrer  # Unchanged referrer is valid only with fresh success evidence.
+        if script == "({pageType: window.pageType, referrer: document.referrer})":
+            return {"pageType": "EditAdSuccess" if evidence == "native" else None, "referrer": referrer}
+        if script == page_scripts.call("idless_success_page"):
+            return evidence == "dom"
+        if script == "window.location.href":
+            return f"{test_bot.root_url}/done"
+        return None
+
+    async def await_condition(condition:Any, **kwargs:Any) -> Any:
+        if failure_stage == "poll":
+            raise ProtocolException(MagicMock(), "navigation interrupted", 0)
+        return await _await_condition(condition, **kwargs)
+
+    with (
+        patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+        patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+        patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = execute),
+        patch.object(test_bot, "web_await", new_callable = AsyncMock, side_effect = await_condition),
+        patch.object(publishing_submission, "_click_submit_button", new_callable = AsyncMock) as submit,
+        patch.object(publishing_submission, "_get_form_validation_errors", new_callable = AsyncMock, return_value = []),
+        patch.object(publishing_submission, "_handle_post_submit_prompts", new_callable = AsyncMock,
+                     side_effect = ProtocolException(MagicMock(), "navigation interrupted", 0) if failure_stage == "prompts" else None),
+        patch.object(publishing_submission, "_try_recover_ad_id_from_redirect", new_callable = AsyncMock) as tracking,
+    ):
+        assert await publishing_submission.submit_and_confirm_ad(
+            test_bot, "test.yaml", ad, AdUpdateStrategy.MODIFY,
+            captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+        ) == 777
+    submit.assert_awaited_once()
+    tracking.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_replace_does_not_adopt_old_id_from_update_success(test_bot:KleinanzeigenBot) -> None:
+    ad = _make_min_ad()
+    ad.id = 777
+    with (
+        patch("kleinanzeigen_bot.captcha_flow.check_and_wait_for_captcha", new_callable = AsyncMock),
+        patch.object(test_bot, "web_set_input_value", new_callable = AsyncMock),
+        patch.object(
+            test_bot, "web_execute", new_callable = AsyncMock,
+            return_value = {"pageType": "EditAdSuccess", "referrer": f"{test_bot.root_url}/p-anzeige-bearbeiten.html?adId=777"},
+        ),
+        patch.object(publishing_submission, "_click_submit_button", new_callable = AsyncMock) as submit,
+        patch.object(publishing_submission, "_get_form_validation_errors", new_callable = AsyncMock, return_value = []),
+        patch.object(publishing_submission, "_handle_post_submit_prompts", new_callable = AsyncMock, side_effect = TimeoutError("lost response")),
+        patch.object(publishing_submission, "_try_recover_ad_id_from_redirect", new_callable = AsyncMock, return_value = None),
+        pytest.raises(PublishSubmissionUncertainError),
+    ):
+        await publishing_submission.submit_and_confirm_ad(
+            test_bot, "test.yaml", ad, AdUpdateStrategy.REPLACE,
+            captcha_config = test_bot.config.captcha, root_url = test_bot.root_url,
+        )
+    submit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", [TimeoutError("navigation"), ProtocolException(MagicMock(), "navigation", 0)])
+async def test_update_success_lookup_failure_is_not_evidence(test_bot:KleinanzeigenBot, failure:Exception) -> None:
+    with patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = failure):
+        assert await publishing_submission._is_update_success_page(test_bot, root_url = test_bot.root_url, ad_id = 777) is False

@@ -39,6 +39,34 @@ async def _is_idless_publish_success_page(web:WebScrapingMixin) -> bool:
     return result is True
 
 
+async def _is_update_success_page(web:WebScrapingMixin, *, root_url:str, ad_id:int | None) -> bool:
+    """Bind the native update success marker to the submitted ad."""
+    if ad_id is None:
+        return False
+    try:
+        snapshot = await web.web_execute("({pageType: window.pageType, referrer: document.referrer})")
+    except (TimeoutError, ProtocolException):
+        return False
+    if not isinstance(snapshot, dict) or snapshot.get("pageType") != "EditAdSuccess":
+        return False
+    if not isinstance(snapshot.get("referrer"), str):
+        return False
+    try:
+        referrer = urllib_parse.urlparse(snapshot["referrer"])
+        root = urllib_parse.urlparse(root_url)
+        ids = urllib_parse.parse_qs(referrer.query, keep_blank_values = True).get("adId", [])
+        return (
+            (referrer.scheme, referrer.netloc) == (root.scheme, root.netloc)
+            and referrer.path == "/p-anzeige-bearbeiten.html"
+            and len(ids) == 1
+            and ids[0].isascii()
+            and ids[0].isdecimal()
+            and int(ids[0]) == ad_id
+        )
+    except ValueError:
+        return False
+
+
 async def _try_recover_ad_id_from_published_ads(
     web:WebScrapingMixin,
     *,
@@ -425,6 +453,12 @@ async def submit_and_confirm_ad(
     ad_id:int | None = None
     idless_success_detected = False
     validation_errors:list[str] = []
+
+    async def _check_idless_success() -> bool:
+        if mode == AdUpdateStrategy.MODIFY and await _is_update_success_page(web, root_url = root_url, ad_id = ad_cfg.id):
+            return True
+        return await _is_idless_publish_success_page(web)
+
     try:
         validation_errors = await _get_form_validation_errors(web)
         if validation_errors:
@@ -436,11 +470,13 @@ async def submit_and_confirm_ad(
 
         async def _check_confirmation_state() -> bool:
             """Stop polling on confirmation or explicit form rejection."""
-            nonlocal idless_success_detected, validation_errors
+            nonlocal ad_id, idless_success_detected, validation_errors
             url = str(await web.web_execute("window.location.href"))
             if "p-anzeige-aufgeben-bestaetigung.html?adId=" in url:
+                query = urllib_parse.parse_qs(urllib_parse.urlparse(url).query)
+                ad_id = int(query.get("adId", [])[0])
                 return True
-            if await _is_idless_publish_success_page(web):
+            if await _check_idless_success():
                 idless_success_detected = True
                 return True
             validation_errors = await _get_form_validation_errors(web)
@@ -485,21 +521,18 @@ async def submit_and_confirm_ad(
                     "Confirmation page exposed no ad ID; recovered ad ID %s from the published ads list",
                     ad_id,
                 )
-        else:
-            # Use the live URL because the page object URL may be stale after redirects.
-            current_url = str(await web.web_execute("window.location.href"))
-            current_url_query_params = urllib_parse.parse_qs(urllib_parse.urlparse(current_url).query)
-            ad_id = int(current_url_query_params.get("adId", [])[0])
-
     except (TimeoutError, ProtocolException, IndexError, ValueError, TypeError) as ex:
-        # The confirmation page may have auto-redirected before we could poll it,
-        # or the URL was redirected between polling and extraction (race condition).
-        # Try to recover the ad ID from tracking data on the current page.
-        LOG.debug("Confirmation URL polling or extraction failed (%s), attempting tracking data fallback...", type(ex).__name__)
+        LOG.debug(
+            "Post-submit confirmation failed (%s): %s; attempting success-page and tracking recovery",
+            type(ex).__name__, ex, exc_info = True,
+        )
         recovered_from_tracking = False
         try:
-            ad_id = await _try_recover_ad_id_from_redirect(web, pre_submit_referrer = pre_submit_referrer)
-            recovered_from_tracking = ad_id is not None
+            if mode == AdUpdateStrategy.MODIFY and await _check_idless_success():
+                ad_id = ad_cfg.id
+            if ad_id is None:
+                ad_id = await _try_recover_ad_id_from_redirect(web, pre_submit_referrer = pre_submit_referrer)
+                recovered_from_tracking = ad_id is not None
         except Exception as fallback_ex:  # noqa: BLE001
             LOG.debug("Tracking data fallback failed: %s", fallback_ex)
 
