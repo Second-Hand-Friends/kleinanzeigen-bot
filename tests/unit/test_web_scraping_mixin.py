@@ -1801,16 +1801,14 @@ class TestWebScrolling:
 
         async def ticker() -> None:
             while True:
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(0)
                 tick_count[0] += 1
 
-        async def condition() -> bool:
-            raise ProtocolException({"message": "Method not found", "code": -32601})
+        condition = AsyncMock(side_effect = [ProtocolException({"message": "Method not found", "code": -32601}), True])
 
         task = asyncio.create_task(ticker())
         try:
-            with pytest.raises(TimeoutError):
-                await web_scraper.web_await(condition, timeout = 0.2, apply_multiplier = False)
+            assert await web_scraper.web_await(condition) is True
         finally:
             task.cancel()
             task_was_cancelled = False
