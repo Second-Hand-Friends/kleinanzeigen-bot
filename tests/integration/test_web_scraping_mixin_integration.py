@@ -10,6 +10,7 @@ from nodriver import cdp
 from kleinanzeigen_bot.login_flow import check_sms_verification, has_logged_in_marker
 from kleinanzeigen_bot.utils.misc import ensure
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, WebScrapingMixin
+from tests.browser_startup import start_browser_session
 
 # the browser is shared across the session, see conftest.py
 pytestmark = [pytest.mark.slow, pytest.mark.itest, pytest.mark.asyncio(loop_scope = "session")]
@@ -93,7 +94,7 @@ async def test_closing_a_session_persists_cookies_for_the_next_start(blank_site:
         return session
 
     first = new_session()
-    await first.create_browser_session()
+    await start_browser_session(first)
     try:
         await first.web_open(blank_site)
         await first.page.send(cdp.network.set_cookie("session", "kept", url = blank_site, expires = cdp.network.TimeSinceEpoch(4_000_000_000)))
