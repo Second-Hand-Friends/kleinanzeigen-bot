@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from kleinanzeigen_bot import LOG, publishing_submission
+from kleinanzeigen_bot import LOG, publishing_submission, resources
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
@@ -43,6 +43,7 @@ from kleinanzeigen_bot.publishing_form import (
     set_special_attributes,
     upload_images,
 )
+from kleinanzeigen_bot.utils import dicts
 from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError, PageScriptError
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Element
 
@@ -942,6 +943,45 @@ class TestCategorySuggestionPicker:
 
 class TestRedesignedCategoryDialog:
     """Regression coverage for the visible-label category dialog."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("category", "expected_label"), [
+        ("161/245/other", "Weiteres Foto"),
+        ("161/245/equipment", "Zubehör"),
+    ])
+    async def test_bundled_category_selects_unique_dialog_leaf(
+        self,
+        test_bot:KleinanzeigenBot,
+        category:str,
+        expected_label:str,
+    ) -> None:
+        categories = dicts.load_dict_from_module(resources, "categories.yaml")
+        categories.update(dicts.load_dict_from_module(resources, "categories_old.yaml"))
+        candidates = _category_dialog_label_options(category, categories)[-1]
+        buttons = []
+        for label in ["Kamera", "Objektiv", "Zubehör", "Kamera & Zubehör", "Weiteres Foto"]:
+            button = MagicMock()
+            button.visible_text = label
+            button.click = AsyncMock()
+            buttons.append(button)
+
+        async def visible_text(button:Element) -> str:
+            return str(button.visible_text)
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = buttons),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            selected = await _click_category_dialog_level(test_bot, "dialog[open]", category, 2, candidates)
+
+        assert selected == expected_label
+        for button in buttons:
+            if button.visible_text == expected_label:
+                button.click.assert_awaited_once()
+            else:
+                button.click.assert_not_awaited()
 
     def test_category_path_label_options_include_specific_and_generic_names(self) -> None:
         categories = {
