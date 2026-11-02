@@ -6,8 +6,8 @@
 from pathlib import Path
 from typing import Any, Protocol
 
+from . import ad_drafts, extract, published_ads
 from . import download_selection as _download_selection
-from . import extract, published_ads
 from .model.ad_model import Ad
 from .model.config_model import DEFAULT_DOWNLOAD_DIR, Config
 from .published_ads import PublishedAd
@@ -257,7 +257,7 @@ async def download_ads(
 ) -> None:
     """
     Determines which download mode was chosen with the arguments, and calls the specified download routine.
-    This downloads either all, only unsaved(new), or specific ads given by ID.
+    This downloads either all, only unsaved(new), or specific ads given by ID, or imports online drafts.
     """
     # Normalize comma-separated keyword selectors; set deduplication collapses "new,new" → {"new"}
     selector_tokens = {s.strip() for s in ads_selector.split(",")}
@@ -270,8 +270,16 @@ async def download_ads(
 
     # Validate selector before fetching metadata
     is_numeric_selector = _download_selection.is_numeric_ids_selector(effective_selector)
-    if effective_selector not in {"all", "new"} and not is_numeric_selector:
-        LOG.error("Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.", effective_selector)
+    if effective_selector not in {"all", "new", "drafts"} and not is_numeric_selector:
+        LOG.error("Invalid ads selector: %s. Use 'all', 'new', 'drafts', or comma-separated numeric IDs.", effective_selector)
+        return
+
+    if effective_selector == "drafts":
+        # Drafts are not part of the published ads metadata, so skip fetching it.
+        drafts_dir = resolve_download_dir(config, config_file_path, workspace) / ad_drafts.DRAFTS_DIR_NAME
+        _xdg_paths.ensure_directory(drafts_dir, "downloaded drafts directory")
+        LOG.info("Drafts download directory: %s", drafts_dir)
+        await ad_drafts.download_ad_drafts(web, drafts_dir, root_url)
         return
 
     # Fetch published ads once and build a lookup dict

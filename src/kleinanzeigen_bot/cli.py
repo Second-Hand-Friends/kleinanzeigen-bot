@@ -178,10 +178,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
                     * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch
                       fällige Anzeigen zu veröffentlichen
-              --ads=all|new|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
+              --ads=all|new|drafts|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
                     Mögliche Werte:
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
                     * new: Lädt Anzeigen aus Ihrem Profil herunter, die lokal noch nicht gespeichert sind
+                    * drafts: Speichert Online-Entwürfe (z. B. aus der App) als *.yaml.draft-Dateien unter "drafts/" im Download-Verzeichnis
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs zum Herunterladen an, z. B. "--ads=1,2,3"
               --ads=all|changed|<id(s)> (update) - Gibt an, welche Anzeigen aktualisiert werden sollen (STANDARD: changed)
                     Mögliche Werte:
@@ -248,10 +249,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * changed: only publish ads that have been modified since last publication
                 * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
                 * Combinations: You can combine multiple selectors with commas, e.g. "--ads=changed,due" to publish both changed and due ads
-          --ads=all|new|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
+          --ads=all|new|drafts|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
                 Possible values:
                 * all: downloads all ads from your profile
                 * new: downloads ads from your profile that are not locally saved yet
+                * drafts: saves online drafts (e.g. from the mobile app) as *.yaml.draft files below "drafts/" in the download directory
                 * <id(s)>: provide one or several ads by ID to download, like e.g. "--ads=1,2,3"
           --ads=all|changed|<id(s)> (update) - specifies which ads to update (DEFAULT: changed)
                 Possible values:
