@@ -22,7 +22,17 @@ kleinanzeigen-bot download --ads=new
 
 # Download specific ads by ID
 kleinanzeigen-bot download --ads=1,2,3
+
+# Import online drafts (e.g. started in the mobile app)
+kleinanzeigen-bot download --ads=drafts
 ```
+
+### Importing online drafts
+
+`download --ads=drafts` saves each draft from your account to `drafts/<draft-id>/ad_<draft-id>.yaml.draft` inside the download directory, together with its photos.
+Drafts are often incomplete (for example, without a price), so the `.yaml.draft` extension keeps them out of the default `ad_files` patterns and they are saved with `active: false`.
+To publish a draft, complete the file, rename it to `.yaml`, set `active: true` and run `publish`.
+A draft that was imported before is skipped, so your local changes are kept. The draft itself stays in your online account.
 
 For full JSON schema with IDE autocompletion support, see:
 
