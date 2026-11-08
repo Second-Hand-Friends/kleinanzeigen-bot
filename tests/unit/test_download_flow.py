@@ -217,6 +217,28 @@ class TestDownloadFlow:
         mock_fetch_published_ads.assert_awaited_once_with(test_bot, test_bot.root_url, strict = False)
 
     @pytest.mark.asyncio
+    async def test_download_ads_drafts_selector_imports_drafts_below_download_dir(self, test_bot:KleinanzeigenBot, tmp_path:Path) -> None:
+        test_bot.workspace = xdg_paths.Workspace.for_config(tmp_path / "config.yaml", "kleinanzeigen-bot")
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock) as mock_fetch_published_ads,
+            patch("kleinanzeigen_bot.ad_drafts.download_ad_drafts", new_callable = AsyncMock) as mock_download_ad_drafts,
+        ):
+            await download_flow.download_ads(
+                web = test_bot, config = test_bot.config,
+                config_file_path = test_bot.config_file_path,
+                workspace = test_bot.workspace,
+                ads_selector = "drafts",
+                load_ads_func = test_bot.load_ads,
+                root_url = test_bot.root_url,
+            )
+
+        drafts_dir = test_bot.workspace.download_dir / "drafts"
+        mock_download_ad_drafts.assert_awaited_once_with(test_bot, drafts_dir, test_bot.root_url)
+        mock_fetch_published_ads.assert_not_called()
+        assert drafts_dir.is_dir()
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "scenario",
         [

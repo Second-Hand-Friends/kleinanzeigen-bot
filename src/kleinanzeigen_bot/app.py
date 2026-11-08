@@ -415,9 +415,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
 
     async def _handle_download(self) -> None:
         # ad IDs depends on selector — validate before bootstrap/config loading
-        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new"}):
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all", "new", "drafts"}):
             if self._ads_selector_explicit:
-                LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new) or numeric IDs.', self.ads_selector)
+                LOG.error('Invalid --ads selector: "%s". Valid values: comma-separated keywords (all, new, drafts) or numeric IDs.', self.ads_selector)
                 sys.exit(2)
             self.ads_selector = "new"
         self._bootstrap_runtime()

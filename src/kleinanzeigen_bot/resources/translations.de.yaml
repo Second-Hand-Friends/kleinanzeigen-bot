@@ -127,7 +127,7 @@ kleinanzeigen_bot/app.py:
     "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
 
   _handle_download:
-    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new) oder numerische IDs."
+    "Invalid --ads selector: \"%s\". Valid values: comma-separated keywords (all, new, drafts) or numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: kommagetrennte Schlüsselwörter (all, new, drafts) oder numerische IDs."
 
   _handle_status:
     "No ad files found.": "Keine Anzeigendateien gefunden."
@@ -565,14 +565,41 @@ kleinanzeigen_bot/reserve_flow.py:
     " -> FAILED: Could not find '%s' button for ad ID %s": " -> FEHLER: '%s'-Button für Anzeigen-ID %s nicht gefunden"
 
 #################################################
+kleinanzeigen_bot/ad_drafts.py:
+#################################################
+  fetch_ad_drafts:
+    "Could not determine the account id required to load online drafts.": "Die zum Laden der Online-Entwürfe benötigte Konto-ID konnte nicht ermittelt werden."
+    "Unexpected response when loading online drafts.": "Unerwartete Antwort beim Laden der Online-Entwürfe."
+
+  draft_to_ad_config:
+    "Draft %s: skipping unknown shipping option %s.": "Entwurf %s: Überspringe unbekannte Versandoption %s."
+
+  _download_image_sync:
+    "Failed to download image %s: %s": "Fehler beim Herunterladen des Bildes %s: %s"
+
+  _save_draft:
+    "Saved draft '%s' with %s to: %s": "Entwurf '%s' mit %s gespeichert unter: %s"
+    "image": "Bild"
+
+  download_ad_drafts:
+    "Loading online drafts...": "Lade Online-Entwürfe..."
+    "Loading online drafts failed: %s": "Laden der Online-Entwürfe fehlgeschlagen: %s"
+    "Online drafts found: %d": "Gefundene Online-Entwürfe: %d"
+    "Draft %s was already imported to %s. Skipping it to keep local changes.": "Entwurf %s wurde bereits nach %s importiert. Überspringe ihn, um lokale Änderungen zu erhalten."
+    "Draft %s was not saved because an image could not be downloaded. It will be retried on the next run.": "Entwurf %s wurde nicht gespeichert, weil ein Bild nicht heruntergeladen werden konnte. Er wird beim nächsten Lauf erneut versucht."
+    "Failed to save draft %s. Skipping it.": "Fehler beim Speichern des Entwurfs %s. Überspringe ihn."
+    "DONE: saved %d new drafts. Complete them, rename them to *.yaml and set 'active: true' to publish them.": "FERTIG: %d neue Entwürfe gespeichert. Vervollständige sie, benenne sie in *.yaml um und setze 'active: true', um sie zu veröffentlichen."
+
+#################################################
 kleinanzeigen_bot/download_flow.py:
 #################################################
   download_ads:
     "Ads download directory: %s": "Anzeigen-Download-Verzeichnis: %s"
+    "Drafts download directory: %s": "Entwürfe-Download-Verzeichnis: %s"
     "Scanning ad overview for navigation URLs...": "Suche Navigations-URLs in Anzeigenübersicht..."
     "Found %s.": "%s gefunden."
     "ad URL": "Anzeigen-URL"
-    "Invalid ads selector: %s. Use 'all', 'new', or comma-separated numeric IDs.": "Ungültiger Anzeigen-Selektor: %s. Verwende 'all', 'new', oder kommagetrennte numerische IDs."
+    "Invalid ads selector: %s. Use 'all', 'new', 'drafts', or comma-separated numeric IDs.": "Ungültiger Anzeigen-Selektor: %s. Verwende 'all', 'new', 'drafts', oder kommagetrennte numerische IDs."
 
   _fetch_published_ads_by_id:
     "Fetching ad metadata (status, expiry dates)...": "Lade Anzeigen-Metadaten (Status, Ablaufdaten)..."
