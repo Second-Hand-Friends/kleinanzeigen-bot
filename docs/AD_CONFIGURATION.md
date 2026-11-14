@@ -117,6 +117,8 @@ category: 161/278
 category: 161/227/playstation/playstation_4
 ```
 
+While publishing, the bot reads the current category names from Kleinanzeigen and selects them by ID. A category that Kleinanzeigen renamed therefore keeps working as long as its ID stays valid; the names in `categories.yaml` only serve as convenient aliases.
+
 ### Price and Price Type
 
 ```yaml

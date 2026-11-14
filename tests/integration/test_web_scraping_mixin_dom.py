@@ -45,7 +45,7 @@ async def test_category_choice_label_skips_sr_only_and_decorative_parts(fast_web
     assert label == "Auto, Rad & Boot"
 
 
-async def test_category_picker_attributes_decode_the_sites_devalue_response(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
+async def test_category_tree_action_decodes_the_sites_devalue_response(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """#1388: the picker action answers with a flat devalue array whose numbers are indices."""
     await show_html("<p>form</p>")
     flat = [[1], {"attributeId": 2, "required": 3, "localizedOptions": 4}, "pc_videospiele.art", True, [5, 8],
@@ -53,13 +53,16 @@ async def test_category_picker_attributes_decode_the_sites_devalue_response(fast
     await fast_web.web_execute(
         f"globalThis.fetch = async () => new Response({json.dumps(json.dumps(flat))}, {{status: 200}}); true"
     )
-    result = await fast_web.web_execute(page_scripts.call("category_picker_attributes", "getPickerAttributes", {"categoryId": 227}))
+    result = await fast_web.web_execute(page_scripts.call("category_tree_action", "getPickerAttributes", {"categoryId": 227}))
     assert result == {
         "statusCode": 200,
-        "attributes": [{
+        "data": [{
             "attributeId": "pc_videospiele.art",
             "required": True,
-            "options": [{"value": "playstation", "label": "PlayStation"}, {"value": "xbox", "label": "Xbox"}],
+            "localizedOptions": [
+                {"value": "playstation", "localizedValue": "PlayStation"},
+                {"value": "xbox", "localizedValue": "Xbox"},
+            ],
         }],
     }
 

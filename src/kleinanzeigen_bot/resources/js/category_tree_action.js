@@ -6,12 +6,12 @@
 
 (
   /**
-   * Read the picker attributes of a category with the page's own category tree actions.
+   * Call one of the page's own category tree actions and decode its answer.
    *
    * The actions answer with a devalue document: a flat array whose first entry is the root and
    * whose numbers are indices into that array.
    *
-   * @param {"getPickerAttributes" | "getDependentPickerAttributes"} action
+   * @param {"getTree" | "getPickerAttributes" | "getDependentPickerAttributes"} action
    * @param {Record<string, string | number>} body
    */
   async (action, body) => {
@@ -20,7 +20,7 @@
       headers: { "content-type": "application/json" },
       body: globalThis.JSON.stringify(body),
     });
-    if (!response.ok) return { statusCode: response.status, attributes: [] };
+    if (!response.ok) return { statusCode: response.status, data: null };
 
     /** @type {unknown[]} */
     const flat = globalThis.JSON.parse(await response.text());
@@ -48,18 +48,6 @@
       return record;
     };
 
-    const decoded = hydrate(0);
-    const attributes = globalThis.Array.isArray(decoded) ? decoded : [];
-    return {
-      statusCode: response.status,
-      attributes: attributes.map((/** @type {any} */ attribute) => ({
-        attributeId: attribute.attributeId,
-        required: attribute.required === true,
-        options: (attribute.localizedOptions ?? []).map((/** @type {any} */ option) => ({
-          value: option.value,
-          label: option.localizedValue,
-        })),
-      })),
-    };
+    return { statusCode: response.status, data: hydrate(0) };
   }
 );
