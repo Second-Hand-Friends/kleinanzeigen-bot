@@ -246,7 +246,8 @@ async def _set_category_in_dialog(
     if not isinstance(categories, Mapping):
         categories = {}
     label_options = _category_dialog_label_options(category, categories, product_title = product_title)
-    # The site's own labels win over the bundled ones, which go stale when Kleinanzeigen renames a category.
+    # The site's own labels win; the bundled names are only the fallback when the site data is missing,
+    # because they go stale whenever Kleinanzeigen renames a category.
     for depth, site_label in (await category_picker.category_picker_labels(web, category)).items():
         if depth < len(label_options):
             label_options[depth] = [site_label]

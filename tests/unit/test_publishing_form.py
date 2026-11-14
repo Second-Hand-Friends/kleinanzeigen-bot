@@ -1009,6 +1009,33 @@ class TestRedesignedCategoryDialog:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(("site_labels", "expected"), [
+        pytest.param({1: "Smartphones"}, ["Smartphones"], id = "site-label-wins-over-stale-yaml-name"),
+        pytest.param({}, ["Handy & Telefon"], id = "yaml-label-without-site-data"),
+    ])
+    async def test_category_dialog_uses_yaml_labels_only_without_site_labels(
+        self, test_bot:KleinanzeigenBot, site_labels:dict[int, str], expected:list[str],
+    ) -> None:
+        test_bot.category_labels = {"Elektronik": "161", "Elektronik > Handy & Telefon": "161/173"}
+        seen:list[list[str]] = []
+
+        async def click_level(_web:Any, _selector:str, _category:str, _depth:int, candidates:list[str]) -> str:
+            seen.append(candidates)
+            return candidates[0]
+
+        with (
+            patch("kleinanzeigen_bot.category_picker.category_picker_labels", new_callable = AsyncMock, return_value = site_labels),
+            patch("kleinanzeigen_bot.category_picker.dependent_picker_options", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.publishing_form._click_category_dialog_level", side_effect = click_level),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
+            pytest.raises(CategoryResolutionError),
+        ):
+            await _set_category_in_dialog(test_bot, category = "161/173", dialog_selector = "dialog[open]")
+
+        assert seen[1] == expected
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_category_dialog_names_values_when_site_asks_for_one_more_level(self, test_bot:KleinanzeigenBot) -> None:
         """#1388: a console now opens a further level; the apply button stays disabled until it is chosen."""
         test_bot.category_labels = {"Elektronik": "161", "Elektronik > Videospiele": "161/227"}
@@ -1084,6 +1111,8 @@ class TestRedesignedCategoryDialog:
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
             patch.object(test_bot, "web_apply", new_callable = AsyncMock, return_value = ""),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.category_picker.category_picker_labels", new_callable = AsyncMock, return_value = {}),
+            patch("kleinanzeigen_bot.category_picker.dependent_picker_options", new_callable = AsyncMock, return_value = []),
             pytest.raises(CategoryResolutionError, match = "did not select the requested leaf"),
         ):
             await _set_category_in_dialog(test_bot, category = "17", dialog_selector = "dialog[open]")
