@@ -286,13 +286,15 @@ async def _set_category_in_dialog(
 async def _resolve_category_text(web:WebScrapingMixin, category:str) -> str:
     """Resolve a category written as names to its ID path using the site's own category data.
 
-    Falls back to the parent alias of the bundled names (the former behavior of ad loading) and finally
-    returns the text unchanged, which ``set_category`` rejects as an unknown alias.
+    If the names are unknown, it warns with the offered values and falls back to the parent alias of the bundled names
+    (the former behavior of ad loading); without such an alias the lookup error is raised. Without site data the text is
+    returned unchanged, which ``set_category`` rejects as an unknown alias.
     """
+    lookup_error:CategoryResolutionError | None = None
     try:
         resolved = await category_picker.resolve_category_text(web, category)
     except CategoryResolutionError as error:
-        LOG.debug("Category '%s' could not be resolved from the site's category data: %s", category, error)
+        lookup_error = error
         resolved = None
     if resolved:
         LOG.info("Category [%s] resolved to ID [%s]. Use the ID in the ad file to skip this lookup.", category, resolved)
@@ -301,8 +303,12 @@ async def _resolve_category_text(web:WebScrapingMixin, category:str) -> str:
     categories = getattr(web, "categories", {})
     parent = category.rpartition(">")[0].strip() if ">" in category else ""
     if isinstance(categories, Mapping) and parent and (parent_id := categories.get(parent)):
+        if lookup_error is not None:
+            LOG.warning("Category [%s] could not be resolved from the site: %s", category, lookup_error)
         LOG.warning("Category [%s] unknown. Using category [%s] with ID [%s] instead.", category, parent, parent_id)
         return str(parent_id)
+    if lookup_error is not None:
+        raise lookup_error
     return category
 
 

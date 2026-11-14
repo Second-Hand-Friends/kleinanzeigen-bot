@@ -661,12 +661,12 @@ class TestCategoryProbeBehavior:
             await set_category(test_bot, category = "Elektronik > Smartphones > Andere Marke", ad_file = "ad.yaml")
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("lookup", "expected"), [
-        pytest.param(None, "123", id = "no-site-data"),
-        pytest.param(CategoryResolutionError("unknown name"), "123", id = "unknown-name"),
+    @pytest.mark.parametrize("lookup", [
+        pytest.param(None, id = "no-site-data"),
+        pytest.param(CategoryResolutionError("Offered values: Smartphones, Videospiele"), id = "unknown-name"),
     ])
     async def test_text_category_falls_back_to_the_parent_alias(
-        self, test_bot:KleinanzeigenBot, lookup:Any, expected:str,
+        self, test_bot:KleinanzeigenBot, lookup:Any, caplog:pytest.LogCaptureFixture,
     ) -> None:
         test_bot.categories = {"Garten": "123"}
         mock = AsyncMock(side_effect = lookup) if isinstance(lookup, Exception) else AsyncMock(return_value = lookup)
@@ -677,10 +677,24 @@ class TestCategoryProbeBehavior:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            pytest.raises(TimeoutError, match = "stop here"),
+            caplog.at_level(logging.WARNING),
+            pytest.raises(TimeoutError, match = "stop here"),  # reached the form flow, i.e. the parent alias was accepted
         ):
             await set_category(test_bot, category = "Garten > Blumen", ad_file = "ad.yaml")
-        assert expected == "123"  # reached the form flow, i.e. the parent alias was accepted
+        assert "Using category [Garten] with ID [123]" in caplog.text
+        assert ("Offered values: Smartphones, Videospiele" in caplog.text) is isinstance(lookup, Exception)
+
+    @pytest.mark.asyncio
+    async def test_text_category_without_parent_alias_reports_the_offered_values(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch(
+                "kleinanzeigen_bot.category_picker.resolve_category_text",
+                new_callable = AsyncMock,
+                side_effect = CategoryResolutionError("Offered values: Smartphones, Videospiele"),
+            ),
+            pytest.raises(CategoryResolutionError, match = "Offered values"),
+        ):
+            await set_category(test_bot, category = "Elektronik > Dreamcast", ad_file = "ad.yaml")
 
     @pytest.mark.asyncio
     async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
