@@ -139,25 +139,6 @@ def _category_dialog_label_options(
     return [sorted(labels) for labels in options]
 
 
-def _category_label_tokens(label:str) -> tuple[str, ...]:
-    """Normalize category labels for matching UI wording and punctuation changes."""
-    replacements:dict[str, str | int | None] = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
-    normalized = label.casefold().translate(str.maketrans(replacements))
-    return tuple(word for word in re.findall(r"[a-z0-9]+", normalized) if word != "und")
-
-
-def _category_label_match_score(label:str, candidate:str) -> int:
-    label_tokens = _category_label_tokens(label)
-    candidate_tokens = _category_label_tokens(candidate)
-    if not label_tokens or not candidate_tokens:
-        return 0
-    if label_tokens == candidate_tokens:
-        return 3
-    if set(candidate_tokens).issubset(label_tokens):
-        return 2
-    return 0
-
-
 async def _probe_category_dialog(web:WebScrapingMixin) -> str | None:
     """Return the selector for the redesigned category dialog, if it is open."""
     for dialog_selector in _OPEN_DIALOG_SELECTORS:
@@ -199,7 +180,7 @@ async def _click_category_dialog_level(
             label = await _category_choice_label(web, button)
             if label:
                 score = max(
-                    (_category_label_match_score(label, candidate) for candidate in label_candidates),
+                    (category_picker.category_label_match_score(label, candidate) for candidate in label_candidates),
                     default = 0,
                 )
                 choices.append((button, label, score))
@@ -210,7 +191,7 @@ async def _click_category_dialog_level(
         depth == 0
         and len(offered) == 1
         and offered[0][2] == 0
-        and _category_label_tokens(offered[0][1]) in {("alle", "kategorien"), ("all", "categories")}
+        and category_picker.category_label_tokens(offered[0][1]) in {("alle", "kategorien"), ("all", "categories")}
     ):
         # Some sessions initially show only a generic entry point. Open it
         # once, then resolve the requested root against the newly visible list.
@@ -302,6 +283,35 @@ async def _set_category_in_dialog(
         raise TimeoutError(_("Category dialog remained open after applying '%s'.") % category)
 
 
+async def _resolve_category_text(web:WebScrapingMixin, category:str) -> str:
+    """Resolve a category written as names to its ID path using the site's own category data.
+
+    If the names are unknown, it warns with the offered values and falls back to the parent alias of the bundled names
+    (the former behavior of ad loading); without such an alias the lookup error is raised. Without site data the text is
+    returned unchanged, which ``set_category`` rejects as an unknown alias.
+    """
+    lookup_error:CategoryResolutionError | None = None
+    try:
+        resolved = await category_picker.resolve_category_text(web, category)
+    except CategoryResolutionError as error:
+        lookup_error = error
+        resolved = None
+    if resolved:
+        LOG.info("Category [%s] resolved to ID [%s]. Use the ID in the ad file to skip this lookup.", category, resolved)
+        return resolved
+
+    categories = getattr(web, "categories", {})
+    parent = category.rpartition(">")[0].strip() if ">" in category else ""
+    if isinstance(categories, Mapping) and parent and (parent_id := categories.get(parent)):
+        if lookup_error is not None:
+            LOG.warning("Category [%s] could not be resolved from the site: %s", category, lookup_error)
+        LOG.warning("Category [%s] unknown. Using category [%s] with ID [%s] instead.", category, parent, parent_id)
+        return str(parent_id)
+    if lookup_error is not None:
+        raise lookup_error
+    return category
+
+
 async def set_category(
     web:WebScrapingMixin,
     *,
@@ -316,6 +326,9 @@ async def set_category(
     """
     # Stray slashes (e.g. "161/176/") would otherwise yield an empty "cat_" ID that never appears.
     segments = [segment for segment in (category or "").split("/") if segment]
+    if category and segments and not segments[0].isdigit():
+        category = await _resolve_category_text(web, category)
+        segments = [segment for segment in category.split("/") if segment]
     if category and not (segments and segments[0].isdigit()):
         raise CategoryResolutionError(
             _("Unknown category alias '%s'. Use a category name from categories.yaml or a numeric category path.") % category

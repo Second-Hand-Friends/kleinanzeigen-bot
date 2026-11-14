@@ -9,17 +9,42 @@ The site's own category tree (depth 0-1) and picker data (depth 2-3) are the rel
 """
 
 import asyncio
+import re
 from collections.abc import Mapping
+from gettext import gettext as _
 from typing import Any, Final
 
 from .utils import loggers as _loggers
 from .utils import page_scripts
+from .utils.exceptions import CategoryResolutionError
 from .utils.web_scraping_mixin import WebScrapingMixin
 
 LOG:Final[_loggers.Logger] = _loggers.get_logger(__name__)
 
 _HTTP_OK:Final[int] = 200
+_EXACT_MATCH:Final[int] = 3
+_MAX_TEXT_DEPTH:Final[int] = 4  # category, subcategory, attribute value, dependent attribute value
 _ATTRIBUTE_DEPTH:Final[int] = 2  # index of the first attribute segment in a category path
+
+
+def category_label_tokens(label:str) -> tuple[str, ...]:
+    """Normalize category labels for matching UI wording and punctuation changes."""
+    replacements:dict[str, str | int | None] = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
+    normalized = label.casefold().translate(str.maketrans(replacements))
+    return tuple(word for word in re.findall(r"[a-z0-9]+", normalized) if word != "und")
+
+
+def category_label_match_score(label:str, candidate:str) -> int:
+    """Score how well a visible ``label`` matches a configured ``candidate`` (3 exact, 2 contained, 0 none)."""
+    label_tokens = category_label_tokens(label)
+    candidate_tokens = category_label_tokens(candidate)
+    if not label_tokens or not candidate_tokens:
+        return 0
+    if label_tokens == candidate_tokens:
+        return 3
+    if set(candidate_tokens).issubset(label_tokens):
+        return 2
+    return 0
 
 
 async def fetch_category_action(web:WebScrapingMixin, action:str, body:Mapping[str, str | int]) -> Any:
@@ -156,3 +181,44 @@ async def dependent_picker_options(web:WebScrapingMixin, category:str) -> list[t
     if attribute is None:
         return []
     return [option for dependent in await _dependent_attributes(web, path, attribute) for option in _options(dependent)]
+
+
+def _pick_by_name(text:str, name:str, options:list[tuple[str, str]]) -> str:
+    """Return the value of the one option whose label equals ``name``; raise with the offered labels otherwise."""
+    matches = [value for value, label in options if category_label_match_score(label, name) == _EXACT_MATCH]
+    if len(matches) == 1:
+        return matches[0]
+    raise CategoryResolutionError(
+        _("Category '%(text)s': '%(name)s' is not unique or not offered by Kleinanzeigen. Offered values: %(offered)s")
+        % {"text": text, "name": name, "offered": ", ".join(label for _value, label in options)}
+    )
+
+
+async def resolve_category_text(web:WebScrapingMixin, text:str) -> str | None:
+    """Resolve a category path written as names (``Elektronik > Smartphones > Xiaomi``) to its ID path.
+
+    Returns ``None`` if the site data is unavailable; raises ``CategoryResolutionError`` if a name is unknown or ambiguous.
+    """
+    names = [name.strip() for name in text.split(">") if name.strip()]
+    if not names:
+        return None
+    if len(names) > _MAX_TEXT_DEPTH:
+        raise CategoryResolutionError(_("Category '%s' has more levels than Kleinanzeigen offers.") % text)
+    tree = await fetch_category_action(web, "getTree", {})
+    if not isinstance(tree, list):
+        return None
+
+    ids:list[str] = []
+    nodes = [node for node in tree if isinstance(node, dict) and node.get("name")]
+    for name in names[:_ATTRIBUTE_DEPTH]:
+        ids.append(_pick_by_name(text, name, [(str(node["id"]), str(node["name"])) for node in nodes]))
+        matched = next(node for node in nodes if str(node["id"]) == ids[-1])
+        nodes = [child for child in matched.get("children") or [] if isinstance(child, dict) and child.get("name")]
+    if len(names) > _ATTRIBUTE_DEPTH:
+        attributes = await fetch_picker_attributes(web, "getPickerAttributes", {"categoryId": int(ids[1])})
+        ids.append(_pick_by_name(text, names[2], [option for attribute in attributes for option in _options(attribute)]))
+        if len(names) > _ATTRIBUTE_DEPTH + 1:
+            attribute = next(attribute for attribute in attributes if _label_of(attribute, ids[2]) is not None)
+            dependents = await _dependent_attributes(web, ids, attribute)
+            ids.append(_pick_by_name(text, names[3], [option for dependent in dependents for option in _options(dependent)]))
+    return "/".join(ids)
