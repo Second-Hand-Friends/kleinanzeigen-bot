@@ -111,6 +111,10 @@ category: "Verschenken & Tauschen > Tauschen"
 
 # Category ID
 category: 161/278
+
+# Category ID with attribute levels (e.g. platform below PlayStation);
+# the bot lists the available values if a level is missing
+category: 161/227/playstation/playstation_4
 ```
 
 ### Price and Price Type

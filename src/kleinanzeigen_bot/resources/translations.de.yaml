@@ -301,6 +301,8 @@ kleinanzeigen_bot/publishing_form.py:
 
   _set_category_in_dialog:
     "Category dialog cannot resolve the configured category path '%s' to visible labels.": "Der Kategorie-Dialog kann den konfigurierten Kategorienpfad '%s' nicht in sichtbare Bezeichnungen auflösen."
+    ? "Kleinanzeigen asks for one more selection under '%(category)s'. Append one of these values to the category path: %(offered)s"
+    : "Kleinanzeigen verlangt unter '%(category)s' eine weitere Auswahl. Hänge einen dieser Werte an den Kategoriepfad an: %(offered)s"
     "Category dialog did not select the requested leaf '%s'.": "Der Kategorie-Dialog hat die gewünschte Unterkategorie '%s' nicht ausgewählt."
     "Category dialog does not have one unique apply button for '%s'.": "Der Kategorie-Dialog hat für '%s' keine eindeutige Schaltfläche zum Übernehmen."
     "Category dialog remained open after applying '%s'.": "Der Kategorie-Dialog blieb nach dem Übernehmen von '%s' geöffnet."
@@ -752,6 +754,11 @@ kleinanzeigen_bot/price_reduction.py:
   _apply_price_reduction_decision:
     "Auto price reduction applied for [%s]: %s -> %s after %s reduction cycles": "Automatische Preisreduzierung für [%s] angewendet: %s -> %s nach %s Reduktionszyklen"
     "Auto price reduction kept price %s for [%s] after attempting %s reduction cycles": "Automatische Preisreduzierung hat Preis %s für [%s] beibehalten nach dem Versuch von %s Reduktionszyklen"
+
+#################################################
+kleinanzeigen_bot/category_picker.py:
+  category_picker_labels:
+    "Category value '%s' is not offered under category '%s' any more. Offered values: %s": "Der Kategoriewert '%s' wird unter der Kategorie '%s' nicht mehr angeboten. Angebotene Werte: %s"
 
 #################################################
 kleinanzeigen_bot/extract.py:

@@ -45,6 +45,25 @@ async def test_category_choice_label_skips_sr_only_and_decorative_parts(fast_web
     assert label == "Auto, Rad & Boot"
 
 
+async def test_category_picker_attributes_decode_the_sites_devalue_response(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """#1388: the picker action answers with a flat devalue array whose numbers are indices."""
+    await show_html("<p>form</p>")
+    flat = [[1], {"attributeId": 2, "required": 3, "localizedOptions": 4}, "pc_videospiele.art", True, [5, 8],
+            {"value": 6, "localizedValue": 7}, "playstation", "PlayStation", {"value": 9, "localizedValue": 10}, "xbox", "Xbox"]
+    await fast_web.web_execute(
+        f"globalThis.fetch = async () => new Response({json.dumps(json.dumps(flat))}, {{status: 200}}); true"
+    )
+    result = await fast_web.web_execute(page_scripts.call("category_picker_attributes", "getPickerAttributes", {"categoryId": 227}))
+    assert result == {
+        "statusCode": 200,
+        "attributes": [{
+            "attributeId": "pc_videospiele.art",
+            "required": True,
+            "options": [{"value": "playstation", "label": "PlayStation"}, {"value": "xbox", "label": "Xbox"}],
+        }],
+    }
+
+
 @pytest.mark.parametrize(("body", "attr", "expected"), [
     pytest.param('<button id="x">Sichtbar</button>', Is.DISPLAYED, True, id = "displayed"),
     pytest.param('<button id="x" style="visibility: hidden">x</button>', Is.DISPLAYED, False, id = "visibility-hidden"),

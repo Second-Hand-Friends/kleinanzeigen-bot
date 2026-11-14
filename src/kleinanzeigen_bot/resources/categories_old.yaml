@@ -198,3 +198,21 @@ Wohnzimmer_Sonstiges: 80/88/sonstiges
 Tauschen: 272/273
 Verleihen: 272/274
 Verschenken: 272/192
+
+## Labels renamed on Kleinanzeigen (IDs unchanged)
+Elektronik > Handy & Telefon: 161/173/sonstige
+Elektronik > Videospiele > PlayStation Spiele: 161/227/playstation
+Familie, Kind & Baby > Spielzeug > Action- & Spielfiguren: 17/23/actionfiguren
+Elektronik > Handy & Telefon > Apple: 161/173/apple
+Elektronik > Handy & Telefon > Google: 161/173/google_handy
+Elektronik > Handy & Telefon > Huawei: 161/173/huawai_handy
+Elektronik > Handy & Telefon > HTC: 161/173/htc_handy
+Elektronik > Handy & Telefon > LG: 161/173/lg_handy
+Elektronik > Handy & Telefon > Motorola: 161/173/motorola_handy
+Elektronik > Handy & Telefon > Nokia: 161/173/nokia_handy
+Elektronik > Handy & Telefon > Samsung: 161/173/samsung_handy
+Elektronik > Handy & Telefon > Siemens: 161/173/siemens_handy
+Elektronik > Handy & Telefon > Sony: 161/173/sony_handy
+Elektronik > Handy & Telefon > Xiaomi: 161/173/xiaomi_handy
+Elektronik > Handy & Telefon > Faxgeräte: 161/173/faxgeraete
+Elektronik > Handy & Telefon > Telefone: 161/173/telefone

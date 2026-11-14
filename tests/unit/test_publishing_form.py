@@ -984,6 +984,53 @@ class TestRedesignedCategoryDialog:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_category_dialog_uses_only_site_labels_when_available(self, test_bot:KleinanzeigenBot) -> None:
+        test_bot.categories = {
+            "Elektronik": "161",
+            "Elektronik > Videospiele": "161/227",
+            "Elektronik > Videospiele > PlayStation Spiele": "161/227/playstation",
+        }
+        seen:list[list[str]] = []
+
+        async def click_level(_web:Any, _selector:str, _category:str, _depth:int, candidates:list[str]) -> str:
+            seen.append(candidates)
+            return candidates[0]
+
+        with (
+            patch("kleinanzeigen_bot.category_picker.category_picker_labels", new_callable = AsyncMock, return_value = {2: "PlayStation"}),
+            patch("kleinanzeigen_bot.category_picker.dependent_picker_options", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.publishing_form._click_category_dialog_level", side_effect = click_level),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
+            pytest.raises(CategoryResolutionError),
+        ):
+            await _set_category_in_dialog(test_bot, category = "161/227/playstation", dialog_selector = "dialog[open]")
+
+        assert seen[2] == ["PlayStation"]
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_category_dialog_names_values_when_site_asks_for_one_more_level(self, test_bot:KleinanzeigenBot) -> None:
+        """#1388: a console now opens a further level; the apply button stays disabled until it is chosen."""
+        test_bot.categories = {"Elektronik": "161", "Elektronik > Videospiele": "161/227"}
+
+        async def click_level(_web:Any, _selector:str, _category:str, _depth:int, candidates:list[str]) -> str:
+            return candidates[0]
+
+        with (
+            patch("kleinanzeigen_bot.category_picker.category_picker_labels", new_callable = AsyncMock, return_value = {2: "PlayStation"}),
+            patch(
+                "kleinanzeigen_bot.category_picker.dependent_picker_options",
+                new_callable = AsyncMock,
+                return_value = [("playstation_5", "PlayStation 5"), ("playstation_4", "PlayStation 4")],
+            ),
+            patch("kleinanzeigen_bot.publishing_form._click_category_dialog_level", side_effect = click_level),
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = []),
+            pytest.raises(CategoryResolutionError, match = "playstation_5, playstation_4"),
+        ):
+            await _set_category_in_dialog(test_bot, category = "161/227/playstation", dialog_selector = "dialog[open]")
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_category_dialog_fails_closed_for_ambiguous_split_leaf(self, test_bot:KleinanzeigenBot) -> None:
         buttons = [MagicMock(), MagicMock()]
         buttons[0].click = AsyncMock()
@@ -1134,6 +1181,7 @@ class TestRedesignedCategoryDialog:
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
             patch.object(test_bot, "web_apply", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
