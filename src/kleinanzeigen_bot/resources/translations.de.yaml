@@ -759,6 +759,7 @@ kleinanzeigen_bot/price_reduction.py:
 kleinanzeigen_bot/category_picker.py:
   category_picker_labels:
     "Category value '%s' is not offered under category '%s' any more. Offered values: %s": "Der Kategoriewert '%s' wird unter der Kategorie '%s' nicht mehr angeboten. Angebotene Werte: %s"
+    "Category value '%s' is not offered under '%s' any more. Offered values: %s": "Der Kategoriewert '%s' wird unter '%s' nicht mehr angeboten. Angebotene Werte: %s"
 
 #################################################
 kleinanzeigen_bot/extract.py:

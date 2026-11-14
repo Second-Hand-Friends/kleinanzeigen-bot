@@ -8,6 +8,7 @@ and ``playstation_4`` (depth 3) are attribute values whose labels Kleinanzeigen 
 The site's picker data is the only reliable source for them.
 """
 
+import asyncio
 from collections.abc import Mapping
 from typing import Any, Final
 
@@ -24,7 +25,8 @@ _ATTRIBUTE_DEPTH:Final[int] = 2  # index of the first attribute segment in a cat
 async def fetch_picker_attributes(web:WebScrapingMixin, action:str, body:Mapping[str, str | int]) -> list[dict[str, Any]]:
     """Read picker attributes from the page's category tree actions; empty if unavailable."""
     try:
-        response = await web.web_execute(page_scripts.call("category_picker_attributes", action, dict(body)))
+        async with asyncio.timeout(web.timeout("page_load")):
+            response = await web.web_execute(page_scripts.call("category_picker_attributes", action, dict(body)))
     except TimeoutError:
         return []
     if not isinstance(response, dict) or response.get("statusCode") != _HTTP_OK or not isinstance(response.get("attributes"), list):
@@ -84,10 +86,19 @@ async def category_picker_labels(web:WebScrapingMixin, category:str) -> dict[int
 
     labels = {_ATTRIBUTE_DEPTH: _label_of(attribute, path[2]) or path[2]}
     if len(path) > _ATTRIBUTE_DEPTH + 1:
-        for dependent in await _dependent_attributes(web, path, attribute):
+        dependents = await _dependent_attributes(web, path, attribute)
+        for dependent in dependents:
             if (label := _label_of(dependent, path[3])) is not None:
                 labels[_ATTRIBUTE_DEPTH + 1] = label
                 break
+        else:
+            if dependents:
+                LOG.warning(
+                    "Category value '%s' is not offered under '%s' any more. Offered values: %s",
+                    path[3],
+                    path[2],
+                    ", ".join(value for dependent in dependents for value, _label in _options(dependent)),
+                )
     return labels
 
 

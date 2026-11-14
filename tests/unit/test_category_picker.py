@@ -3,6 +3,7 @@
 # SPDX-ArtifactOfProjectHomePage: https://github.com/Second-Hand-Friends/kleinanzeigen-bot/
 """Tests for the category picker data read from Kleinanzeigen's category tree actions."""
 
+import asyncio
 import logging
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -62,6 +63,37 @@ async def test_category_picker_labels_warn_when_value_is_not_offered(
         assert await category_picker_labels(test_bot, "161/227/dreamcast") == {}
     assert "'dreamcast' is not offered under category '227'" in caplog.text
     assert "xbox, playstation" in caplog.text
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_category_picker_labels_warn_when_dependent_value_is_not_offered(
+    test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture,
+) -> None:
+    responses = [
+        _picker_response("pc_videospiele.art", {"playstation": "PlayStation"}),
+        _picker_response("pc_videospiele.platform", {"playstation_5": "PlayStation 5", "playstation_4": "PlayStation 4"}, required = False),
+    ]
+    with (
+        patch.object(test_bot, "web_execute", new_callable = AsyncMock, side_effect = responses),
+        caplog.at_level(logging.WARNING),
+    ):
+        assert await category_picker_labels(test_bot, "161/227/playstation/playstation_9") == {2: "PlayStation"}
+    assert "'playstation_9' is not offered under 'playstation'" in caplog.text
+    assert "playstation_5, playstation_4" in caplog.text
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_category_picker_request_is_bounded_by_a_timeout(test_bot:KleinanzeigenBot) -> None:
+    async def stall(_code:str) -> None:
+        await asyncio.sleep(10)
+
+    with (
+        patch.object(test_bot, "timeout", return_value = 0.01),
+        patch.object(test_bot, "web_execute", side_effect = stall),
+    ):
+        assert await category_picker_labels(test_bot, "161/227/playstation") == {}
 
 
 @pytest.mark.unit

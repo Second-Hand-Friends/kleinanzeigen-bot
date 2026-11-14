@@ -13,6 +13,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from gettext import gettext as _
 from pathlib import Path
 from typing import Any, Final
@@ -46,6 +47,8 @@ class RuntimeState:
     config:Config
     categories:dict[str, str]
     timing_collector:TimingCollector | None
+    # Names that may be shown in the category dialog: no deprecated aliases, which only resolve names to IDs.
+    category_labels:dict[str, str] = dataclass_field(default_factory = dict)
 
 
 def create_default_config(config_file_path:str, workspace:_xdg_paths.Workspace | None) -> None:
@@ -133,18 +136,20 @@ def load_config(config_file_path:str, workspace:_xdg_paths.Workspace | None, com
     # Merge order matters: bundled defaults first, deprecated aliases second, user overrides last.
     categories:dict[str, str] = _dicts.load_dict_from_module(_resources, "categories.yaml", "")
     LOG.debug("Loaded %s categories from categories.yaml", len(categories))
+    category_labels = dict(categories)
     deprecated_categories = _dicts.load_dict_from_module(_resources, "categories_old.yaml", "")
     LOG.debug("Loaded %s categories from categories_old.yaml", len(deprecated_categories))
     categories.update(deprecated_categories)
     if config.categories:
         categories.update(config.categories)
+        category_labels.update(config.categories)
         LOG.debug("Loaded %s categories from config.yaml (custom)", len(config.categories))
     if not categories:
         # This should only happen if resources are broken or empty, so surface it loudly.
         LOG.warning("No categories loaded - category files may be missing or empty")
     LOG.debug("Loaded %s categories in total", len(categories))
 
-    return RuntimeState(config = config, categories = categories, timing_collector = timing_collector)
+    return RuntimeState(config = config, categories = categories, timing_collector = timing_collector, category_labels = category_labels)
 
 
 def apply_browser_config(browser_config:Any, config:Config, workspace:_xdg_paths.Workspace | None, config_file_path:str) -> None:
