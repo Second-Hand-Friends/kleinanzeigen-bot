@@ -11,7 +11,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from kleinanzeigen_bot.app import KleinanzeigenBot
-from kleinanzeigen_bot.category_picker import category_picker_labels, dependent_picker_options
+from kleinanzeigen_bot.category_picker import category_label_match_score, category_picker_labels, dependent_picker_options, resolve_category_text
+from kleinanzeigen_bot.utils.exceptions import CategoryResolutionError
 
 _TREE = [
     {"id": 161, "name": "Elektronik", "children": [{"id": 173, "name": "Smartphones", "children": []}, {"id": 227, "name": "Videospiele", "children": []}]},
@@ -156,3 +157,57 @@ async def test_dependent_picker_options_list_the_attribute_values_of_a_category(
     """A category such as Wearables asks for an attribute value right below it."""
     with patch.object(test_bot, "web_execute", _site()):
         assert await dependent_picker_options(test_bot, "161/227") == [("xbox", "Xbox"), ("playstation", "PlayStation")]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("text", "expected"), [
+    pytest.param("Elektronik > Smartphones", "161/173", id = "category"),
+    pytest.param("elektronik>videospiele > PlayStation", "161/227/playstation", id = "attribute-value"),
+    pytest.param("Elektronik > Videospiele > PlayStation > PlayStation 4", "161/227/playstation/playstation_4", id = "dependent-value"),
+])
+async def test_resolve_category_text_returns_the_id_path(test_bot:KleinanzeigenBot, text:str, expected:str) -> None:
+    with patch.object(test_bot, "web_execute", _site()):
+        assert await resolve_category_text(test_bot, text) == expected
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("text", "offered"), [
+    pytest.param("Elektronik > Handy & Telefon", "Smartphones, Videospiele", id = "renamed-category"),
+    pytest.param("Elektronik > Videospiele > Dreamcast", "Xbox, PlayStation", id = "unknown-attribute-value"),
+    pytest.param("Elektronik > Videospiele > PlayStation > PlayStation 9", "PlayStation 5, PlayStation 4", id = "unknown-dependent-value"),
+])
+async def test_resolve_category_text_names_the_offered_values(test_bot:KleinanzeigenBot, text:str, offered:str) -> None:
+    with patch.object(test_bot, "web_execute", _site()), pytest.raises(CategoryResolutionError) as raised:
+        await resolve_category_text(test_bot, text)
+    assert offered in str(raised.value)
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_category_text_rejects_too_many_levels(test_bot:KleinanzeigenBot) -> None:
+    with patch.object(test_bot, "web_execute", _site()), pytest.raises(CategoryResolutionError, match = "more levels"):
+        await resolve_category_text(test_bot, "a > b > c > d > e")
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["", " > "])
+async def test_resolve_category_text_ignores_empty_text(test_bot:KleinanzeigenBot, text:str) -> None:
+    with patch.object(test_bot, "web_execute", new_callable = AsyncMock) as execute:
+        assert await resolve_category_text(test_bot, text) is None
+    execute.assert_not_awaited()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_category_text_without_site_data_returns_none(test_bot:KleinanzeigenBot) -> None:
+    with patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = None):
+        assert await resolve_category_text(test_bot, "Elektronik > Smartphones") is None
+
+
+def test_category_label_match_score_ranks_exact_before_contained() -> None:
+    assert category_label_match_score("Pullover", "Pullover & Strickjacken") == 0
+    assert category_label_match_score("Hosen, Jeans & Shorts", "Hosen & Jeans") == 2
+    assert category_label_match_score("Haus & Garten", "Haus und Garten") == 3

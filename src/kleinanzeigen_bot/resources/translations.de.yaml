@@ -292,6 +292,10 @@ kleinanzeigen_bot/published_ads.py:
 #################################################
 kleinanzeigen_bot/publishing_form.py:
 #################################################
+  _resolve_category_text:
+    "Category [%s] resolved to ID [%s]. Use the ID in the ad file to skip this lookup.": "Kategorie [%s] wurde zur ID [%s] aufgelöst. Verwende die ID in der Anzeigendatei, um diese Abfrage zu sparen."
+    "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]."
+
   set_category:
     "Unknown category alias '%s'. Use a category name from categories.yaml or a numeric category path.": "Unbekannter Kategorie-Alias '%s'. Verwenden Sie einen Kategorienamen aus categories.yaml oder einen numerischen Kategoriepfad."
     "Category element 'cat_%s' not found. Page layout: %s": "Kategorie-Element 'cat_%s' nicht gefunden. Seitenlayout: %s"
@@ -708,9 +712,6 @@ kleinanzeigen_bot/ad_loading.py:
   _prepare_selected_ad_entry:
     "-> property [description] not specified @ [%s]": "-> Eigenschaft [description] nicht angegeben @ [%s]"
 
-  resolve_ad_category:
-    "Category [%s] unknown. Using category [%s] with ID [%s] instead.": "Kategorie [%s] unbekannt. Verwende stattdessen Kategorie [%s] mit ID [%s]."
-
   resolve_ad_images:
     "Unsupported image file type [%s]": "Nicht unterstütztes Bildformat [%s]"
     "No images found for given file patterns %s at %s": "Keine Bilder für die Dateimuster %s in %s gefunden"
@@ -757,6 +758,12 @@ kleinanzeigen_bot/price_reduction.py:
 
 #################################################
 kleinanzeigen_bot/category_picker.py:
+  _pick_by_name:
+    "Category '%(text)s': '%(name)s' is not unique or not offered by Kleinanzeigen. Offered values: %(offered)s": "Kategorie '%(text)s': '%(name)s' ist nicht eindeutig oder wird von Kleinanzeigen nicht angeboten. Angebotene Werte: %(offered)s"
+
+  resolve_category_text:
+    "Category '%s' has more levels than Kleinanzeigen offers.": "Die Kategorie '%s' hat mehr Ebenen, als Kleinanzeigen anbietet."
+
   _tree_labels:
     "Category '%s' is not offered by Kleinanzeigen any more. Offered categories: %s": "Die Kategorie '%s' wird von Kleinanzeigen nicht mehr angeboten. Angebotene Kategorien: %s"
   category_picker_labels:

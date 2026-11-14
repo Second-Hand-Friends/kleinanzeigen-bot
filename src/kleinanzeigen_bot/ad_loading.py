@@ -208,25 +208,13 @@ def check_ad_changed(
 def resolve_ad_category(ad_cfg:Ad, categories:dict[str, str]) -> None:
     """Resolve *ad_cfg.category* alias to a numeric category ID in-place.
 
-    When the exact alias is unknown but contains ``>``, falls back to the
-    parent category if that parent is a known alias.
+    An unknown alias is left untouched; the publishing form resolves it from the site's category data
+    (or falls back to the parent alias).
     """
     if not ad_cfg.category:
         return
 
     resolved_category_id = categories.get(ad_cfg.category)
-    if not resolved_category_id and ">" in ad_cfg.category:
-        # this maps actually to the sonstiges/weiteres sub-category
-        parent_category = ad_cfg.category.rpartition(">")[0].strip()
-        resolved_category_id = categories.get(parent_category)
-        if resolved_category_id:
-            LOG.warning(
-                "Category [%s] unknown. Using category [%s] with ID [%s] instead.",
-                ad_cfg.category,
-                parent_category,
-                resolved_category_id,
-            )
-
     if resolved_category_id:
         ad_cfg.category = resolved_category_id
 

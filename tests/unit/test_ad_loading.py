@@ -194,13 +194,14 @@ class TestResolveAdCategory:
         resolve_ad_category(ad_cfg, categories)
         assert ad_cfg.category == "unknown"
 
-    def test_parent_fallback(self, base_ad_config:dict[str, Any]) -> None:
+    def test_unknown_child_of_known_alias_is_left_for_live_resolution(self, base_ad_config:dict[str, Any]) -> None:
+        """The publishing form resolves it from the site; the parent alias is only its fallback."""
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "garten > blumen"})
         categories = {"garten": "123"}
         resolve_ad_category(ad_cfg, categories)
-        assert ad_cfg.category == "123"
+        assert ad_cfg.category == "garten > blumen"
 
-    def test_parent_fallback_unknown_parent_unchanged(self, base_ad_config:dict[str, Any]) -> None:
+    def test_unknown_parent_unchanged(self, base_ad_config:dict[str, Any]) -> None:
         ad_cfg = Ad.model_validate(base_ad_config | {"category": "foo > bar"})
         categories = {"garten": "123"}
         resolve_ad_category(ad_cfg, categories)

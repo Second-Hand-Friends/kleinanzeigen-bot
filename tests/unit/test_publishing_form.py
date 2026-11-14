@@ -16,11 +16,11 @@ import pytest
 
 from kleinanzeigen_bot import LOG, publishing_submission
 from kleinanzeigen_bot.app import KleinanzeigenBot
+from kleinanzeigen_bot.category_picker import category_label_match_score
 from kleinanzeigen_bot.model.ad_model import Ad, AdUpdateStrategy
 from kleinanzeigen_bot.model.config_model import PublishingConfig
 from kleinanzeigen_bot.publishing_form import (
     _category_dialog_label_options,  # noqa: PLC2701
-    _category_label_match_score,  # noqa: PLC2701
     _click_category_dialog_level,  # noqa: PLC2701
     _select_button_combobox,  # noqa: PLC2701 - needed for coverage of React fiber selection
     _set_category_in_dialog,  # noqa: PLC2701
@@ -635,6 +635,7 @@ class TestCategoryProbeBehavior:
     async def test_unknown_category_alias_fails_before_browser_navigation(self, test_bot:KleinanzeigenBot, category:str) -> None:
         """Unresolved aliases fail without retrying a nonexistent DOM ID."""
         with (
+            patch("kleinanzeigen_bot.category_picker.resolve_category_text", new_callable = AsyncMock, return_value = None),
             patch.object(test_bot, "web_click", new_callable = AsyncMock) as click,
             patch.object(test_bot, "web_open", new_callable = AsyncMock) as open_page,
             pytest.raises(CategoryResolutionError) as raised,
@@ -644,6 +645,42 @@ class TestCategoryProbeBehavior:
         assert category in str(raised.value)
         click.assert_not_awaited()
         open_page.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_text_category_is_resolved_from_the_site_before_selecting(self, test_bot:KleinanzeigenBot) -> None:
+        """#1388: a path written as names becomes an ID path, without a categories.yaml entry."""
+        with (
+            patch("kleinanzeigen_bot.category_picker.resolve_category_text", new_callable = AsyncMock, return_value = "161/173/sonstige"),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "stop here"),
+        ):
+            await set_category(test_bot, category = "Elektronik > Smartphones > Andere Marke", ad_file = "ad.yaml")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("lookup", "expected"), [
+        pytest.param(None, "123", id = "no-site-data"),
+        pytest.param(CategoryResolutionError("unknown name"), "123", id = "unknown-name"),
+    ])
+    async def test_text_category_falls_back_to_the_parent_alias(
+        self, test_bot:KleinanzeigenBot, lookup:Any, expected:str,
+    ) -> None:
+        test_bot.categories = {"Garten": "123"}
+        mock = AsyncMock(side_effect = lookup) if isinstance(lookup, Exception) else AsyncMock(return_value = lookup)
+        with (
+            patch("kleinanzeigen_bot.category_picker.resolve_category_text", mock),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
+            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            pytest.raises(TimeoutError, match = "stop here"),
+        ):
+            await set_category(test_bot, category = "Garten > Blumen", ad_file = "ad.yaml")
+        assert expected == "123"  # reached the form flow, i.e. the parent alias was accepted
 
     @pytest.mark.asyncio
     async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
@@ -958,8 +995,8 @@ class TestRedesignedCategoryDialog:
         assert "Andere Baby- & Kinderkleidung" in _category_dialog_label_options("17/22/sonstiges", categories)[2]
 
     def test_category_dialog_does_not_guess_shortened_leaf_label(self) -> None:
-        assert _category_label_match_score("Pullover", "Pullover & Strickjacken") == 0
-        assert _category_label_match_score("Hosen, Jeans & Shorts", "Hosen & Jeans") == 2
+        assert category_label_match_score("Pullover", "Pullover & Strickjacken") == 0
+        assert category_label_match_score("Hosen, Jeans & Shorts", "Hosen & Jeans") == 2
         categories = {"Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken": "17/22/pullover_strickjacken"}
         assert _category_dialog_label_options(
             "17/22/pullover_strickjacken", categories, product_title = "Pagene Young Kinder-Strickjacke"
