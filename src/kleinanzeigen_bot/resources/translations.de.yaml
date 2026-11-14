@@ -1101,6 +1101,7 @@ kleinanzeigen_bot/utils/web_scraping_mixin.py:
     "Navigating to page %s...": "Navigiere zu Seite %s..."
     "Last page reached (next button is disabled).": "Letzte Seite erreicht (Weiter-Button ist deaktiviert)."
     "No pagination controls found. Assuming last page.": "Keine Paginierungssteuerung gefunden. Es wird von der letzten Seite ausgegangen."
+    "Stopped after %s ad overview pages (safety limit); further pages were not processed.": "Nach %s Seiten der Anzeigenübersicht gestoppt (Sicherheitslimit); weitere Seiten wurden nicht verarbeitet."
 
   web_set_input_value:
     "web_set_input_value: element '%(id)s' not found in DOM (TOCTOU race)": "web_set_input_value: Element '%(id)s' nicht im DOM gefunden (TOCTOU Race)"

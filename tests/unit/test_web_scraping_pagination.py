@@ -127,6 +127,46 @@ class TestNavigatePaginatedAdOverview:
             next_button_enabled.click.assert_awaited_once()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(("pages", "max_pages", "expected_calls", "warns"), [
+        pytest.param(26, None, 26, False, id = "more-than-ten-pages"),  # #1387: 646 ads = 26 pages
+        pytest.param(5, 3, 3, True, id = "safety-limit"),
+    ])
+    async def test_multi_page_walks_all_pages_up_to_limit(
+        self, pages:int, max_pages:int | None, expected_calls:int, warns:bool, caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        mixin = WebScrapingMixin()
+        callback = AsyncMock(return_value = False)
+        clicks = 0
+
+        async def click() -> None:
+            nonlocal clicks
+            clicks += 1
+
+        async def find_all(selector_type:By, selector_value:str, **_kwargs:Any) -> list[Element]:  # noqa: ARG001
+            button = MagicMock()
+            button.attrs = {"disabled": ""} if clicks >= pages - 1 else {}
+            button.click = AsyncMock(side_effect = click)
+            return [button]
+
+        with (
+            patch.object(mixin, "web_open", new_callable = AsyncMock),
+            patch.object(mixin, "web_sleep", new_callable = AsyncMock),
+            patch.object(mixin, "web_find", new_callable = AsyncMock, side_effect = self._single_page_find_side_effect),
+            patch.object(mixin, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
+            patch.object(mixin, "web_scroll_page_down", new_callable = AsyncMock),
+            patch.object(mixin, "timeout", return_value = 10),
+            caplog.at_level("WARNING"),
+        ):
+            if max_pages is None:
+                result = await mixin.navigate_paginated_ad_overview(callback)
+            else:
+                result = await mixin.navigate_paginated_ad_overview(callback, max_pages = max_pages)
+
+        assert result is False
+        assert callback.await_count == expected_calls
+        assert ("safety limit" in caplog.text) is warns
+
+    @pytest.mark.asyncio
     async def test_web_open_raises_timeout(self) -> None:
         """Test that TimeoutError on web_open is caught and returns False."""
         mixin = WebScrapingMixin()
