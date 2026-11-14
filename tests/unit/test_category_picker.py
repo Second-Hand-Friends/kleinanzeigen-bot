@@ -119,3 +119,11 @@ async def test_dependent_picker_options_list_the_values_below_an_attribute(test_
         assert await dependent_picker_options(test_bot, "161/227/playstation") == [
             ("playstation_5", "PlayStation 5"), ("playstation_4", "PlayStation 4"),
         ]
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_dependent_picker_options_are_empty_for_a_complete_path(test_bot:KleinanzeigenBot) -> None:
+    with patch.object(test_bot, "web_execute", new_callable = AsyncMock) as execute:
+        assert await dependent_picker_options(test_bot, "161/227/playstation/playstation_4") == []
+    execute.assert_not_awaited()

@@ -105,6 +105,8 @@ async def category_picker_labels(web:WebScrapingMixin, category:str) -> dict[int
 async def dependent_picker_options(web:WebScrapingMixin, category:str) -> list[tuple[str, str]]:
     """Return the ``(value, label)`` pairs offered one level below the attribute value of ``category``."""
     path = _path(category)
+    if len(path) != _ATTRIBUTE_DEPTH + 1:  # only a path that ends at the attribute value can take one more segment
+        return []
     attribute, _attributes = await _find_attribute(web, path)
     if attribute is None:
         return []
