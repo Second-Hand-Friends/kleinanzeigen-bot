@@ -967,6 +967,23 @@ class TestRedesignedCategoryDialog:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_category_dialog_reads_label_without_sr_only_suffix(self, test_bot:KleinanzeigenBot) -> None:
+        """#1384: the selection text of a choice only holds the sr-only suffix; the label comes from the page script."""
+        button = MagicMock()
+        button.click = AsyncMock()
+
+        with (
+            patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = [button]),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = ", öffnet Unterkategorien"),
+            patch.object(test_bot, "web_apply", new_callable = AsyncMock, return_value = "Auto, Rad & Boot"),
+        ):
+            label = await _click_category_dialog_level(test_bot, "dialog[open]", "210/1", 0, ["Auto, Rad & Boot"])
+
+        assert label == "Auto, Rad & Boot"
+        button.click.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_category_dialog_fails_closed_for_ambiguous_split_leaf(self, test_bot:KleinanzeigenBot) -> None:
         buttons = [MagicMock(), MagicMock()]
         buttons[0].click = AsyncMock()
@@ -980,6 +997,7 @@ class TestRedesignedCategoryDialog:
         with (
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, return_value = buttons),
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_apply", new_callable = AsyncMock, return_value = ""),
             pytest.raises(CategoryResolutionError, match = "no unique match"),
         ):
             await _click_category_dialog_level(
@@ -1017,6 +1035,7 @@ class TestRedesignedCategoryDialog:
         with (
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_apply", new_callable = AsyncMock, return_value = ""),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             pytest.raises(CategoryResolutionError, match = "did not select the requested leaf"),
         ):
@@ -1114,6 +1133,7 @@ class TestRedesignedCategoryDialog:
             patch.object(test_bot, "web_probe", new_callable = AsyncMock, side_effect = probe),
             patch.object(test_bot, "web_find_all", new_callable = AsyncMock, side_effect = find_all),
             patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, side_effect = visible_text),
+            patch.object(test_bot, "web_apply", new_callable = AsyncMock, return_value = ""),
             patch.object(test_bot, "web_click", new_callable = AsyncMock),
             patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),

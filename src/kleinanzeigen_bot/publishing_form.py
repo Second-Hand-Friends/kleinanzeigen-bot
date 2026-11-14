@@ -169,6 +169,12 @@ async def _probe_category_dialog(web:WebScrapingMixin) -> str | None:
     return None
 
 
+async def _category_choice_label(web:WebScrapingMixin, button:Element) -> str:
+    """Return a dialog choice label without its sr-only suffix (", öffnet Unterkategorien")."""
+    label = str(await web.web_apply(button, page_scripts.function("category_choice_label")) or "").strip()
+    return label or await web.extract_visible_text(button)
+
+
 async def _click_category_dialog_level(
     web:WebScrapingMixin,
     dialog_selector:str,
@@ -189,7 +195,7 @@ async def _click_category_dialog_level(
 
         choices:list[tuple[Element, str, int]] = []
         for button in buttons:
-            label = await web.extract_visible_text(button)
+            label = await _category_choice_label(web, button)
             if label:
                 score = max(
                     (_category_label_match_score(label, candidate) for candidate in label_candidates),
@@ -258,7 +264,7 @@ async def _set_category_in_dialog(
         )
     except TimeoutError:
         selected_buttons = []
-    selected_labels = {await web.extract_visible_text(button) for button in selected_buttons}
+    selected_labels = {await _category_choice_label(web, button) for button in selected_buttons}
     if selected_leaf not in selected_labels:
         raise CategoryResolutionError(
             _("Category dialog did not select the requested leaf '%s'.") % selected_leaf

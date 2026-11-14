@@ -11,6 +11,7 @@ import pytest
 import pytest_asyncio
 from nodriver import cdp
 
+from kleinanzeigen_bot.utils import page_scripts
 from kleinanzeigen_bot.utils.web_scraping_mixin import By, Is, WebScrapingMixin
 
 pytestmark = [pytest.mark.itest, pytest.mark.slow, pytest.mark.asyncio(loop_scope = "session")]
@@ -30,6 +31,18 @@ async def test_visible_text_skips_hidden_content(fast_web:WebScrapingMixin, show
     await show_html('<p id="text">Hallo <span style="display: none">versteckt</span>Welt</p>')
     element = await fast_web.web_find(By.ID, "text")
     assert await fast_web.extract_visible_text(element) == "Hallo Welt"
+
+
+async def test_category_choice_label_skips_sr_only_and_decorative_parts(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """#1384: a category dialog choice reads as its name, without icon or screen-reader suffix."""
+    await show_html(
+        '<button id="x" type="button"><span aria-hidden="true"><svg></svg></span>'
+        '<span class="flex-1">Auto, Rad &amp; Boot</span><svg></svg>'
+        '<span class="sr-only">, öffnet Unterkategorien</span></button>'
+    )
+    element = await fast_web.web_find(By.ID, "x")
+    label = await fast_web.web_apply(element, page_scripts.function("category_choice_label"))
+    assert label == "Auto, Rad & Boot"
 
 
 @pytest.mark.parametrize(("body", "attr", "expected"), [
