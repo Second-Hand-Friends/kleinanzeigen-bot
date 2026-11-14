@@ -109,6 +109,10 @@ category: "Elektronik > Notebooks"
 # Custom category name (defined in config.yaml)
 category: "Verschenken & Tauschen > Tauschen"
 
+# Category names that are not listed in categories.yaml are looked up on Kleinanzeigen while publishing
+# (the resulting ID is logged, use it in the ad file to skip the lookup)
+category: "Elektronik > Smartphones > Andere Marke"
+
 # Category ID
 category: 161/278
 
