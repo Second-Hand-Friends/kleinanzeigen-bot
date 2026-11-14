@@ -223,7 +223,7 @@ async def _set_category_in_dialog(
     product_title:str | None = None,
 ) -> None:
     """Select a configured category path in Kleinanzeigen's redesigned dialog."""
-    categories = getattr(web, "category_labels", {})
+    categories = getattr(web, "categories", {})
     if not isinstance(categories, Mapping):
         categories = {}
     label_options = _category_dialog_label_options(category, categories, product_title = product_title)

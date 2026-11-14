@@ -51,7 +51,6 @@ kleinanzeigen_bot/runtime_config.py:
   load_config:
     "config": "Konfiguration"
     "Loaded %s categories from categories.yaml": "%s Kategorien aus categories.yaml geladen"
-    "Loaded %s categories from categories_old.yaml": "%s Kategorien aus categories_old.yaml geladen"
     "Loaded %s categories from config.yaml (custom)": "%s Kategorien aus config.yaml geladen (benutzerdefiniert)"
     "Loaded %s categories in total": "%s Kategorien insgesamt geladen"
     "No categories loaded - category files may be missing or empty": "Keine Kategorien geladen - Kategorie-Dateien fehlen oder sind leer"

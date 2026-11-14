@@ -686,7 +686,8 @@ class TestCategoryProbeBehavior:
         assert ("Offered values: Smartphones, Videospiele" in caplog.text) is isinstance(lookup, Exception)
 
     @pytest.mark.asyncio
-    async def test_text_category_without_parent_alias_reports_the_offered_values(self, test_bot:KleinanzeigenBot) -> None:
+    @pytest.mark.parametrize("category", ["Elektronik > Dreamcast", "Handy_Apple"])  # unknown name, removed deprecated alias
+    async def test_text_category_without_parent_alias_reports_the_offered_values(self, test_bot:KleinanzeigenBot, category:str) -> None:
         with (
             patch(
                 "kleinanzeigen_bot.category_picker.resolve_category_text",
@@ -695,7 +696,7 @@ class TestCategoryProbeBehavior:
             ),
             pytest.raises(CategoryResolutionError, match = "Offered values"),
         ):
-            await set_category(test_bot, category = "Elektronik > Dreamcast", ad_file = "ad.yaml")
+            await set_category(test_bot, category = category, ad_file = "ad.yaml")
 
     @pytest.mark.asyncio
     async def test_set_category_uses_probe_for_auto_selected_marker(self, test_bot:KleinanzeigenBot) -> None:
@@ -1037,7 +1038,7 @@ class TestRedesignedCategoryDialog:
     @pytest.mark.unit
     @pytest.mark.asyncio
     async def test_category_dialog_uses_only_site_labels_when_available(self, test_bot:KleinanzeigenBot) -> None:
-        test_bot.category_labels = {
+        test_bot.categories = {
             "Elektronik": "161",
             "Elektronik > Videospiele": "161/227",
             "Elektronik > Videospiele > PlayStation Spiele": "161/227/playstation",
@@ -1068,7 +1069,7 @@ class TestRedesignedCategoryDialog:
     async def test_category_dialog_uses_yaml_labels_only_without_site_labels(
         self, test_bot:KleinanzeigenBot, site_labels:dict[int, str], expected:list[str],
     ) -> None:
-        test_bot.category_labels = {"Elektronik": "161", "Elektronik > Handy & Telefon": "161/173"}
+        test_bot.categories = {"Elektronik": "161", "Elektronik > Handy & Telefon": "161/173"}
         seen:list[list[str]] = []
 
         async def click_level(_web:Any, _selector:str, _category:str, _depth:int, candidates:list[str]) -> str:
@@ -1090,7 +1091,7 @@ class TestRedesignedCategoryDialog:
     @pytest.mark.asyncio
     async def test_category_dialog_names_values_when_site_asks_for_one_more_level(self, test_bot:KleinanzeigenBot) -> None:
         """#1388: a console now opens a further level; the apply button stays disabled until it is chosen."""
-        test_bot.category_labels = {"Elektronik": "161", "Elektronik > Videospiele": "161/227"}
+        test_bot.categories = {"Elektronik": "161", "Elektronik > Videospiele": "161/227"}
 
         async def click_level(_web:Any, _selector:str, _category:str, _depth:int, candidates:list[str]) -> str:
             return candidates[0]
@@ -1143,7 +1144,7 @@ class TestRedesignedCategoryDialog:
         self,
         test_bot:KleinanzeigenBot,
     ) -> None:
-        test_bot.category_labels = {"Bekleidung": "17"}
+        test_bot.categories = {"Bekleidung": "17"}
         category_button = MagicMock()
         category_button.click = AsyncMock()
         category_button.visible_text = "Bekleidung"
@@ -1174,7 +1175,7 @@ class TestRedesignedCategoryDialog:
     @pytest.mark.asyncio
     async def test_set_category_uses_visible_dialog_labels_and_applies_leaf(self, test_bot:KleinanzeigenBot) -> None:
         category = "17/22/pullover_strickjacken"
-        test_bot.category_labels = {
+        test_bot.categories = {
             "Familie, Kind & Baby > Baby- & Kinderkleidung > Pullover & Strickjacken": category,
         }
         clicked:list[str] = []
