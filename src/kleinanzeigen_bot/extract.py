@@ -22,6 +22,7 @@ from typing import Any, Final, cast
 
 from kleinanzeigen_bot.model.ad_model import ContactPartial
 
+from . import category_picker
 from .model.ad_model import OPTION_NAME_BY_CARRIER_CODE, AdPartial, validate_condition_api_mapping
 from .model.config_model import AutoPriceReductionConfig, Config
 from .utils import dicts, files, i18n, loggers, misc, page_scripts, reflect
@@ -34,6 +35,7 @@ __all__ = [
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
 
 _BREADCRUMB_MIN_DEPTH:Final[int] = 2
+_CATEGORY_PATH_WITH_ATTRIBUTE_LEN:Final[int] = 3  # e.g. 161/227/playstation
 BREADCRUMB_RE = re.compile(r"/c(\d+)")
 _MAX_FILENAME_COMPONENT_LENGTH:Final[int] = 255
 _DOWNLOAD_STEM_SUFFIX_BUDGET:Final[int] = len("__img9999.jpeg")
@@ -908,6 +910,7 @@ class AdExtractor(WebScrapingMixin):
         info["description"] = description_text.strip()
 
         info["special_attributes"] = await self._extract_special_attributes_from_ad_page(dimensions, island_props = island_props)
+        info["category"] = await self._with_dependent_category_segment(info["category"], info["special_attributes"])
 
         if "schaden_s" in info["special_attributes"]:
             # change f to  'nein' and 't' to 'ja'
@@ -1097,6 +1100,21 @@ class AdExtractor(WebScrapingMixin):
         opts = belen_conf.get("universalAnalyticsOpts")
         dimensions = opts.get("dimensions") if isinstance(opts, dict) else None
         return dimensions if isinstance(dimensions, dict) else {}
+
+    async def _with_dependent_category_segment(self, category:str, special_attributes:dict[str, str]) -> str:
+        """Append the value of the dependent picker attribute (e.g. the console of a video game) to ``category``.
+
+        The category picker asks for it as one more level (``161/227/playstation/playstation_4``); the
+        ad itself only carries it among its attributes, so the value is matched against the options
+        the picker offers below the third path segment.
+        """
+        if len([segment for segment in category.split("/") if segment]) != _CATEGORY_PATH_WITH_ATTRIBUTE_LEN:
+            return category
+        owned = {value.casefold() for value in special_attributes.values()}
+        for value, _label in await category_picker.dependent_picker_options(self, category):
+            if value.casefold() in owned:
+                return f"{category}/{value}"
+        return category
 
     async def _fetch_anonymous_ad_dimensions(self, ad_id:int) -> dict[str, Any] | None:
         """Fetch the canonical ad dimensions of ``ad_id`` with a single anonymous request.

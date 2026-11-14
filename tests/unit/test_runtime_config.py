@@ -127,6 +127,9 @@ publishing:
 
         assert state.config.login.username == "fallback_user"
         assert state.categories["Custom > Category"] == "1/2"
+        assert state.category_labels["Custom > Category"] == "1/2"
+        assert "Handy_Apple" in state.categories
+        assert "Handy_Apple" not in state.category_labels
         assert state.timing_collector is None
 
     def test_load_config_raises_for_missing_login_env(self, tmp_path:Path, monkeypatch:pytest.MonkeyPatch) -> None:

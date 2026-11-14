@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from gettext import gettext as _
 from typing import Any, Final, cast
 
+from . import category_picker
 from .ad_description import get_ad_description
 from .ad_form_helpers import (
     SPECIAL_ATTRIBUTE_TOKEN_RE,
@@ -241,10 +242,14 @@ async def _set_category_in_dialog(
     product_title:str | None = None,
 ) -> None:
     """Select a configured category path in Kleinanzeigen's redesigned dialog."""
-    categories = getattr(web, "categories", {})
+    categories = getattr(web, "category_labels", {})
     if not isinstance(categories, Mapping):
         categories = {}
     label_options = _category_dialog_label_options(category, categories, product_title = product_title)
+    # The site's own labels win over the bundled ones, which go stale when Kleinanzeigen renames a category.
+    for depth, site_label in (await category_picker.category_picker_labels(web, category)).items():
+        if depth < len(label_options):
+            label_options[depth] = [site_label]
     if not label_options or any(not candidates for candidates in label_options):
         raise CategoryResolutionError(
             _("Category dialog cannot resolve the configured category path '%s' to visible labels.") % category
@@ -266,6 +271,15 @@ async def _set_category_in_dialog(
         selected_buttons = []
     selected_labels = {await _category_choice_label(web, button) for button in selected_buttons}
     if selected_leaf not in selected_labels:
+        if not selected_buttons:
+            # Some values (e.g. a console) now open one more level that has to be chosen; the apply
+            # button stays disabled until then.
+            further = await category_picker.dependent_picker_options(web, category)
+            if further:
+                raise CategoryResolutionError(
+                    _("Kleinanzeigen asks for one more selection under '%(category)s'. Append one of these values to the category path: %(offered)s")
+                    % {"category": category, "offered": ", ".join(value for value, _label in further)}
+                )
         raise CategoryResolutionError(
             _("Category dialog did not select the requested leaf '%s'.") % selected_leaf
         )

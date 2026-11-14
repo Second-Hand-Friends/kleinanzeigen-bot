@@ -88,6 +88,31 @@ def test_extractor(browser_mock:MagicMock, test_bot_config:Config) -> extract_mo
     return extract_module.AdExtractor(browser_mock, test_bot_config, Path("downloaded-ads"))
 
 
+class TestDependentCategorySegment:
+    """#1388: the value of the dependent picker attribute becomes the fourth category path segment."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("category", "attributes", "options", "expected"), [
+        pytest.param("161/227/playstation", {"pc_videospiele.platform": "playstation_4"},
+                     [("playstation_5", "PlayStation 5"), ("playstation_4", "PlayStation 4")], "161/227/playstation/playstation_4", id = "match"),
+        pytest.param("161/227/playstation", {"art_s": "playstation"}, [("playstation_4", "PlayStation 4")], "161/227/playstation", id = "no-value-on-ad"),
+        pytest.param("17/23/actionfiguren", {"art_s": "actionfiguren"}, [], "17/23/actionfiguren", id = "no-further-level"),
+    ])
+    async def test_appends_matching_dependent_value(
+        self, test_extractor:extract_module.AdExtractor,
+        category:str, attributes:dict[str, str], options:list[tuple[str, str]], expected:str,
+    ) -> None:
+        with patch("kleinanzeigen_bot.category_picker.dependent_picker_options", new_callable = AsyncMock, return_value = options):
+            assert await test_extractor._with_dependent_category_segment(category, attributes) == expected
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("category", ["161/227", "161/227/playstation/playstation_4"])
+    async def test_leaves_other_path_lengths_alone_without_requests(self, test_extractor:extract_module.AdExtractor, category:str) -> None:
+        with patch("kleinanzeigen_bot.category_picker.dependent_picker_options", new_callable = AsyncMock) as options:
+            assert await test_extractor._with_dependent_category_segment(category, {"x": "playstation_4"}) == category
+        options.assert_not_awaited()
+
+
 class TestAdExtractorBasics:
     """Basic synchronous tests for extract_module.AdExtractor."""
 
