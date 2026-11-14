@@ -103,6 +103,7 @@ __all__ = [
 ]
 
 LOG:Final[loggers.Logger] = loggers.get_logger(__name__)
+_MAX_OVERVIEW_PAGES:Final[int] = 200  # 25 ads per page
 
 # see https://api.jquery.com/category/selectors/
 METACHAR_ESCAPER:Final[dict[int, str]] = str.maketrans({ch: f"\\{ch}" for ch in "!\"#$%&'()*+,./:;<=>?@[\\]^`{|}~"})
@@ -1735,7 +1736,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         page_action:Callable[[int], Awaitable[bool]],
         page_url:str = "https://www.kleinanzeigen.de/m-meine-anzeigen.html",
         *,
-        max_pages:int = 10,
+        max_pages:int = _MAX_OVERVIEW_PAGES,
         open_page:bool = True,
     ) -> bool:
         """
@@ -1747,7 +1748,7 @@ class WebScrapingMixin:  # noqa: PLR0904
         Args:
             page_action: Async callable that receives current_page number and returns True if action succeeded/should stop
             page_url: URL of the paginated overview page (default: kleinanzeigen ad management page)
-            max_pages: Maximum number of pages to navigate (safety limit)
+            max_pages: Safety limit against a next button that never gets disabled; high enough for any real ad count
             open_page: Open page_url first, pinned to its first, unfiltered page; False preserves an
                 overview reached through site navigation
 
@@ -1838,6 +1839,8 @@ class WebScrapingMixin:  # noqa: PLR0904
             except TimeoutError:
                 LOG.info("No pagination controls found. Assuming last page.")
                 break
+        else:
+            LOG.warning("Stopped after %s ad overview pages (safety limit); further pages were not processed.", max_pages)
 
         return False
 
