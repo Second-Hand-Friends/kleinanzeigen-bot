@@ -646,19 +646,29 @@ class TestCategoryProbeBehavior:
         click.assert_not_awaited()
         open_page.assert_not_awaited()
 
+    async def _selected_category(self, test_bot:KleinanzeigenBot, resolver:AsyncMock, category:str) -> str:
+        """Run ``set_category`` up to the dialog and return the category path handed to the selection."""
+        link = MagicMock()
+        link.click = AsyncMock()
+        with (
+            patch("kleinanzeigen_bot.category_picker.resolve_category_text", resolver),
+            patch.object(test_bot, "web_click", new_callable = AsyncMock),
+            patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = link),
+            patch.object(test_bot, "extract_visible_text", new_callable = AsyncMock, return_value = ""),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.publishing_form._probe_category_dialog", new_callable = AsyncMock, return_value = "dialog"),
+            patch("kleinanzeigen_bot.publishing_form._set_category_in_dialog", new_callable = AsyncMock) as select,
+        ):
+            await set_category(test_bot, category = category, ad_file = "ad.yaml")
+        select.assert_awaited_once()
+        return str(select.await_args_list[0].kwargs["category"])
+
     @pytest.mark.asyncio
     async def test_text_category_is_resolved_from_the_site_before_selecting(self, test_bot:KleinanzeigenBot) -> None:
         """#1388: a path written as names becomes an ID path, without a categories.yaml entry."""
-        with (
-            patch("kleinanzeigen_bot.category_picker.resolve_category_text", new_callable = AsyncMock, return_value = "161/173/sonstige"),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            pytest.raises(TimeoutError, match = "stop here"),
-        ):
-            await set_category(test_bot, category = "Elektronik > Smartphones > Andere Marke", ad_file = "ad.yaml")
+        resolver = AsyncMock(return_value = "161/173/sonstige")
+        assert await self._selected_category(test_bot, resolver, "Elektronik > Smartphones > Andere Marke") == "161/173/sonstige"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("lookup", [
@@ -669,18 +679,9 @@ class TestCategoryProbeBehavior:
         self, test_bot:KleinanzeigenBot, lookup:Any, caplog:pytest.LogCaptureFixture,
     ) -> None:
         test_bot.categories = {"Garten": "123"}
-        mock = AsyncMock(side_effect = lookup) if isinstance(lookup, Exception) else AsyncMock(return_value = lookup)
-        with (
-            patch("kleinanzeigen_bot.category_picker.resolve_category_text", mock),
-            patch.object(test_bot, "web_click", new_callable = AsyncMock),
-            patch.object(test_bot, "page_layout_summary", new_callable = AsyncMock, return_value = ""),
-            patch.object(test_bot, "web_probe", new_callable = AsyncMock, return_value = None),
-            patch.object(test_bot, "web_find", new_callable = AsyncMock, side_effect = TimeoutError("stop here")),
-            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
-            caplog.at_level(logging.WARNING),
-            pytest.raises(TimeoutError, match = "stop here"),  # reached the form flow, i.e. the parent alias was accepted
-        ):
-            await set_category(test_bot, category = "Garten > Blumen", ad_file = "ad.yaml")
+        resolver = AsyncMock(side_effect = lookup) if isinstance(lookup, Exception) else AsyncMock(return_value = lookup)
+        with caplog.at_level(logging.WARNING):
+            assert await self._selected_category(test_bot, resolver, "Garten > Blumen") == "123"
         assert "Using category [Garten] with ID [123]" in caplog.text
         assert ("Offered values: Smartphones, Videospiele" in caplog.text) is isinstance(lookup, Exception)
 
