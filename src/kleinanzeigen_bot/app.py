@@ -52,7 +52,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._workspace_mode_arg:_xdg_paths.InstallationMode | None = None
 
         self.categories:dict[str, str] = {}
-        self.category_labels:dict[str, str] = {}
 
         self.file_log:_loggers.LogFileHandle | None = None
         self._log_basename = os.path.splitext(os.path.basename(sys.executable))[0] if is_frozen() else "kleinanzeigen_bot"
@@ -183,7 +182,6 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         runtime_state = _runtime_config.load_config(self.config_file_path, self.workspace, self.command)
         self.config = runtime_state.config
         self.categories = runtime_state.categories
-        self.category_labels = runtime_state.category_labels
         self._timing_collector = runtime_state.timing_collector
         _runtime_config.apply_browser_config(self.browser_config, self.config, self.workspace, self.config_file_path)
 
