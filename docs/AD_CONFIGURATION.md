@@ -256,6 +256,29 @@ You can configure `auto_price_reduction` once under `ad_defaults` in `config.yam
 
 Special attributes are category-specific key/value pairs. Use the download command to inspect existing ads in your category and reuse the keys you see under `special_attributes`.
 
+To list the fields of a category before you publish, including which ones are required and which values they accept, use the read-only `fields` command. It logs in, opens the ad form, selects the category and prints one JSON object per field without submitting anything:
+
+```bash
+kleinanzeigen-bot fields --category=210/217/zubehoer
+```
+
+```json
+[
+  {
+    "key": "fahrraeder.type",
+    "attribute": "type_s",
+    "label": "Typ",
+    "required": true,
+    "preset": "",
+    "options": [{"value": "city", "label": "Cityräder"}]
+  }
+]
+```
+
+`attribute` is the key to use under `special_attributes`, `preset` is the value the category preselects, and `options` lists the selectable labels with their API values (empty when they cannot be read). `--category` accepts a numeric category path or a name from `categories.yaml`.
+
+If publishing fails with a form validation error, the message names the field key next to its label, for example `Typ [fahrraeder.type]: Bitte gib einen Wert ein.`
+
 For condition values, use the API values from downloaded ads instead of translated display labels.
 Common API values are `new`, `like_new`, `ok`, `alright`, and `defect` (for example API `like_new` corresponds to the German UI label `Sehr Gut`), but available values can vary by category.
 

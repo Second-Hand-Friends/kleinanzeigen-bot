@@ -60,6 +60,7 @@ class ParsedArgs:
     log_file_path:str | None = None
     logfile_explicitly_provided:bool = False
     workspace_mode:str | None = None
+    category_arg:str | None = None
 
 
 def _restore_library_path_for_subprocesses() -> None:
@@ -164,6 +165,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               status   - Zeigt Anzeigenstatus und APR-Vorschau an
               list     - Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an
+              fields   - Zeigt die Felder einer Kategorie (Schlüssel, Pflichtfeld, Optionen) als JSON an, ohne etwas zu veröffentlichen
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -204,6 +206,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * all: Löscht alle Anzeigen
                     * due: Löscht alle Anzeigen, deren republication_interval abgelaufen ist
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
+              --category=<Name oder Pfad> (fields) - Kategorie, deren Felder angezeigt werden, z. B. "210/217/zubehoer" (ERFORDERLICH)
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --preserve-local-settings - Erzwingt das Beibehalten lokaler Einstellungen bei erneutem Download (überschreibt config-Wert false)
@@ -236,6 +239,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           diagnose - diagnoses browser connection issues and shows troubleshooting information
           status   - shows ad status and APR preview details
           list     - lists current online ads with ID, title, state, and expiry date
+          fields   - prints the fields of a category (key, required flag, options) as JSON without publishing anything
           --
           help     - displays this help (default command)
           version  - displays the application version
@@ -275,6 +279,7 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * all: delete all ads
                 * due: delete all ads whose republication_interval has elapsed
                 * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
+          --category=<name or path> (fields) - category whose fields are printed, e.g. "210/217/zubehoer" or a name from categories.yaml (REQUIRED)
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication
           --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
@@ -298,7 +303,7 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
         options, arguments = getopt.gnu_getopt(
             list(args)[1:],
             "hv",
-            ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "preserve-local-settings", "verbose", "workspace-mode="],
+            ["ads=", "category=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "preserve-local-settings", "verbose", "workspace-mode="],
         )
     except getopt.error as ex:
         LOG.error(ex.msg)
@@ -325,6 +330,8 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
             case "--ads":
                 parsed.ads_selector = value.strip().lower()
                 parsed.ads_selector_explicit = True
+            case "--category":
+                parsed.category_arg = value.strip()
             case "--force":
                 parsed.ads_selector = "all"
                 parsed.ads_selector_explicit = True

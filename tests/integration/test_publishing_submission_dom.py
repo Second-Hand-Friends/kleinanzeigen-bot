@@ -163,7 +163,7 @@ async def _validation_errors(web:WebScrapingMixin, show_html:ShowHtml, body:str)
 
 async def test_reports_referenced_react_errors_without_native_invalid_state(web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """Report field-associated React errors even when native validity passes."""
-    assert await _validation_errors(web, show_html, _editor_html(errors = True)) == ["Kilometerstand: Bitte gib einen Wert ein."]
+    assert await _validation_errors(web, show_html, _editor_html(errors = True)) == ["Kilometerstand [autos.km]: Bitte gib einen Wert ein."]
 
 
 @pytest.mark.parametrize("container", ["main", "div"])
@@ -200,13 +200,13 @@ async def test_combobox_status_error_uses_its_label(web:WebScrapingMixin, show_h
             '<button type="button" id="autos.marke_s" role="combobox" aria-invalid="true" aria-describedby="marke-message">'
             "Bitte wählen</button>"
             '<p id="marke-message" role="status">Bitte waehle eine Marke.</p></div></form>')
-    assert await _validation_errors(web, show_html, body) == ["Marke: Bitte waehle eine Marke."]
+    assert await _validation_errors(web, show_html, body) == ["Marke [autos.marke_s]: Bitte waehle eine Marke."]
 
 
 async def test_unreferenced_status_error_is_scoped_to_one_invalid_field(web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """An adjacent React error is read without collecting other page statuses."""
     body = _editor_html(errors = True, described = False, extra = '<p role="status">Unrelated main status</p>')
-    assert await _validation_errors(web, show_html, body) == ["Kilometerstand: Bitte gib einen Wert ein."]
+    assert await _validation_errors(web, show_html, body) == ["Kilometerstand [autos.km]: Bitte gib einen Wert ein."]
 
 
 # --- free Basis package --------------------------------------------------------------------------

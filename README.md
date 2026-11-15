@@ -255,6 +255,7 @@ Commands:
   diagnose - diagnoses browser connection issues and shows troubleshooting information
   status   - shows ad status and APR preview details
   list     - lists current online ads with ID, title, state, and expiry date
+  fields   - prints the fields of a category (key, required flag, options) as JSON without publishing anything
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -294,6 +295,7 @@ Options:
         * all: delete all ads
         * due: delete all ads whose republication_interval has elapsed
         * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
+  --category=<name or path> (fields) - category whose fields are printed, e.g. "210/217/zubehoer" or a name from categories.yaml (REQUIRED)
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
   --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
