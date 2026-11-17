@@ -522,6 +522,13 @@ class TestExtendChoiceDialog:
         assert page.confirmed is True
         assert saved["updated_on"] == _UNCHANGED
 
+    @pytest.mark.asyncio
+    async def test_close_open_dialog_tolerates_missing_dialog(self, test_bot:KleinanzeigenBot) -> None:
+        """Closing is best effort: no close button is not an error."""
+        with patch.object(test_bot, "web_click", new_callable = AsyncMock, side_effect = TimeoutError("no dialog")) as click:
+            await extend_flow._close_open_dialog(test_bot)
+        click.assert_awaited_once()
+
     def test_choice_dialog_script_receives_labels_as_arguments(self) -> None:
         """Labels are passed as JSON arguments, never spliced into the script text."""
         script = extend_flow._choice_dialog_script("select")
