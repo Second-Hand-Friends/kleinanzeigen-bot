@@ -294,7 +294,7 @@ class TestKleinanzeigenBotAdOperations:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("args", [["draft"], ["draft", "--ads=new"]])
     async def test_run_draft_command_saves_new_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None, args:list[str]) -> None:  # pylint: disable=unused-argument
-        """draft loads new ads, opens the logged-in browser and hands them to save_ad_drafts."""
+        """The draft command loads new ads, opens the logged-in browser and hands them to save_ad_drafts."""
         ads = [("ad.yaml", MagicMock(), {})]
         with (
             patch.object(test_bot, "load_ads", return_value = ads) as load_ads,
