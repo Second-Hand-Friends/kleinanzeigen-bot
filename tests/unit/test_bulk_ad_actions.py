@@ -32,6 +32,7 @@ class Overview:
         self.visited:list[int] = []
         self.attempted:list[int] = []
         self.succeeded:list[int] = []
+        self.success_message = False
 
     async def open(self, url:str) -> None:
         parts = urlsplit(url)
@@ -70,8 +71,16 @@ class Overview:
             if ad_id == self.failed_id:
                 raise TimeoutError("Simulated click timeout")
             self.succeeded.append(ad_id)
+            self.success_message = True
 
         return MagicMock(click = click)
+
+    async def extension_state(self, _script:str) -> str:
+        """Legacy overview without the choice dialog: a click shows the "Vielen Dank!" dialog."""
+        return "success" if self.success_message else "none"
+
+    async def close_dialog(self, *_args:Any, **_kwargs:Any) -> None:
+        self.success_message = False
 
     @staticmethod
     async def await_condition(condition:Callable[[], Awaitable[Any]], **_kwargs:Any) -> Any:
@@ -123,9 +132,8 @@ async def test_bulk_command_visits_each_needed_page_once(
         patch.object(test_bot, "web_find", side_effect = overview.find),
         patch.object(test_bot, "web_find_all", side_effect = overview.find_all),
         patch.object(test_bot, "web_scroll_page_down", new_callable = AsyncMock),
-        patch.object(test_bot, "web_click", new_callable = AsyncMock),
-        # legacy overview without the extension choice dialog
-        patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "closed"),
+        patch.object(test_bot, "web_click", side_effect = overview.close_dialog),
+        patch.object(test_bot, "web_execute", side_effect = overview.extension_state),
         patch.object(test_bot, "web_await", side_effect = overview.await_condition),
         patch.object(test_bot, "web_sleep", new_callable = AsyncMock) as sleep,
         patch("kleinanzeigen_bot.published_ads.fetch_published_ads", side_effect = fetch),

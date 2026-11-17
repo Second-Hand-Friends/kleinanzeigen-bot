@@ -531,12 +531,13 @@ kleinanzeigen_bot/extend_flow.py:
   _extend_ad:
     "Extending ad '%s' (ID: %s)...": "Verlängere Anzeige '%s' (ID: %s)..."
     " -> FAILED: Could not find extend button for ad ID %s": " -> FEHLER: 'Verlängern'-Button für Anzeigen-ID %s nicht gefunden"
-    " -> No confirmation dialog found, extension may have completed directly": " -> Kein Bestätigungsdialog gefunden"
     " -> SUCCESS: ad extended with ID %s": " -> ERFOLG: Anzeige mit ID %s verlängert"
     " -> FAILED: Timeout while extending ad '%s': %s": " -> FEHLER: Zeitüberschreitung beim Verlängern der Anzeige '%s': %s"
     " -> FAILED: Could not persist extension for ad '%s': %s": " -> FEHLER: Verlängerung der Anzeige '%s' konnte nicht gespeichert werden: %s"
     "Found extend button on page %s": "'Verlängern'-Button auf Seite %s gefunden"
     " -> FAILED: Could not confirm the free extension option for ad ID %s": " -> FEHLER: Kostenlose Verlängerungsoption für Anzeigen-ID %s konnte nicht bestätigt werden"
+    " -> FAILED: Previous extension message did not disappear for ad ID %s": " -> FEHLER: Meldung der vorherigen Verlängerung ist für Anzeigen-ID %s nicht verschwunden"
+    " -> FAILED: Neither the extension choice dialog nor a success message appeared for ad ID %s": " -> FEHLER: Für Anzeigen-ID %s erschien weder der Auswahldialog noch eine Erfolgsmeldung"
 
   _confirm_free_extension:
     " -> Extension choice dialog not handled (%s)": " -> Auswahldialog zum Verlängern nicht bearbeitet (%s)"

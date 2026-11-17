@@ -42,7 +42,7 @@ async def _run(web:WebScrapingMixin, action:str) -> str:
 async def test_selects_and_confirms_only_the_free_option(web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """The free option is selected and confirmed; the paid option stays unselected."""
     await show_html(_dialog())
-    assert await _run(web, "state") == "pending"
+    assert await _run(web, "state") == "choice"
     assert await _run(web, "select") == "selected"
     assert await web.web_execute("document.getElementById('free').checked") is True
     assert await web.web_execute("document.getElementById('paid').checked") is False
@@ -69,10 +69,26 @@ async def test_refuses_disabled_confirm_button(web:WebScrapingMixin, show_html:S
     assert "Anzeige verlängern" not in await web.web_execute("clicks")
 
 
-async def test_reports_missing_and_closed_dialog(web:WebScrapingMixin, show_html:ShowHtml) -> None:
-    """Without the dialog nothing is clicked; a success dialog is recognized."""
+async def test_paid_only_dialog_is_recognized_and_rejected(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """A dialog without the free option is still a choice dialog; selection refuses it."""
+    await show_html("""
+<div role="dialog" aria-modal="true">
+  <h2>Wie möchtest du deine Anzeige verlängern?</h2>
+  <label for="paid"><input type="radio" id="paid" name="ext" value="extend-bumpup"> Verlängern &amp; Hochschieben für 2,99 €</label>
+  <button type="button">Anzeige verlängern</button>
+</div>
+""")
+    assert await _run(web, "state") == "choice"
+    assert await _run(web, "select") == "free-option-not-unique:0/1"
+    assert await web.web_execute("document.getElementById('paid').checked") is False
+
+
+async def test_state_requires_a_positive_signal(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """Without a dialog nothing is clicked and "none" is reported; toast and legacy dialog are "success"."""
     await show_html("<p>Meine Anzeigen</p>")
     assert await _run(web, "select") == "no-dialog"
-    assert await _run(web, "state") == "closed"
-    await show_html('<div role="dialog"><h2>Vielen Dank!</h2><p>Anzeige wurde erfolgreich verlängert.</p></div>')
-    assert await _run(web, "state") == "success-dialog"
+    assert await _run(web, "state") == "none"
+    await show_html('<div role="status"><p>Anzeige wurde erfolgreich verlängert.</p></div>')
+    assert await _run(web, "state") == "success"
+    await show_html('<div role="dialog"><h2>Vielen Dank!</h2><button aria-label="Schließen">x</button></div>')
+    assert await _run(web, "state") == "success"
