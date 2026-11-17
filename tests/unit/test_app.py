@@ -13,6 +13,7 @@ from ruamel.yaml import YAML as _YAML
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.login_flow import LoginDetectionReason, LoginDetectionResult
+from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.runtime_config import RuntimeState
 from kleinanzeigen_bot.utils import xdg_paths
@@ -295,7 +296,7 @@ class TestKleinanzeigenBotAdOperations:
     @pytest.mark.parametrize("args", [["draft"], ["draft", "--ads=new"]])
     async def test_run_draft_command_saves_new_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None, args:list[str]) -> None:  # pylint: disable=unused-argument
         """The draft command loads new ads, opens the logged-in browser and hands them to save_ad_drafts."""
-        ads = [("ad.yaml", MagicMock(), {})]
+        ads:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", MagicMock(spec = Ad), {})]
         with (
             patch.object(test_bot, "load_ads", return_value = ads) as load_ads,
             patch.object(test_bot, "_open_logged_in_browser", new_callable = AsyncMock) as open_browser,

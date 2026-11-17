@@ -17,14 +17,14 @@
    */
   (action, label, confirmation) => {
     if (action === "confirmed") {
-      return [...document.querySelectorAll('[role="dialog"], dialog[open], h1, h2, h3')]
+      return [...globalThis.document.querySelectorAll('[role="dialog"], dialog[open], h1, h2, h3')]
         .some((element) => (element.textContent || "").includes(confirmation));
     }
     /** @param {HTMLElement} element */
     const visible = (element) =>
       element.getClientRects().length > 0 &&
-      getComputedStyle(element).visibility !== "hidden" && !element.matches(":disabled");
-    const form = document.getElementById("ad-title")?.closest("form");
+      globalThis.getComputedStyle(element).visibility !== "hidden" && !element.matches(":disabled");
+    const form = globalThis.document.getElementById("ad-title")?.closest("form");
     if (!form) return "no-form";
     const matches = [...form.querySelectorAll("button")].filter(visible)
       .filter((button) => button.textContent.replace(/\s+/g, " ").trim() === label);
