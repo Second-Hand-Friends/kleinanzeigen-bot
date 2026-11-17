@@ -922,15 +922,9 @@ class AdExtractor(WebScrapingMixin):
             # change f to  'nein' and 't' to 'ja'
             info["special_attributes"]["schaden_s"] = info["special_attributes"]["schaden_s"].translate(str.maketrans({"t": "ja", "f": "nein"}))
         info["price"], info["price_type"] = await self._extract_pricing_info_from_ad_page(island_props = island_props)
-        info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page(island_props = island_props)
-        if info["shipping_type"] == "SHIPPING":
-            # The ad page only shows "Versand ab x €" for the cheapest selected option, so the price
-            # match finds at most that one option, and none if the price is a promotional one. The
-            # edit form of an own ad knows the actual selection; the price match stays the fallback
-            # (e.g. for ads of other users, whose edit form is not accessible).
-            if edit_form_options := await self._extract_shipping_options_from_edit_form(ad_id):
-                info["shipping_options"] = edit_form_options
-                info["shipping_costs"] = None
+        info["shipping_type"], info["shipping_costs"], info["shipping_options"] = await self._extract_shipping_info_from_ad_page(
+            island_props = island_props, ad_id = ad_id,
+        )
         info["sell_directly"] = await self._extract_sell_directly_from_ad_page()
         if info["sell_directly"] and not info["shipping_options"]:
             # Eligibility does not identify a carrier. Keep the extracted costs without
@@ -1419,9 +1413,17 @@ class AdExtractor(WebScrapingMixin):
             return header.strip()
         return None
 
-    async def _extract_shipping_info_from_ad_page(self, *, island_props:dict[str, Any] | None = None) -> tuple[str, float | None, list[str] | None]:
+    async def _extract_shipping_info_from_ad_page(
+        self, *, island_props:dict[str, Any] | None = None, ad_id:int | None = None,
+    ) -> tuple[str, float | None, list[str] | None]:
         """
         Extracts shipping information from an ad page.
+
+        For a shipping ad, the selected options are read from the ad's edit form first (when
+        ``ad_id`` is given): the ad page only shows "Versand ab x €" for the cheapest selected
+        option, so matching that price finds at most one option, and none for a promotional price.
+        Price matching against the shipping-options API is only the fallback, e.g. for ads of
+        other users, whose edit form is not accessible.
 
         On the redesigned (Astro) layout the legacy shipping element
         (``boxedarticle--details--shipping``) is absent on owned ads. In that
@@ -1448,7 +1450,12 @@ class AdExtractor(WebScrapingMixin):
                 ship_type = "PICKUP"
             elif shipping_text == "Versand möglich":
                 ship_type = "SHIPPING"
+                if ad_id is not None:
+                    shipping_options = await self._extract_shipping_options_from_edit_form(ad_id)
             elif "€" in shipping_text:
+                if ad_id is not None and (edit_form_options := await self._extract_shipping_options_from_edit_form(ad_id)):
+                    # The selection is known, so the displayed minimum price is not needed.
+                    return "SHIPPING", None, edit_form_options
                 shipping_price_parts = shipping_text.split(" ")
                 ship_type = "SHIPPING"
                 ship_costs = float(misc.parse_decimal(shipping_price_parts[-2]))
