@@ -277,6 +277,8 @@ kleinanzeigen-bot fields --category=210/217/zubehoer
 
 `attribute` is the key to use under `special_attributes`, `preset` is the value the category preselects, and `options` lists the selectable labels with their API values (empty when they cannot be read). `--category` accepts a numeric category path or a name from `categories.yaml`.
 
+Fields that are not a dropdown or radio group, such as the condition (`condition_s`), come back with `options: []`, so the command does not list their valid values. For those, take the values from a downloaded ad (see the condition values below). If the API value of a dropdown option cannot be read, its `value` is empty and only the `label` is known.
+
 If publishing fails with a form validation error, the message names the field key next to its label, for example `Typ [fahrraeder.type]: Bitte gib einen Wert ein.`
 
 For condition values, use the API values from downloaded ads instead of translated display labels.

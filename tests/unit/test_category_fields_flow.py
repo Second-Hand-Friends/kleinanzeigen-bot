@@ -120,6 +120,23 @@ async def test_read_category_fields_ignores_unexpected_script_result(monkeypatch
     assert await category_fields_flow.read_category_fields(FakeFieldsWeb(None), "https://x", "1/2", {}) == []  # type: ignore[arg-type]
 
 
+@pytest.mark.asyncio
+async def test_read_category_fields_logs_options_without_api_value(monkeypatch:pytest.MonkeyPatch, caplog:pytest.LogCaptureFixture) -> None:
+    """Make options with an unreadable API value visible in the debug log."""
+
+    async def fake_set_category(web:object, *, category:str | None, ad_file:str, product_title:str | None = None) -> None:
+        assert ad_file == "fields --category=1/2"
+
+    monkeypatch.setattr(publishing_form, "set_category", fake_set_category)
+    fields = [{"key": "a.b", "options": [{"value": "", "label": "Eins"}]}, {"key": "a.c", "options": [{"value": "x", "label": "Zwei"}]}]
+
+    with caplog.at_level("DEBUG"):
+        assert await category_fields_flow.read_category_fields(FakeFieldsWeb(fields), "https://x", "1/2", {}) == fields  # type: ignore[arg-type]
+
+    assert "[a.b]" in caplog.text
+    assert "[a.c]" not in caplog.text
+
+
 def test_render_fields_is_json_with_umlauts() -> None:
     """Print machine-readable JSON without escaping umlauts."""
     rendered = category_fields_flow.render_fields(_FIELDS)

@@ -135,13 +135,27 @@ async def test_field_errors_name_the_special_attributes_key(web:WebScrapingMixin
         </div>
         <div>
             <label for="baby_kinderschuhe.art">Art</label>
+            <input type="hidden" name="attributeMap[baby_kinderschuhe.art]" value="">
             <button id="baby_kinderschuhe.art" type="button" role="combobox">Bitte wählen</button>
             <div id="attribute-error">Bitte gib einen Wert ein.</div>
         </div>
         <div>
-            <label for="brand">Marke</label>
-            <input id="brand" aria-invalid="true" aria-describedby="brand-description">
-            <div id="brand-description" class="text-critical">Bitte gib einen Wert ein.</div>
+            <div>
+                <label for="brand">Marke</label>
+                <input id="brand" aria-invalid="true" aria-describedby="brand-description">
+                <div id="brand-description" class="text-critical">Bitte gib einen Wert ein.</div>
+            </div>
+            <div>
+                <label for="price.unit">Einheit</label>
+                <input type="hidden" name="attributeMap[price.unit]" value="">
+                <input id="price.unit" value="kg">
+            </div>
+        </div>
+        <div>
+            <label for="plain">Ohne Namen</label>
+            <input id="plain" aria-invalid="true" aria-describedby="plain-description">
+            <div id="plain-description" class="text-critical">Bitte gib einen Wert ein.</div>
+            <div id="unrelated.id">no attribute</div>
         </div>
         </form></body></html>""", "document.getElementById('brand') !== null")
 
@@ -149,6 +163,7 @@ async def test_field_errors_name_the_special_attributes_key(web:WebScrapingMixin
         "Typ [fahrraeder.type]: Bitte gib einen Wert ein.",
         "Art [baby_kinderschuhe.art]: Bitte gib einen Wert ein.",
         "Marke: Bitte gib einen Wert ein.",
+        "Ohne Namen: Bitte gib einen Wert ein.",
     }
 
 
