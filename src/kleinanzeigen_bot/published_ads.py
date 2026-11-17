@@ -212,7 +212,7 @@ async def fetch_published_ads(
     """
     ads:list[PublishedAd] = []
     page = 1
-    MAX_PAGE_LIMIT:Final[int] = 100
+    MAX_PAGE_LIMIT:Final[int] = 200  # 25 ads per page, same safety limit as the HTML overview
     while True:
         # Safety check: don't paginate beyond reasonable limit
         if page > MAX_PAGE_LIMIT:
