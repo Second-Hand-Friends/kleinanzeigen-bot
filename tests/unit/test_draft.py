@@ -96,6 +96,30 @@ class TestSubmitDraft:
             await publishing_submission.submit_draft(_web(editor), Ad.model_validate(_AD), captcha_config = Config().captcha)
         assert editor.clicks == 1
 
+    @pytest.mark.asyncio
+    async def test_failed_click_is_uncertain(self) -> None:
+        """A browser error during the click may have saved the draft: uncertain, no retry."""
+        editor = FakeEditor()
+        web = _web(editor)
+
+        async def execute(script:str) -> Any:
+            if script == publishing_submission._draft_button_script("click"):
+                editor.clicks += 1
+                raise TimeoutError("lost")
+            return await editor.execute(script)
+
+        web.web_execute = AsyncMock(side_effect = execute)
+        with pytest.raises(PublishSubmissionUncertainError):
+            await publishing_submission.submit_draft(web, Ad.model_validate(_AD), captcha_config = Config().captcha)
+        assert editor.clicks == 1
+
+    @pytest.mark.asyncio
+    async def test_button_gone_at_click_time_clicks_nothing(self) -> None:
+        """If the button is no longer unique when clicking, nothing was clicked: a plain failure."""
+        editor = FakeEditor(click = "matches:0")
+        with pytest.raises(TimeoutError):
+            await publishing_submission.submit_draft(_web(editor), Ad.model_validate(_AD), captcha_config = Config().captcha)
+
 
 class TestSaveAdDrafts:
 
@@ -128,6 +152,21 @@ class TestSaveAdDrafts:
         ):
             await publishing_workflow.save_ad_drafts(MagicMock(), [("a.yaml", ad, dict(_AD))], root_url = "https://example.invalid", config = Config())
         save.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_draft_is_reported_and_others_continue(self) -> None:
+        """A draft that clearly failed is counted; the next ad is still processed."""
+        first, second = Ad.model_validate(_AD), Ad.model_validate({**_AD, "title": "Second test ad with a long title"})
+        with (
+            patch.object(publishing_workflow, "save_ad_draft", new_callable = AsyncMock,
+                         side_effect = [TimeoutError("Could not find draft button"), None]) as save,
+            pytest.raises(AdBatchError),
+        ):
+            await publishing_workflow.save_ad_drafts(
+                MagicMock(), [("a.yaml", first, dict(_AD)), ("b.yaml", second, dict(_AD))],
+                root_url = "https://example.invalid", config = Config(),
+            )
+        assert save.await_count == 2
 
     @pytest.mark.asyncio
     async def test_save_ad_draft_opens_create_form_and_submits_draft(self) -> None:
