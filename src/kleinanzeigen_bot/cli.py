@@ -179,7 +179,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * <id(s)>: Gibt eine oder mehrere Anzeigen-IDs an, die veröffentlicht werden sollen, z. B. "--ads=1,2,3", ignoriert republication_interval
                     * Kombinationen: Sie können mehrere Selektoren mit Kommas kombinieren, z. B. "--ads=changed,due" um sowohl geänderte als auch
                       fällige Anzeigen zu veröffentlichen
-              --ads=new (draft) - Speichert neue Anzeigen (ohne ID) als Entwurf (STANDARD: new). Die Anzeigen-YAML bleibt unverändert.
+              --ads=new (draft) - Speichert neue Anzeigen (ohne ID) als Entwurf (STANDARD: new). Die Anzeigen-YAML bleibt unverändert,
+                    daher legt jeder Lauf einen neuen Entwurf an: Wird draft zweimal für dieselbe Anzeige ausgeführt, entsteht ein doppelter Entwurf.
               --ads=all|new|drafts|<id(s)> (download) - Gibt an, welche Anzeigen heruntergeladen werden sollen (STANDARD: new)
                     Mögliche Werte:
                     * all: Lädt alle Anzeigen aus Ihrem Profil herunter
@@ -252,7 +253,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * changed: only publish ads that have been modified since last publication
                 * <id(s)>: provide one or several ads by ID to (re-)publish, like e.g. "--ads=1,2,3" ignoring republication_interval
                 * Combinations: You can combine multiple selectors with commas, e.g. "--ads=changed,due" to publish both changed and due ads
-          --ads=new (draft) - saves new ads (without id) as drafts (DEFAULT: new). The ad YAML is not modified.
+          --ads=new (draft) - saves new ads (without id) as drafts (DEFAULT: new). The ad YAML is not modified,
+                so every run creates a new draft: running draft twice for the same ad creates a duplicate draft.
           --ads=all|new|drafts|<id(s)> (download) - specifies which ads to download (DEFAULT: new)
                 Possible values:
                 * all: downloads all ads from your profile
