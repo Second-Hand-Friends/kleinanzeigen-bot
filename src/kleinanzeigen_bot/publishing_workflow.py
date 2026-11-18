@@ -154,7 +154,8 @@ async def _replacement_is_active(
     if new_id is None or new_id == old_id:
         return False
     try:
-        ads = await published_ads.fetch_published_ads(web, root_url, strict = True, stop_after_ad_id = new_id)
+        async with asyncio.timeout(web.effective_timeout("page_load")):
+            ads = await published_ads.fetch_published_ads(web, root_url, strict = True, stop_after_ad_id = new_id)
     except (PublishedAdsFetchIncompleteError, TimeoutError, ProtocolException, PageScriptError, AssertionError):
         return False
     matches = [ad for ad in ads if ad_matches_id(ad, new_id)]

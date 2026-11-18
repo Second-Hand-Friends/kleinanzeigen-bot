@@ -339,6 +339,32 @@ class TestKleinanzeigenBotPublishAdsBasics:
                 delete_ad_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_replacement_inventory_timeout_keeps_original(
+        self,
+        test_bot:KleinanzeigenBot,
+        base_ad_config:dict[str, Any],
+    ) -> None:
+        test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
+        original = Ad.model_validate(base_ad_config | {"id": 42})
+
+        async def stalled_request(_url:str) -> None:
+            await asyncio.Event().wait()
+
+        with (
+            patch.object(test_bot, "effective_timeout", return_value = 0),
+            patch.object(test_bot, "web_request", side_effect = stalled_request) as request_mock,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
+        ):
+            await delete_old_ad_if_needed(
+                test_bot, original, [{"id": 42, "state": "active"}],
+                timing = "AFTER_PUBLISH", keep_old_ads = False, config = test_bot.config,
+                root_url = test_bot.root_url, replacement_ad_id = 12345,
+            )
+
+        request_mock.assert_awaited_once()
+        delete_ad_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_publish_ads_uses_millisecond_retry_delay_on_retryable_failure(
         self,
         test_bot:KleinanzeigenBot,
