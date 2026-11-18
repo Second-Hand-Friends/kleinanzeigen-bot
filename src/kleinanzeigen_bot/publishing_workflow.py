@@ -96,6 +96,7 @@ async def delete_old_ad_if_needed(  # noqa: SLF001 — accessed by bot seam via 
     config:Config,
     root_url:str,
     known_published_ad_ids:Collection[int] | None = None,
+    replacement_ad_id:int | None = None,
 ) -> None:
     """Delete an old ad before or after (re-)publishing, depending on config.
 
@@ -106,8 +107,8 @@ async def delete_old_ad_if_needed(  # noqa: SLF001 — accessed by bot seam via 
     the logged-in account's ads) does not contain the ad's ID, e.g. after the
     ad file was moved to another account. The server rejects such deletes.
 
-    In ``AFTER_PUBLISH`` mode, title-based deletion is always disabled to
-    avoid accidentally removing the newly published ad.
+    In ``AFTER_PUBLISH`` mode, deletion requires a distinct replacement ID
+    confirmed active in the seller inventory. Title-based deletion is disabled.
     """
     if keep_old_ads:
         return
@@ -117,6 +118,16 @@ async def delete_old_ad_if_needed(  # noqa: SLF001 — accessed by bot seam via 
         LOG.warning(
             "Skipping deletion of old ad %s for '%s': it is not listed in this account's ads.",
             ad_cfg.id, ad_cfg.title,
+        )
+        return
+    if (
+        timing == "AFTER_PUBLISH"
+        and ad_cfg.id is not None
+        and not await _replacement_is_active(web, root_url, old_id = ad_cfg.id, new_id = replacement_ad_id)
+    ):
+        LOG.warning(
+            "Keeping old ad %s for '%s': replacement ad %s is not confirmed active.",
+            ad_cfg.id, ad_cfg.title, replacement_ad_id,
         )
         return
     delete_old_ads_by_title = (
@@ -129,6 +140,24 @@ async def delete_old_ad_if_needed(  # noqa: SLF001 — accessed by bot seam via 
         published_ads_list = published_ads_list,
         delete_old_ads_by_title = delete_old_ads_by_title,
     )
+
+
+async def _replacement_is_active(
+    web:WebScrapingMixin,
+    root_url:str,
+    *,
+    old_id:int,
+    new_id:int | None,
+) -> bool:
+    """Require positive seller inventory evidence before deleting the original."""
+    if new_id is None or new_id == old_id:
+        return False
+    try:
+        ads = await published_ads.fetch_published_ads(web, root_url, strict = True)
+    except (PublishedAdsFetchIncompleteError, TimeoutError, ProtocolException):
+        return False
+    matches = [ad for ad in ads if ad_matches_id(ad, new_id)]
+    return len(matches) == 1 and matches[0].get("state") == "active"
 
 
 async def publish_ad(
@@ -395,7 +424,7 @@ async def publish_ads(
             continue
 
         count += 1
-        success = False
+        resolved_ad_id:int | None = None
         baseline_price = ad_cfg.price
         baseline_price_reduction_count = ad_cfg.price_reduction_count
 
@@ -419,7 +448,6 @@ async def publish_ads(
                 )
                 if known_published_ad_ids is not None and isinstance(resolved_ad_id, int):
                     known_published_ad_ids.add(resolved_ad_id)
-                success = True
                 break  # Publish succeeded, exit retry loop
             except asyncio.CancelledError:
                 raise  # Respect task cancellation
@@ -488,7 +516,7 @@ async def publish_ads(
                 await web.web_sleep(2_000)  # Wait before retry
 
         # Check publishing result separately (no retry - ad is already submitted)
-        if success:
+        if resolved_ad_id is not None:
             try:
                 publish_timeout = web.timeout("publishing_result")
                 await web.web_await(
@@ -508,6 +536,7 @@ async def publish_ads(
                 config = config,
                 root_url = root_url,
                 known_published_ad_ids = known_published_ad_ids,
+                replacement_ad_id = resolved_ad_id,
             )
 
     _report_batch_result(AdUpdateStrategy.REPLACE, count - failed_count, failed_count)

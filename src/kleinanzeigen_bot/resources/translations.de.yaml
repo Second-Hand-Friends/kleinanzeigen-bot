@@ -205,6 +205,7 @@ kleinanzeigen_bot/publishing_workflow.py:
 
   delete_old_ad_if_needed:
     "Skipping deletion of old ad %s for '%s': it is not listed in this account's ads.": "Löschen der alten Anzeige %s für '%s' übersprungen: Sie ist in den Anzeigen dieses Kontos nicht aufgeführt."
+    "Keeping old ad %s for '%s': replacement ad %s is not confirmed active.": "Alte Anzeige %s für '%s' bleibt erhalten: Ersatzanzeige %s ist nicht als aktiv bestätigt."
 
   _fetch_published_ads_for_publish:
     "Skipping title-based publishes because full published-ad list could not be fetched before publish: %s": "Titelbasierte Veröffentlichungen werden übersprungen, weil die vollständige Liste veröffentlichter Anzeigen vor der Veröffentlichung nicht abgerufen werden konnte: %s"

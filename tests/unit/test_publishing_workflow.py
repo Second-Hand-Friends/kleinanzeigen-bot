@@ -282,31 +282,41 @@ class TestKleinanzeigenBotPublishAdsBasics:
     """Publish-ads orchestration tests moved from TestKleinanzeigenBotBasics."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("replacement_state", ["active", "pending", "absent", "unavailable"])
     async def test_publish_ads_triggers_publish_and_cleanup(
         self,
         test_bot:KleinanzeigenBot,
         base_ad_config:dict[str, Any],
         mock_page:MagicMock,
+        replacement_state:str,
     ) -> None:
-        """Simulate publish job wiring without hitting the live site."""
+        """Delete the original only when the exact replacement is active."""
         test_bot.page = mock_page
         test_bot.config.publishing.delete_old_ads = "AFTER_PUBLISH"
         test_bot.keep_old_ads = False
 
-        payload:dict[str, Any] = {"ads": [], "paging": {"pageNum": 1, "last": 1}}
-        ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config), {})]
+        original = {"id": 42, "state": "active"}
+        ads = [original, {"id": 7, "state": "active"}]
+        if replacement_state in {"active", "pending"}:
+            ads.append({"id": 12345, "state": replacement_state})
+        paging = {"pageNum": 1, "last": 1}
+        initial = {"content": json.dumps({"ads": [original], "paging": paging})}
+        replacement = {"content": json.dumps({"ads": ads, "paging": paging})}
+        if replacement_state == "unavailable":
+            replacement = {"content": "invalid response"}
+        ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config | {"id": 42}), {})]
 
         with (
-            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = {"content": json.dumps(payload)}) as web_request_mock,
-            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock) as publish_ad_mock,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = [initial, replacement]) as web_request_mock,
+            patch("kleinanzeigen_bot.publishing_workflow.publish_ad", new_callable = AsyncMock, return_value = 12345) as publish_ad_mock,
             patch.object(test_bot, "web_await", new_callable = AsyncMock, return_value = True) as web_await_mock,
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
         ):
             await test_bot.publish_ads(ad_cfgs)
 
-            # web_request is called once for initial published-ads snapshot
             expected_url = f"{test_bot.root_url}/m-meine-anzeigen-verwalten.json?sort=DEFAULT&pageNum=1"
-            web_request_mock.assert_awaited_once_with(expected_url)
+            assert web_request_mock.await_count == 2
+            web_request_mock.assert_awaited_with(expected_url)
             publish_ad_mock.assert_awaited_once()
             call_args = publish_ad_mock.call_args
             assert call_args is not None
@@ -314,12 +324,15 @@ class TestKleinanzeigenBotPublishAdsBasics:
             assert call_args.args[2] is ad_cfgs[0][1]
             assert call_args.args[5] == AdUpdateStrategy.REPLACE
             web_await_mock.assert_awaited_once()
-            delete_ad_mock.assert_awaited_once_with(
-                web = test_bot, root_url = test_bot.root_url,
-                ad_cfg = ad_cfgs[0][1],
-                published_ads_list = [],
-                delete_old_ads_by_title = False,
-            )
+            if replacement_state == "active":
+                delete_ad_mock.assert_awaited_once_with(
+                    web = test_bot, root_url = test_bot.root_url,
+                    ad_cfg = ad_cfgs[0][1],
+                    published_ads_list = [original],
+                    delete_old_ads_by_title = False,
+                )
+            else:
+                delete_ad_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_publish_ads_uses_millisecond_retry_delay_on_retryable_failure(
@@ -454,6 +467,8 @@ class TestKleinanzeigenBotPublishAdsBasics:
 
         with (
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock) as delete_ad_mock,
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                  return_value = [{"id": 43, "state": "active"}]),
             caplog.at_level("WARNING"),
         ):
             await delete_old_ad_if_needed(
@@ -463,6 +478,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
                 config = test_bot.config,
                 root_url = test_bot.root_url,
                 known_published_ad_ids = frozenset(listed_ids),
+                replacement_ad_id = 43,
             )
 
         assert delete_ad_mock.await_count == (1 if expect_delete else 0)
