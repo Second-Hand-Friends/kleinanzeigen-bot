@@ -282,7 +282,7 @@ class TestKleinanzeigenBotPublishAdsBasics:
     """Publish-ads orchestration tests moved from TestKleinanzeigenBotBasics."""
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("replacement_state", ["active", "pending", "absent", "unavailable"])
+    @pytest.mark.parametrize("replacement_state", ["active", "pending", "absent", "unavailable", "http_error"])
     async def test_publish_ads_triggers_publish_and_cleanup(
         self,
         test_bot:KleinanzeigenBot,
@@ -301,9 +301,13 @@ class TestKleinanzeigenBotPublishAdsBasics:
             ads.append({"id": 12345, "state": replacement_state})
         paging = {"pageNum": 1, "last": 1}
         initial = {"content": json.dumps({"ads": [original], "paging": paging})}
-        replacement = {"content": json.dumps({"ads": ads, "paging": paging})}
+        # Found IDs can use the first page even for a multi-page inventory.
+        replacement_paging = {"pageNum": 1, "last": 2, "next": 2} if replacement_state in {"active", "pending"} else paging
+        replacement:dict[str, str] | Exception = {"content": json.dumps({"ads": ads, "paging": replacement_paging})}
         if replacement_state == "unavailable":
             replacement = {"content": "invalid response"}
+        elif replacement_state == "http_error":
+            replacement = AssertionError("503 Service Unavailable")
         ad_cfgs:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", Ad.model_validate(base_ad_config | {"id": 42}), {})]
 
         with (

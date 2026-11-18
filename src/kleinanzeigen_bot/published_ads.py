@@ -199,13 +199,15 @@ async def fetch_published_ads(
     root_url:str,
     *,
     strict:bool = False,
+    stop_after_ad_id:int | None = None,
 ) -> list[PublishedAd]:
-    """Fetch all published ads, handling API pagination.
+    """Fetch published ads, optionally stopping at the page containing an exact ID.
 
     Args:
         web: A WebScrapingMixin instance for making web requests.
         root_url: The base URL of the Kleinanzeigen site.
-        strict: If True, raise PublishedAdsFetchIncompleteError when pagination data is incomplete.
+        strict: If True, raise PublishedAdsFetchIncompleteError when a traversed page is incomplete.
+        stop_after_ad_id: Stop after the page containing this ID. If absent, traverse all pages.
 
     Returns:
         List of all published ads across all pages.
@@ -241,6 +243,8 @@ async def fetch_published_ads(
         filtered_ads, paging, raw_ads_count = result
         ads.extend(filtered_ads)
 
+        if stop_after_ad_id is not None and any(ad_matches_id(ad, stop_after_ad_id) for ad in filtered_ads):
+            break
         next_page = _determine_next_page(paging, page, raw_ads_count, strict = strict)
         if next_page is None:
             break

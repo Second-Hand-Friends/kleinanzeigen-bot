@@ -37,6 +37,7 @@ from .utils.exceptions import (
     AdFormValidationError,
     CategoryResolutionError,
     ManualPackageSelectionRequiredError,
+    PageScriptError,
     PublishSubmissionUncertainError,
 )
 from .utils.i18n import pluralize
@@ -153,8 +154,8 @@ async def _replacement_is_active(
     if new_id is None or new_id == old_id:
         return False
     try:
-        ads = await published_ads.fetch_published_ads(web, root_url, strict = True)
-    except (PublishedAdsFetchIncompleteError, TimeoutError, ProtocolException):
+        ads = await published_ads.fetch_published_ads(web, root_url, strict = True, stop_after_ad_id = new_id)
+    except (PublishedAdsFetchIncompleteError, TimeoutError, ProtocolException, PageScriptError, AssertionError):
         return False
     matches = [ad for ad in ads if ad_matches_id(ad, new_id)]
     return len(matches) == 1 and matches[0].get("state") == "active"
