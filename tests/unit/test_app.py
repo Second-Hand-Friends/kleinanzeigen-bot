@@ -5,7 +5,7 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from ruamel.yaml import YAML as _YAML
@@ -13,6 +13,7 @@ from ruamel.yaml import YAML as _YAML
 from kleinanzeigen_bot._version import __version__
 from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.login_flow import LoginDetectionReason, LoginDetectionResult
+from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.model.config_model import Config
 from kleinanzeigen_bot.runtime_config import RuntimeState
 from kleinanzeigen_bot.utils import xdg_paths
@@ -290,6 +291,44 @@ class TestKleinanzeigenBotAdOperations:
         with patch.object(test_bot, "load_ads", return_value = []):
             await test_bot.run(["script.py", "publish"])
             assert test_bot.command == "publish"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("args", [["draft"], ["draft", "--ads=new"]])
+    async def test_run_draft_command_saves_new_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None, args:list[str]) -> None:  # pylint: disable=unused-argument
+        """The draft command loads new ads, opens the logged-in browser and hands them to save_ad_drafts."""
+        ads:list[tuple[str, Ad, dict[str, Any]]] = [("ad.yaml", MagicMock(spec = Ad), {})]
+        with (
+            patch.object(test_bot, "load_ads", return_value = ads) as load_ads,
+            patch.object(test_bot, "_open_logged_in_browser", new_callable = AsyncMock) as open_browser,
+            patch("kleinanzeigen_bot.publishing_workflow.save_ad_drafts", new_callable = AsyncMock) as save_drafts,
+        ):
+            await test_bot.run(["script.py", *args])
+        assert test_bot.command == "draft"
+        assert test_bot.ads_selector == "new"
+        load_ads.assert_called_once_with()
+        open_browser.assert_awaited_once()
+        save_drafts.assert_awaited_once_with(test_bot, ads, root_url = test_bot.root_url, config = test_bot.config)
+
+    @pytest.mark.asyncio
+    async def test_run_draft_command_without_new_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """Without new ads nothing is opened or saved."""
+        with (
+            patch.object(test_bot, "load_ads", return_value = []),
+            patch.object(test_bot, "_open_logged_in_browser", new_callable = AsyncMock) as open_browser,
+            patch("kleinanzeigen_bot.publishing_workflow.save_ad_drafts", new_callable = AsyncMock) as save_drafts,
+        ):
+            await test_bot.run(["script.py", "draft"])
+        open_browser.assert_not_awaited()
+        save_drafts.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("selector", ["all", "due", "123"])
+    async def test_run_draft_command_rejects_other_selectors(self, test_bot:KleinanzeigenBot, mock_config_setup:None, selector:str) -> None:  # pylint: disable=unused-argument
+        """Drafts are always new ads: any other explicit selector aborts before loading ads."""
+        with patch.object(test_bot, "load_ads") as load_ads, pytest.raises(SystemExit) as exc:
+            await test_bot.run(["script.py", "draft", f"--ads={selector}"])
+        assert exc.value.code == 2
+        load_ads.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_run_download_command_default_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument

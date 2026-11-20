@@ -240,6 +240,61 @@ async def publish_ad(
     return ad_id
 
 
+async def save_ad_draft(web:WebScrapingMixin, ad_file:str, ad_cfg:Ad, *, root_url:str, config:Config) -> None:
+    """Fill the ad creation form and save it as a Kleinanzeigen draft instead of publishing it.
+
+    Unlike :func:`publish_ad`, this never deletes old ads, applies no price reduction
+    and persists nothing to the ad YAML: a draft has no public ad ID, so a later
+    ``publish`` still treats the ad as new.
+    """
+    LOG.info("Saving draft for ad '%s'...", ad_cfg.title)
+    await web.web_open(f"{root_url}/p-anzeige-aufgeben-schritt2.html", reload_if_already_open = True)
+    await web.dismiss_consent_banner()
+    await _publishing_form.fill_ad_form(web, ad_file, ad_cfg, AdUpdateStrategy.REPLACE, ad_defaults = config.ad_defaults)
+    await _publishing_submission.submit_draft(web, ad_cfg, captcha_config = config.captcha)
+
+
+async def save_ad_drafts(
+    web:WebScrapingMixin,
+    ad_cfgs:list[tuple[str, Ad, dict[str, Any]]],
+    *,
+    root_url:str,
+    config:Config,
+) -> None:
+    """Save new ads as drafts, one attempt each.
+
+    There is deliberately no retry: after the click, a retry would create a duplicate draft.
+    Ads that already have an ID are skipped, because a draft is always a new ad.
+    """
+    saved = 0
+    failed = 0
+    for idx, (ad_file, ad_cfg, _ad_cfg_orig) in enumerate(ad_cfgs, start = 1):
+        LOG.info("Processing %s/%s: '%s' from [%s]...", idx, len(ad_cfgs), ad_cfg.title, ad_file)
+        if ad_cfg.id is not None:
+            LOG.info(" -> SKIPPED: drafts are only created for new ads, '%s' already has an id", ad_cfg.title)
+            continue
+        try:
+            await save_ad_draft(web, ad_file, ad_cfg, root_url = root_url, config = config)
+        except PublishSubmissionUncertainError as ex:
+            failed += 1
+            LOG.error("Draft for '%s' may have been saved (%s). Check your drafts before retrying.", ad_cfg.title, ex)
+        except (TimeoutError, ProtocolException, AdFormValidationError) as ex:
+            failed += 1
+            LOG.error("Could not save draft for '%s': %s", ad_cfg.title, ex)
+        else:
+            saved += 1
+            LOG.info(" -> SUCCESS: draft saved for '%s'", ad_cfg.title)
+
+    LOG.info("############################################")
+    if failed:
+        LOG.info("DONE: saved %s (%s failed)", pluralize("draft", saved), failed)
+    else:
+        LOG.info("DONE: saved %s", pluralize("draft", saved))
+    LOG.info("############################################")
+    if failed:
+        raise AdBatchError(_("Failed to save %s") % pluralize("draft", failed))
+
+
 async def _fetch_published_ads_for_publish(
     web:WebScrapingMixin,
     root_url:str,
