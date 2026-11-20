@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, published_ads, reserve_flow
+from . import ad_loading, ad_status, category_fields_flow, delete_flow, download_flow, extend_flow, published_ads, reserve_flow
 from . import login_flow as _login_flow
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
@@ -96,6 +96,7 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.ads_selector = parsed.ads_selector
         self._ads_selector_explicit = parsed.ads_selector_explicit
         self.keep_old_ads = parsed.keep_old_ads
+        self._category_arg = parsed.category_arg
         self._preserve_local_settings = parsed.preserve_local_settings
         self._config_arg = parsed.config_arg
         self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, parsed.workspace_mode) if parsed.workspace_mode else None
@@ -143,6 +144,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self._handle_login()
                 case "list":
                     await self._handle_list()
+                case "fields":
+                    await self._handle_fields()
                 case "publish":
                     await self._handle_publish()
                 case "update":
@@ -298,6 +301,16 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self._open_logged_in_browser()
         ads = await published_ads.fetch_published_ads(self, self.root_url, strict = True)
         print(published_ads.render_published_ads(ads))
+
+    async def _handle_fields(self) -> None:
+        """Print the form fields of one category as JSON without submitting anything."""
+        if not self._category_arg:
+            LOG.error("Missing --category=<name or path> for the fields command.")
+            sys.exit(2)
+        self._bootstrap_runtime()
+        await self._open_logged_in_browser()
+        fields = await category_fields_flow.read_category_fields(self, self.root_url, self._category_arg, self.categories)
+        print(category_fields_flow.render_fields(fields))
 
     async def _handle_publish(self) -> None:
         self._bootstrap_runtime()

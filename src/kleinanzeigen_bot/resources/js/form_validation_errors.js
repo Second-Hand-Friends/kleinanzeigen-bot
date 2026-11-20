@@ -39,6 +39,29 @@
       }
       return element.matches("input, select, textarea, button") ? element.getAttribute("name") || element.id || "" : "";
     };
+    // Name the field key (e.g. "fahrraeder.type") so a missing value can be written to the right special_attributes key.
+    // Only attributeMap[...] controls count, and the walk stops as soon as the scope holds more than one labelled field.
+    /** @param {Element} element */
+    const keyFor = (element) => {
+      /** @type {Element | null} */
+      let scope = element;
+      for (let depth = 0; depth < 6 && scope && scope !== form; depth++, scope = scope.parentElement) {
+        const controls = [scope, ...scope.querySelectorAll("input[id], select[id], textarea[id], button[id]")];
+        const labelled = controls.filter((control) =>
+          !control.matches('[type="radio"], [type="checkbox"]') &&
+          labels.some((label) => control.id && label.htmlFor === control.id)
+        );
+        if (labelled.length > 1) break;
+        const keys = new Set();
+        for (const control of [scope, ...scope.querySelectorAll("[name^='attributeMap[']")]) {
+          const name = control.getAttribute("name") || "";
+          if (name.startsWith("attributeMap[") && name.endsWith("]")) keys.add(name.slice("attributeMap[".length, -1));
+        }
+        if (keys.size === 1) return [...keys][0];
+        if (keys.size > 1) break;
+      }
+      return "";
+    };
     const errors = new Set();
     const reportedElements = new Set();
     /**
@@ -48,7 +71,9 @@
     const add = (element, message) => {
       if (!message) return;
       const label = labelFor(element);
-      errors.add(label ? `${label}: ${message}` : message);
+      const key = keyFor(element);
+      const name = label && key ? `${label} [${key}]` : label;
+      errors.add(name ? `${name}: ${message}` : message);
     };
     const fields = /** @type {NodeListOf<Field>} */ (
       form.querySelectorAll('[aria-invalid="true"], input:invalid, select:invalid, textarea:invalid')

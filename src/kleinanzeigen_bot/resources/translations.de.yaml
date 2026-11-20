@@ -98,6 +98,9 @@ kleinanzeigen_bot/app.py:
     "############################################": "############################################"
     "DONE: No active ads found.": "FERTIG: Keine aktiven Anzeigen gefunden."
 
+  _handle_fields:
+    "Missing --category=<name or path> for the fields command.": "Für den Befehl fields fehlt --category=<Name oder Pfad>."
+
   _handle_publish:
     "############################################": "############################################"
     "DONE: No new/outdated ads found.": "FERTIG: Keine neuen/veralteten Anzeigen gefunden."
