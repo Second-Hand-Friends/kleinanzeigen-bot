@@ -866,6 +866,9 @@ kleinanzeigen_bot/extract.py:
   _extract_pricing_info_from_ad_page:
     "Price element is empty and no price data was found; using price type NOT_APPLICABLE": "Preisfeld ist leer und es wurden keine Preisdaten gefunden; verwende Preistyp NOT_APPLICABLE"
 
+  _extract_shipping_options_from_edit_form:
+    "Ad %s: shipping options read from edit form: %s": "Anzeige %s: Versandoptionen aus dem Bearbeitungsformular gelesen: %s"
+
   _extract_sell_directly_from_ad_page:
     "Could not extract ad ID from URL: %s": "Konnte Anzeigen-ID nicht aus der URL extrahieren: %s"
 

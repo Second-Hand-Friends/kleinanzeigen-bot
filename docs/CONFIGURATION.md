@@ -192,6 +192,7 @@ download:
   preserve_local_settings: true  # if true, preserve local-only settings when re-downloading an already saved ad (default: true)
 ```
 
+- For ads with shipping, the download reads the selected predefined options from the ad's edit form (read only, one extra GET request, nothing is saved) and stores them as `shipping_options` without `shipping_costs`. The ad page itself only shows "Versand ab x €" for the cheapest selected option, often a promotional price, so matching that price finds at most one option. `excluded_shipping_options` also applies to the edit-form result. Only if the edit form is unavailable or lists no known option, the price match (including `include_all_matching_shipping_options`) is used as before.
 - If an ad is eligible for direct purchase but no predefined shipping option can be extracted (for example, no price match or all matches are excluded), the download saves `sell_directly: false` and `shipping_options: []` with a warning. Extracted shipping costs are retained. Review the shipping options before enabling direct purchase again; no carrier is guessed for this fallback, and `ad_defaults.sell_directly` does not re-enable it.
 - `download.dir` controls where `download` writes ad files.
 - Leaving `download.dir` at the default literal `downloaded-ads` keeps workspace-mode behavior (portable workspace folder in portable mode, XDG workspace folder in XDG mode).
