@@ -54,6 +54,8 @@ class ParsedArgs:
     ads_selector_explicit:bool = False
     keep_old_ads:bool = False
     preserve_local_settings:bool = False
+    unread_only:bool = False
+    json_output:bool = False
     config_arg:str | None = None
     config_file_path:str | None = None
     logfile_arg:str | None = None
@@ -164,6 +166,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               status   - Zeigt Anzeigenstatus und APR-Vorschau an
               list     - Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an
+              messages - Zeigt die Unterhaltungen im Postfach an (Anzeige, Gesprächspartner, letzte Nachricht, ungelesen);
+                         liest nur und markiert nichts als gelesen
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -205,6 +209,9 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * due: Löscht alle Anzeigen, deren republication_interval abgelaufen ist
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
+              --ads=all|<id(s)> (messages) - Zeigt nur Unterhaltungen zu diesen Anzeigen-IDs (STANDARD: all)
+              --unread          - (messages) Zeigt nur Unterhaltungen mit ungelesenen Nachrichten
+              --json            - (messages) Gibt die Unterhaltungen als JSON aus
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
               --preserve-local-settings - Erzwingt das Beibehalten lokaler Einstellungen bei erneutem Download (überschreibt config-Wert false)
               --config=<PATH>   - Pfad zur YAML- oder JSON-Konfigurationsdatei (ändert den Workspace-Modus nicht implizit)
@@ -236,6 +243,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           diagnose - diagnoses browser connection issues and shows troubleshooting information
           status   - shows ad status and APR preview details
           list     - lists current online ads with ID, title, state, and expiry date
+          messages - lists the conversations in your message box (ad, partner, last message, unread);
+                     read-only, nothing is marked as read
           --
           help     - displays this help (default command)
           version  - displays the application version
@@ -276,6 +285,9 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * due: delete all ads whose republication_interval has elapsed
                 * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
           --force           - alias for '--ads=all'
+          --ads=all|<id(s)> (messages) - only lists conversations about these ad IDs (DEFAULT: all)
+          --unread          - (messages) only lists conversations with unread messages
+          --json            - (messages) prints the conversations as JSON
           --keep-old        - don't delete old ads on republication
           --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
           --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
@@ -298,7 +310,8 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
         options, arguments = getopt.gnu_getopt(
             list(args)[1:],
             "hv",
-            ["ads=", "config=", "force", "help", "keep-old", "logfile=", "lang=", "preserve-local-settings", "verbose", "workspace-mode="],
+            ["ads=", "config=", "force", "help", "json", "keep-old", "logfile=", "lang=", "preserve-local-settings", "unread", "verbose",
+             "workspace-mode="],
         )
     except getopt.error as ex:
         LOG.error(ex.msg)
@@ -332,6 +345,10 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
                 parsed.keep_old_ads = True
             case "--preserve-local-settings":
                 parsed.preserve_local_settings = True
+            case "--unread":
+                parsed.unread_only = True
+            case "--json":
+                parsed.json_output = True
             case "--lang":
                 set_current_locale(Locale.of(value))
             case "-v" | "--verbose":
@@ -360,7 +377,8 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
 
 
 def main(args:Sequence[str]) -> None:
-    if "version" not in args:
+    # Logs go to stderr; keep stdout free of the banner where it is parsed (version, messages --json).
+    if "version" not in args and "--json" not in args:
         print(
             textwrap.dedent(rf"""
          _    _      _                           _                       _           _

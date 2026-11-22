@@ -131,6 +131,9 @@ kleinanzeigen_bot/app.py:
   _handle_status:
     "No ad files found.": "Keine Anzeigendateien gefunden."
 
+  _handle_messages:
+    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+
 #################################################
 kleinanzeigen_bot/login_flow.py:
 #################################################
@@ -574,6 +577,37 @@ kleinanzeigen_bot/reserve_flow.py:
 
   report_missing:
     " -> FAILED: Could not find '%s' button for ad ID %s": " -> FEHLER: '%s'-Button für Anzeigen-ID %s nicht gefunden"
+
+#################################################
+kleinanzeigen_bot/messagebox.py:
+#################################################
+  _same_origin_json:
+    "Kleinanzeigen refused %s (HTTP %s). Are you logged in?": "Kleinanzeigen hat %s abgelehnt (HTTP %s). Sind Sie angemeldet?"
+    "%s failed with HTTP %s": "%s fehlgeschlagen mit HTTP %s"
+
+  _access_token:
+    "Kleinanzeigen did not return an access token. Are you logged in?": "Kleinanzeigen hat kein Zugriffstoken geliefert. Sind Sie angemeldet?"
+
+  user_id:
+    "Kleinanzeigen did not return the account's messagebox user ID. Are you logged in?": "Kleinanzeigen hat die Postfach-Benutzer-ID des Kontos nicht geliefert. Sind Sie angemeldet?"
+
+  gateway:
+    "Unexpected messagebox response for %s: %r": "Unerwartete Postfach-Antwort für %s: %r"
+    "Kleinanzeigen refused %s (HTTP %s). Are you logged in?": "Kleinanzeigen hat %s abgelehnt (HTTP %s). Sind Sie angemeldet?"
+    "%s failed with HTTP %s": "%s fehlgeschlagen mit HTTP %s"
+
+  conversations:
+    "Stopped after %s pages of conversations (safety limit); older conversations are not listed.": "Nach %s Seiten mit Unterhaltungen angehalten (Sicherheitsgrenze); ältere Unterhaltungen werden nicht angezeigt."
+
+  render_conversations:
+    "Unread conversations": "Ungelesene Unterhaltungen"
+    "No conversations found.": "Keine Unterhaltungen gefunden."
+    "Conversation": "Unterhaltung"
+    "unread": "ungelesen"
+    "ad": "Anzeige"
+    "partner": "Gesprächspartner"
+    "last message": "letzte Nachricht"
+    "text": "Text"
 
 #################################################
 kleinanzeigen_bot/ad_drafts.py:

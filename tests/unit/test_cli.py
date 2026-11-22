@@ -174,6 +174,27 @@ class TestCliMain:
         assert handled["exc"] is error
         assert exc_info.value.code == 1
 
+    @pytest.mark.parametrize(("args", "banner"), [
+        (["script.py", "messages"], True),
+        (["script.py", "messages", "--json"], False),
+        (["script.py", "version"], False),
+    ])
+    def test_main_keeps_stdout_free_of_the_banner_for_parsed_output(
+        self, monkeypatch:pytest.MonkeyPatch, capsys:pytest.CaptureFixture[str], args:list[str], banner:bool,
+    ) -> None:
+        """``version`` and ``--json`` output is meant to be parsed, so the banner is not printed."""
+        class IdleLoop:
+            def run_until_complete(self, _coro:object) -> None:
+                return None
+
+        monkeypatch.setattr("kleinanzeigen_bot.cli.atexit.register", lambda *args, **kwargs: None)
+        monkeypatch.setattr("kleinanzeigen_bot.cli.nodriver.loop", IdleLoop)
+        monkeypatch.setattr(cli, "KleinanzeigenBot", self._fake_bot)
+
+        cli.main(args)
+
+        assert ("https://github.com/Second-Hand-Friends/kleinanzeigen-bot" in capsys.readouterr().out) is banner
+
     def test_main_reraises_captcha(self, monkeypatch:pytest.MonkeyPatch) -> None:
         captcha = CaptchaEncountered(timedelta(seconds = 1))
 

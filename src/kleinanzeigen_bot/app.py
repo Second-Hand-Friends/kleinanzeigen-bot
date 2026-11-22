@@ -8,12 +8,13 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, published_ads, reserve_flow
+from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, messagebox, published_ads, reserve_flow
 from . import login_flow as _login_flow
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
 from . import update_checker as _update_checker
 from ._version import __version__
+from .download_selection import is_numeric_ids_selector
 from .login_flow import LoginDetectionResult
 from .model.ad_model import Ad, AdUpdateStrategy
 from .model.config_model import Config  # noqa: TC001 — used at runtime, config injection
@@ -63,6 +64,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.ads_selector = "due"
         self._ads_selector_explicit:bool = False
         self.keep_old_ads = False
+        self._unread_only:bool = False
+        self._json_output:bool = False
 
         # Ensure the attribute always exists on the bot object so that
         # capture_login_detection_diagnostics_if_enabled can read/write it
@@ -97,6 +100,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._ads_selector_explicit = parsed.ads_selector_explicit
         self.keep_old_ads = parsed.keep_old_ads
         self._preserve_local_settings = parsed.preserve_local_settings
+        self._unread_only = parsed.unread_only
+        self._json_output = parsed.json_output
         self._config_arg = parsed.config_arg
         self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, parsed.workspace_mode) if parsed.workspace_mode else None
         self._logfile_arg = parsed.logfile_arg
@@ -143,6 +148,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self._handle_login()
                 case "list":
                     await self._handle_list()
+                case "messages":
+                    await self._handle_messages()
                 case "publish":
                     await self._handle_publish()
                 case "update":
@@ -298,6 +305,26 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self._open_logged_in_browser()
         ads = await published_ads.fetch_published_ads(self, self.root_url, strict = True)
         print(published_ads.render_published_ads(ads))
+
+    async def _handle_messages(self) -> None:
+        """Show the conversations of the message box without changing anything online."""
+        # Validate before bootstrapping so config problems cannot mask this error.
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all"}):
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
+                sys.exit(2)
+            self.ads_selector = "all"
+        ad_ids = {int(ad_id) for ad_id in self.ads_selector.split(",")} if is_numeric_ids_selector(self.ads_selector) else None
+
+        self._bootstrap_runtime()
+        await self._open_logged_in_browser()
+        client = messagebox.MessageboxClient(self, self.root_url)
+        meta = await client.meta()
+        conversations = messagebox.filter_conversations(await client.conversations(), unread_only = self._unread_only, ad_ids = ad_ids)
+        if self._json_output:
+            print(messagebox.conversations_to_json(conversations, meta))
+        else:
+            print(messagebox.render_conversations(conversations, meta))
 
     async def _handle_publish(self) -> None:
         self._bootstrap_runtime()
