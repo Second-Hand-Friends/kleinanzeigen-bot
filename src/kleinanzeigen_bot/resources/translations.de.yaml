@@ -133,7 +133,7 @@ kleinanzeigen_bot/app.py:
 
   _handle_sync_status:
     "############################################": "############################################"
-    "DONE: No local ads with an ID found.": "FERTIG: Keine lokalen Anzeigen mit ID gefunden."
+    "DONE: No local ads with the given IDs found.": "FERTIG: Keine lokalen Anzeigen mit den angegebenen IDs gefunden."
     "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
 
 #################################################
@@ -588,6 +588,8 @@ kleinanzeigen_bot/status_sync.py:
     "No local ad file found for ID %s": "Keine lokale Anzeigendatei für ID %s gefunden"
 
   _sync_ad:
+    " -> FAILED: could not re-read ad [%s]: %s": " -> FEHLER: Anzeige [%s] konnte nicht erneut gelesen werden: %s"
+    " -> SKIPPED: ad [%s] changed its ID since it was loaded; run sync-status again": " -> ÜBERSPRUNGEN: Anzeige [%s] hat seit dem Laden ihre ID geändert; sync-status erneut ausführen"
     " -> ad [%s] (ID: %s): invalid expiry date from kleinanzeigen.de: %s; keeping the local value": " -> Anzeige [%s] (ID: %s): ungültiges Ablaufdatum von kleinanzeigen.de: %s; der lokale Wert bleibt erhalten"
     " -> UNCHANGED: ad [%s] (ID: %s)": " -> UNVERÄNDERT: Anzeige [%s] (ID: %s)"
     " -> FAILED: could not save ad [%s]: %s": " -> FEHLER: Anzeige [%s] konnte nicht gespeichert werden: %s"

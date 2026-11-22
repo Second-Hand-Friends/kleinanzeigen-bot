@@ -17,6 +17,8 @@ from datetime import date, datetime
 from gettext import gettext as _
 from typing import TYPE_CHECKING, Any, Final
 
+from ruamel.yaml.error import YAMLError
+
 from . import download_selection as _download_selection
 from .utils import dicts as _dicts
 from .utils import loggers as _loggers
@@ -98,9 +100,34 @@ def _set_or_remove(ad_cfg_orig:dict[str, Any], key:str, value:str | None) -> Non
         ad_cfg_orig[key] = value
 
 
+def _stored_expiry(value:Any) -> Any:
+    """Return a stored ``expires_on`` as a date when it is one (ruamel loads unquoted dates as ``date``)."""
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value.strip())
+        except ValueError:
+            return value
+    return value
+
+
 def _sync_ad(entry:LoadedAd, online_ad:PublishedAd, result:SyncStatusResult) -> None:
-    """Write the online state and expiry date of one ad to its file if they differ from the local values."""
-    ad_file, ad_file_relative, ad_cfg, ad_cfg_orig = entry
+    """Write the online state and expiry date of one ad to its file if they differ from the stored values."""
+    ad_file, ad_file_relative, ad_cfg, _ad_cfg_orig = entry
+
+    # Re-read the file right before writing: it was loaded before the login and the online fetch, and an edit
+    # made in the meantime (e.g. a changed price) must not be overwritten with the content loaded earlier.
+    try:
+        current = _dicts.load_dict(ad_file, "ad")
+    except (OSError, ValueError, YAMLError) as ex:
+        LOG.error(" -> FAILED: could not re-read ad [%s]: %s", ad_file_relative, ex)
+        result.failed += 1
+        return
+    if current.get("id") != ad_cfg.id:
+        LOG.warning(" -> SKIPPED: ad [%s] changed its ID since it was loaded; run sync-status again", ad_file_relative)
+        result.failed += 1
+        return
+    stored_state = current.get("online_state")
+    stored_expires_on = _stored_expiry(current.get("expires_on"))
 
     state = online_ad.get("state")
     new_state = str(state) if state is not None and str(state).strip() else None  # missing or empty means unknown
@@ -113,20 +140,20 @@ def _sync_ad(entry:LoadedAd, online_ad:PublishedAd, result:SyncStatusResult) -> 
             ad_file_relative, ad_cfg.id, online_ad.get("endDate"),
         )
         expiry_valid = False
-        new_expires_on = ad_cfg.expires_on
+        new_expires_on = stored_expires_on
 
-    if new_state == ad_cfg.online_state and new_expires_on == ad_cfg.expires_on:
+    if new_state == stored_state and new_expires_on == stored_expires_on:
         LOG.info(" -> UNCHANGED: ad [%s] (ID: %s)", ad_file_relative, ad_cfg.id)
         result.unchanged += 1
         return
 
     # Only the two auto-managed fields are touched; the round-trip dict keeps comments, order and all other values.
     # The date is written as an ISO string, which also works for JSON ad files.
-    _set_or_remove(ad_cfg_orig, "online_state", new_state)
+    _set_or_remove(current, "online_state", new_state)
     if expiry_valid:
-        _set_or_remove(ad_cfg_orig, "expires_on", new_expires_on.isoformat() if new_expires_on else None)
+        _set_or_remove(current, "expires_on", new_expires_on.isoformat() if new_expires_on else None)
     try:
-        _dicts.save_dict(ad_file, ad_cfg_orig)
+        _dicts.save_dict(ad_file, current)
     except OSError as ex:
         LOG.error(" -> FAILED: could not save ad [%s]: %s", ad_file_relative, ex)
         result.failed += 1
@@ -135,9 +162,9 @@ def _sync_ad(entry:LoadedAd, online_ad:PublishedAd, result:SyncStatusResult) -> 
     LOG.info(
         " -> UPDATED: ad [%s] (ID: %s): state %s -> %s, expires %s -> %s",
         ad_file_relative, ad_cfg.id,
-        ad_cfg.online_state or "-", new_state or "-",
-        ad_cfg.expires_on.isoformat() if ad_cfg.expires_on else "-",
-        new_expires_on.isoformat() if new_expires_on else "-",
+        stored_state or "-", new_state or "-",
+        stored_expires_on.isoformat() if isinstance(stored_expires_on, date) else stored_expires_on or "-",
+        new_expires_on.isoformat() if isinstance(new_expires_on, date) else new_expires_on or "-",
     )
     result.updated += 1
 

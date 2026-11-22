@@ -320,9 +320,11 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             ad_file_patterns = self.config.ad_files,
             ad_defaults = self.config.ad_defaults,
         )
-        if not (ads := status_sync.select_ads_to_sync(loaded, self.ads_selector)):
+        ads = status_sync.select_ads_to_sync(loaded, self.ads_selector)
+        # With "all", online ads without a local file are reported even when no local ad has an ID yet.
+        if not ads and self.ads_selector != "all":
             LOG.info("############################################")
-            LOG.info("DONE: No local ads with an ID found.")
+            LOG.info("DONE: No local ads with the given IDs found.")
             LOG.info("############################################")
             return
 

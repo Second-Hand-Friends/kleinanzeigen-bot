@@ -183,7 +183,8 @@ class DownloadConfig(ContextualModel):
         default = True,
         description = (
             "if true, preserves local-only settings (auto_price_reduction, republication_interval, "
-            "repost_count, price_reduction_count) when re-downloading an already saved ad. "
+            "repost_count, price_reduction_count, and the sync-status fields online_state and expires_on) "
+            "when re-downloading an already saved ad. "
             "Useful for picking up live changes without losing local configuration."
         ),
     )

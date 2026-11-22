@@ -402,6 +402,7 @@ expires_on:  # Expiry date of the ad on kleinanzeigen.de as of the last sync-sta
 
 `online_state` and `expires_on` are written only by `kleinanzeigen-bot sync-status`. They are a snapshot of the website at the time of
 that run (other commands such as `publish`, `extend` or `reserve` do not update them), so run `sync-status` again to refresh them.
+A re-download keeps them when `download.preserve_local_settings` is enabled (the default); otherwise it drops them.
 Both fields are informational: they are not part of `content_hash`, so updating them never makes an ad count as changed.
 
 ## Complete Example

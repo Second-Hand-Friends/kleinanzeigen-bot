@@ -3741,6 +3741,8 @@ class TestAdExtractorDownload:
             "price_reduction_count": 3,
             **apr_fields,
             "republication_interval": 14,
+            "online_state": "paused",
+            "expires_on": "2026-12-24",
         }
         await asyncio.to_thread(dicts.save_dict, str(existing_yaml), existing_data)
 
@@ -3770,6 +3772,8 @@ class TestAdExtractorDownload:
             for field, value in apr_fields["auto_price_reduction"].items():
                 assert saved_data["auto_price_reduction"][field] == value
         assert saved_data["republication_interval"] == 14
+        assert saved_data["online_state"] == "paused"
+        assert str(saved_data["expires_on"]) == "2026-12-24"
         assert isinstance(saved_data.get("content_hash"), str)
         assert len(saved_data["content_hash"]) == 64
         assert not any("Could not preserve" in message for message in caplog.messages)

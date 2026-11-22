@@ -205,7 +205,7 @@ download:
 - `download.ad_file_name_template`: each placeholder may appear at most once.
 - `download.ad_file_name_template` must include `{id}` so downloaded filenames remain stable and unique.
 - `download.folder_name_max_length` limits folder names only; downloaded file stems use a separate filename budget.
-- `download.preserve_local_settings` (default: `true`) keeps local-only per-ad settings (`auto_price_reduction`, `republication_interval`, `repost_count`, `price_reduction_count`) when re-downloading an already saved ad. Set to `false` to reset these to defaults on re-download.
+- `download.preserve_local_settings` (default: `true`) keeps local-only per-ad settings (`auto_price_reduction`, `republication_interval`, `repost_count`, `price_reduction_count`, and the `sync-status` fields `online_state` and `expires_on`) when re-downloading an already saved ad. Set to `false` to reset these to defaults on re-download.
 
 Assume this sample ad:
 
