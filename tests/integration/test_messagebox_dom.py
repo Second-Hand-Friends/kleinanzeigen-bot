@@ -44,3 +44,15 @@ async def test_messagebox_request_returns_error_status(web:WebScrapingMixin, sho
 
     assert response["statusCode"] == 404
     assert response["content"] == "missing"
+
+
+async def test_messagebox_request_ignores_a_page_binding_that_shadows_fetch(web:WebScrapingMixin, show_html:ShowHtml, blank_site:str) -> None:
+    """The script calls globalThis.fetch, so a page-level `fetch` binding cannot intercept the request."""
+    await show_html("<p>inbox</p>")
+    await web.web_execute(
+        "document.head.appendChild(Object.assign(document.createElement('script'), {textContent: 'let fetch = 1;'})); true")
+    assert await web.web_execute("fetch") == 1
+
+    response = await web.web_execute(page_scripts.call("messagebox_request", f"{blank_site}/echo", "GET", "t", None))
+
+    assert response["statusCode"] == 200

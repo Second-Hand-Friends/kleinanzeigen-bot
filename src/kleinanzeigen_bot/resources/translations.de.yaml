@@ -609,6 +609,7 @@ kleinanzeigen_bot/messagebox.py:
 
   conversations:
     "Stopped after %s pages of conversations (safety limit); older conversations are not listed.": "Nach %s Seiten mit Unterhaltungen angehalten (Sicherheitsgrenze); ältere Unterhaltungen werden nicht angezeigt."
+    "Unexpected messagebox conversations response on page %s": "Unerwartete Antwort des Postfachs auf Seite %s"
 
   render_conversations:
     "Unread conversations": "Ungelesene Unterhaltungen"

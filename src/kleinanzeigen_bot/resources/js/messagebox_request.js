@@ -16,7 +16,7 @@
     /** @type {Record<string, string>} */
     const headers = { Accept: "application/json", Authorization: token, "X-ECG-USER-AGENT": "messagebox-1" };
     if (body !== null) headers["Content-Type"] = "application/json";
-    return fetch(url, {
+    return globalThis.fetch(url, {
       method: method,
       mode: "cors",
       credentials: "include",
