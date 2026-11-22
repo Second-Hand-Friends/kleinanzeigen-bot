@@ -79,7 +79,7 @@ class FakeMessagesBot(KleinanzeigenBot):
             return {"statusCode": 200, "statusMessage": "OK", "headers": {"authorization": _TOKEN}, "content": '{"expiration": 0}'}
         if url == f"{self.root_url}/messagebox-api/view":
             return {"statusCode": 200, "statusMessage": "OK", "headers": {}, "content": json.dumps({"user": {"id": _UID}})}
-        pytest.fail(f"unexpected request {url}")
+        raise AssertionError(f"unexpected request {url}")
 
     async def web_execute(self, jscode:str) -> Any:
         assert self.logged_in
@@ -87,7 +87,7 @@ class FakeMessagesBot(KleinanzeigenBot):
             if jscode == _gateway_script(path):
                 self.requests.append(("GET", path))
                 return response
-        pytest.fail(f"unexpected page script {jscode[-200:]}")
+        raise AssertionError(f"unexpected page script {jscode[-200:]}")
 
 
 def _ok(data:Any) -> dict[str, Any]:
@@ -279,3 +279,58 @@ def test_render_conversations_in_german() -> None:
         "Unterhaltung: c-1 [ungelesen]\n  Anzeige: Rad (ID: 1)\n  Gesprächspartner: Anna\n  letzte Nachricht: t\n  Text: Hallo"
     )
     assert messagebox.render_conversations([], {"numUnread": 0}) == "Ungelesene Unterhaltungen: 0\n\nKeine Unterhaltungen gefunden."
+
+
+@pytest.mark.asyncio
+async def test_missing_messagebox_user_id_is_reported(tmp_path:Path) -> None:
+    class NoUserBot(FakeMessagesBot):
+        async def web_request(self, url:str, method:str = "GET", valid_response_codes:int | Iterable[int] = 200,
+                              headers:dict[str, str] | None = None) -> Any:
+            if url.endswith("/messagebox-api/view"):
+                return {"statusCode": 200, "statusMessage": "OK", "headers": {}, "content": "<html>login</html>"}
+            return await super().web_request(url, method, valid_response_codes, headers)
+
+    bot = NoUserBot(_gateway())
+    with pytest.raises(MessageboxError, match = "did not return the account's messagebox user ID"):
+        await bot.run(_args(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_unexpected_page_script_result_is_reported(tmp_path:Path) -> None:
+    """A torn-down page context returns no response dict; that must not pass as an empty inbox."""
+    gateway = _gateway()
+    gateway["/conversations?include=_meta"] = None
+    bot = FakeMessagesBot(gateway)
+
+    with pytest.raises(MessageboxError, match = "Unexpected messagebox response"):
+        await bot.run(_args(tmp_path))
+
+
+@pytest.mark.asyncio
+async def test_answers_without_the_expected_json_are_tolerated(tmp_path:Path, capsys:pytest.CaptureFixture[str]) -> None:
+    """Non-JSON or differently shaped 2xx answers show an empty inbox instead of crashing."""
+    gateway = {
+        "/conversations?include=_meta": {"statusCode": 200, "statusMessage": "OK", "content": "not json"},
+        f"/conversations?page=0&size={messagebox.PAGE_SIZE}": _ok({"items": []}),
+    }
+    bot = FakeMessagesBot(gateway)
+
+    await bot.run(_args(tmp_path))
+
+    assert capsys.readouterr().out == "No conversations found.\n"
+
+
+@pytest.mark.asyncio
+async def test_conversations_stop_at_the_page_safety_limit(caplog:pytest.LogCaptureFixture) -> None:
+    gateway = {
+        f"/conversations?page={page}&size={messagebox.PAGE_SIZE}": _ok({"conversations": [{"id": f"p{page}-{n}"} for n in range(messagebox.PAGE_SIZE)]})
+        for page in range(messagebox.MAX_PAGES + 1)
+    }
+    bot = FakeMessagesBot(gateway)
+    bot.logged_in = True
+
+    with caplog.at_level("WARNING"):
+        conversations = await messagebox.MessageboxClient(bot, bot.root_url).conversations()
+
+    assert len(conversations) == messagebox.MAX_PAGES * messagebox.PAGE_SIZE
+    assert f"Stopped after {messagebox.MAX_PAGES} pages of conversations" in caplog.text
