@@ -473,6 +473,7 @@ This command will check your browser setup and provide troubleshooting informati
 - [tillvogt/KleinanzeigenScraper](https://github.com/tillvogt/KleinanzeigenScraper) (Python) Webscraper which stores scraped info from kleinanzeigen.de in an SQL database
 - [TLINDEN/Kleingebäck](https://github.com/TLINDEN/kleingebaeck) (Go) kleinanzeigen.de Backup
 - [bkd3sign/kleinanzeigen-bot-ui](https://github.com/bkd3sign/kleinanzeigen-bot-ui) (TypeScript) A self-hosted web interface for kleinanzeigen-bot
+- [Ollornog/kleinanzeigen-assistant](https://github.com/Ollornog/kleinanzeigen-assistant) (Python) Desktop app built on kleinanzeigen-bot: ads from folders, scheduled price reductions, inbox with AI reply drafts
 
 ## <a name="license"></a>License
 
