@@ -494,6 +494,9 @@ kleinanzeigen_bot/delete_flow.py:
     "DONE: Deleted %s of %s": "FERTIG: %s von %s gelöscht"
     "ad": "Anzeige"
     " -> SKIPPED: title-based deletion requires a complete published ads list: %s": " -> ÜBERSPRUNGEN: titelbasierte Löschung erfordert eine vollständige Liste veröffentlichter Anzeigen: %s"
+    "Could not check ad IDs against your account, deleting by ID without the check: %s": "Anzeigen-IDs konnten nicht mit Ihrem Konto abgeglichen werden, Löschen per ID erfolgt ohne Prüfung: %s"
+    " -> SKIPPED: ad '%s' (ID: %s) is not listed in your account": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) ist nicht in Ihrem Konto gelistet"
+    "Skipped %s not listed in your account (IDs: %s); their local files were left unchanged": "%s übersprungen, die nicht in Ihrem Konto gelistet sind (IDs: %s); ihre lokalen Dateien bleiben unverändert"
 
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."

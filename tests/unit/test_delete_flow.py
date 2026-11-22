@@ -370,7 +370,7 @@ class TestDeleteAdsAfterDeletePolicy:
             return DeleteResult(deleted = False, attempted = True)  # all responses were 404 but deletion was attempted
 
         with (
-            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 12345, "state": "active"}]),
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, side_effect = fake_delete),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
@@ -395,7 +395,7 @@ class TestDeleteAdsAfterDeletePolicy:
         ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
 
         with (
-            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 12345, "state": "active"}]),
             patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = DeleteResult(deleted = False, attempted = False)),
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
             patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
@@ -426,7 +426,8 @@ class TestDeleteAdsAfterDeletePolicy:
         ad2 = (str(tmp_path / "ad2.yaml"), ad_cfg2, ad_cfg2.model_dump())
 
         with (
-            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                  return_value = [{"id": 12345, "state": "active"}, {"id": "67890", "state": "paused"}]),
             patch("kleinanzeigen_bot.delete_flow.delete_ad",
                   new_callable = AsyncMock,
                   return_value = DeleteResult(deleted = True, attempted = True)) as mock_delete_ad,
@@ -470,16 +471,18 @@ class TestDeleteAdsAfterDeletePolicy:
         mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = True)
 
     @pytest.mark.asyncio
-    async def test_delete_ads_skips_published_ads_fetch_for_id_only_deletes(
+    async def test_delete_ads_checks_explicit_ids_against_the_account_strictly(
         self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
     ) -> None:
-        """ID-only deletes should not depend on fetching unrelated published-ad pages."""
+        """ID deletes fetch the account's complete ad list once to check the IDs before deleting."""
         test_bot.config.deleting.after_delete = "NONE"
         ad_file, ad_cfg, ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
 
         with (
-            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock) as mock_fetch,
-            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock, return_value = DeleteResult(deleted = False, attempted = False)),
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                  return_value = [{"id": 12345, "state": "active"}]) as mock_fetch,
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new_callable = AsyncMock,
+                  return_value = DeleteResult(deleted = True, attempted = True)) as mock_delete,
             patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
         ):
             await delete_flow.delete_ads(
@@ -489,11 +492,81 @@ class TestDeleteAdsAfterDeletePolicy:
                 ad_cfgs = [(ad_file, ad_cfg, ad_cfg_orig)],
             )
 
-        mock_fetch.assert_not_awaited()
+        mock_fetch.assert_awaited_once_with(test_bot, test_bot.root_url, strict = True)
+        mock_delete.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_skips_ids_not_listed_in_the_account(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path, caplog:pytest.LogCaptureFixture,
+    ) -> None:
+        """IDs of another account are skipped with a warning; the rest is deleted and the skip is summarized (#1410)."""
+        test_bot.config.deleting.after_delete = "RESET"
+        foreign_file, foreign_cfg, foreign_orig = self._make_ad(minimal_ad_config | {"title": "Ad from the other account"}, tmp_path)
+        own_cfg = Ad.model_validate(minimal_ad_config | {"id": 67890, "title": "Ad in this account", "active": True})
+        own = (str(tmp_path / "own.yaml"), own_cfg, own_cfg.model_dump())
+        mock_delete = AsyncMock(return_value = DeleteResult(deleted = True, attempted = True))
+
+        with (
+            caplog.at_level("INFO"),
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                  return_value = [{"id": "67890", "state": "active"}]),
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new = mock_delete),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.utils.dicts.save_dict") as mock_save,
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = False,
+                ad_cfgs = [(foreign_file, foreign_cfg, foreign_orig), own],
+            )
+
+        mock_delete.assert_awaited_once()
+        assert mock_delete.await_args is not None
+        assert mock_delete.await_args.args[2] is own_cfg
+        assert foreign_cfg.id == 12345
+        assert foreign_orig["id"] == 12345
+        assert [call.args[0] for call in mock_save.call_args_list] == [own[0]], "only the deleted ad's file is reset"
+        assert "SKIPPED: ad 'Ad from the other account' (ID: 12345) is not listed in your account" in caplog.text
+        assert "DONE: Deleted 1 of 2 ads" in caplog.text
+        assert "Skipped 1 ad not listed in your account (IDs: 12345)" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_with_foreign_id_does_not_send_a_request_for_it(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """End to end through delete_ad: the server error for a foreign ID can no longer abort the batch."""
+        test_bot.config.deleting.after_delete = "NONE"
+        foreign_cfg = Ad.model_validate(minimal_ad_config | {"id": 111, "title": "Ad from the other account"})
+        own_cfg = Ad.model_validate(minimal_ad_config | {"id": 222, "title": "Ad in this account"})
+        ads = [(str(tmp_path / "a.yaml"), foreign_cfg, foreign_cfg.model_dump()), (str(tmp_path / "b.yaml"), own_cfg, own_cfg.model_dump())]
+
+        async def fake_request(url:str, **_kwargs:Any) -> dict[str, Any]:
+            if url.endswith("ids=111"):
+                raise AssertionError("Invalid response 500 Internal Server Error")  # what the server answers for a foreign ID
+            return {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 222, "state": "active"}]),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "csrf-token"),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fake_request) as mock_request,
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = False,
+                ad_cfgs = ads,
+            )
+
+        assert [call.kwargs["url"] for call in mock_request.await_args_list] == [f"{test_bot.root_url}/m-anzeigen-loeschen.json?ids=222"]
+        assert own_cfg.id is None
+        assert foreign_cfg.id == 111
 
     @pytest.mark.asyncio
     async def test_delete_ads_skips_title_deletes_but_continues_id_deletes_when_strict_fetch_fails(
-        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path, caplog:pytest.LogCaptureFixture,
     ) -> None:
         """Incomplete strict title matching should not block exact-ID deletes in the same batch."""
         test_bot.config.deleting.after_delete = "NONE"
@@ -521,6 +594,7 @@ class TestDeleteAdsAfterDeletePolicy:
         mock_delete.assert_awaited_once_with(
             test_bot, test_bot.root_url, id_ad_cfg, [], delete_old_ads_by_title = True,
         )
+        assert "deleting by ID without the check: page 2 timed out" in caplog.text
 
     @pytest.mark.asyncio
     async def test_cleanup_on_title_match_all_404_with_id_none(

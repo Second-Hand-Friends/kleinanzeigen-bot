@@ -317,6 +317,12 @@ field labels and messages; correct the affected ad configuration before retrying
 An uncertain submission is never automatically retried because it may already be
 online. Successful batches and batches containing only skipped ads exit with status `0`.
 
+`delete` acts on the ads in your local ad files. Before deleting by ID, it checks the IDs against
+your account's current online ad list; IDs that are not listed there (for example after moving ads
+to another account) are skipped with a warning, their files are left unchanged, and the remaining
+ads are still deleted. If the online list cannot be fetched completely, ads are deleted by ID
+without this check, as before.
+
 > **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
 Shipping inference during `download`: the bot reads the public ad shipping state. Pickup becomes `PICKUP`; `Versand möglich` without a price becomes `SHIPPING` without costs/options. Visible "shipping from" prices are kept as deprecated `shipping_costs` metadata and, when they match a current gateway option, infer one [`shipping_options`](docs/AD_CONFIGURATION.md#shipping-options-reference) entry by default. Set `download.include_all_matching_shipping_options: true` to include all non-excluded options with the same package size. `sell_directly` is resolved only for current-profile ads from cached manage-ads data.

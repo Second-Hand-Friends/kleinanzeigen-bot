@@ -44,27 +44,38 @@ async def delete_ads(
 ) -> None:
     count = 0
     deleted_count = 0
+    skipped_ids_not_in_account:list[int] = []
 
+    # The account's own ads are needed to match ID-less ads by title and to check explicit IDs:
+    # deleting an ID that belongs to another account (e.g. after moving ads to a new account) makes
+    # the server answer with an error that would abort the whole batch.
     needs_title_matching = delete_old_ads_by_title and any(ad_cfg.id is None for _, ad_cfg, _ in ad_cfgs)
-    title_matching_fetch_error:published_ads.PublishedAdsFetchIncompleteError | None = None
-    if needs_title_matching:
+    needs_published_ads = needs_title_matching or any(ad_cfg.id is not None for _, ad_cfg, _ in ad_cfgs)
+    published_ads_fetch_error:published_ads.PublishedAdsFetchIncompleteError | None = None
+    published_ads_list:list[PublishedAd] = []
+    if needs_published_ads:
         try:
             published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = True)
         except published_ads.PublishedAdsFetchIncompleteError as ex:
-            published_ads_list = []
-            title_matching_fetch_error = ex
-    else:
-        published_ads_list = []
+            published_ads_fetch_error = ex
+            if any(ad_cfg.id is not None for _, ad_cfg, _ in ad_cfgs):
+                # Keep deleting by ID as before rather than blocking the batch on an incomplete list.
+                LOG.warning("Could not check ad IDs against your account, deleting by ID without the check: %s", ex)
+    published_ids = _published_ad_ids(published_ads_list)
 
     for ad_file, ad_cfg, ad_cfg_orig in ad_cfgs:
         count += 1
         LOG.info("Processing %s/%s: '%s' from [%s]...", count, len(ad_cfgs), ad_cfg.title, ad_file)
 
-        if ad_cfg.id is None and delete_old_ads_by_title and title_matching_fetch_error is not None:
+        if ad_cfg.id is None and delete_old_ads_by_title and published_ads_fetch_error is not None:
             LOG.error(
                 " -> SKIPPED: title-based deletion requires a complete published ads list: %s",
-                title_matching_fetch_error,
+                published_ads_fetch_error,
             )
+            result = DeleteResult(deleted = False, attempted = False)
+        elif ad_cfg.id is not None and published_ads_fetch_error is None and ad_cfg.id not in published_ids:
+            LOG.warning(" -> SKIPPED: ad '%s' (ID: %s) is not listed in your account", ad_cfg.title, ad_cfg.id)
+            skipped_ids_not_in_account.append(ad_cfg.id)
             result = DeleteResult(deleted = False, attempted = False)
         else:
             result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
@@ -78,7 +89,24 @@ async def delete_ads(
 
     LOG.info("############################################")
     LOG.info("DONE: Deleted %s of %s", deleted_count, pluralize("ad", count))
+    if skipped_ids_not_in_account:
+        LOG.warning(
+            "Skipped %s not listed in your account (IDs: %s); their local files were left unchanged",
+            pluralize("ad", skipped_ids_not_in_account),
+            ", ".join(str(ad_id) for ad_id in skipped_ids_not_in_account),
+        )
     LOG.info("############################################")
+
+
+def _published_ad_ids(published_ads_list:list[PublishedAd]) -> set[int]:
+    """Return the numeric IDs of the account's published ads, ignoring entries without a usable ID."""
+    ids:set[int] = set()
+    for published_ad in published_ads_list:
+        try:
+            ids.add(int(published_ad["id"]))
+        except (KeyError, TypeError, ValueError):
+            LOG.debug("Skipping published ad with invalid id: %r", published_ad.get("id"))
+    return ids
 
 
 async def delete_ad(
