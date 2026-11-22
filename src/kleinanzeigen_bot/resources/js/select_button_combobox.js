@@ -85,7 +85,7 @@
           for (let k = 0; k < opts.length; k++) {
             // React props map to options by position, so options keeps non-HTML elements and they are skipped here.
             const target = options[k];
-            if (opts[k].value === value && target instanceof HTMLElement) {
+            if (opts[k].value === value && target instanceof globalThis.HTMLElement) {
               target.click();
               return { ok: true };
             }
@@ -97,7 +97,7 @@
     for (let k = 0; k < options.length; k++) {
       const o = options[k];
       // A [role="option"] element need not be an HTMLElement (e.g. SVG) and then has no click().
-      if (!(o instanceof HTMLElement)) continue;
+      if (!(o instanceof globalThis.HTMLElement)) continue;
       if (
         o.getAttribute("value") === value ||
         o.getAttribute("data-value") === value ||

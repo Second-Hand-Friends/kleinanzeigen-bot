@@ -176,6 +176,19 @@ async def test_web_select_button_combobox_skips_non_html_options(fast_web:WebScr
     assert await fast_web.web_execute("clicks") == ["Farbe", "Dunkel Blau"]
 
 
+async def test_web_select_button_combobox_ignores_a_page_binding_that_shadows_html_element(
+    fast_web:WebScrapingMixin, show_html:ShowHtml,
+) -> None:
+    """The guard uses globalThis.HTMLElement, so a page-level `HTMLElement` binding cannot break it."""
+    await show_html('<button id="color" role="combobox">Farbe</button><ul id="color-menu" role="listbox">'
+                    '<li role="option">Rot</li></ul>')
+    await fast_web.web_execute(
+        "document.head.appendChild(Object.assign(document.createElement('script'), {textContent: 'let HTMLElement = 1;'})); true")
+    assert await fast_web.web_execute("HTMLElement") == 1
+    await fast_web.web_select_button_combobox("color", "Rot")
+    assert await fast_web.web_execute("clicks") == ["Farbe", "Rot"]
+
+
 async def test_web_select_button_combobox_only_non_html_match_raises_timeout(fast_web:WebScrapingMixin, show_html:ShowHtml) -> None:
     """A match that cannot be clicked is reported like a missing option instead of failing in the page."""
     await show_html('<button id="color" role="combobox">Farbe</button><ul id="color-menu" role="listbox">'
