@@ -9,6 +9,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from nodriver.core.connection import ProtocolException
 
 from kleinanzeigen_bot import delete_flow
 from kleinanzeigen_bot.app import KleinanzeigenBot
@@ -670,6 +671,39 @@ class TestDeleteAdsAfterDeletePolicy:
             test_bot, test_bot.root_url, id_ad_cfg, [], delete_old_ads_by_title = True,
         )
         assert "deleting by ID without the check: page 2 timed out" in caplog.text
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("fetch_error", [
+        pytest.param(AssertionError('Invalid response "500 Internal Server Error" received'), id = "http-error"),
+        pytest.param(ProtocolException("Unexpected response for HTTP GET"), id = "missing-response"),
+    ])
+    async def test_delete_ads_falls_back_to_unchecked_id_deletes_on_any_list_fetch_failure(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+        caplog:pytest.LogCaptureFixture, fetch_error:Exception,
+    ) -> None:
+        """Not only timeouts: any failure to get the complete list keeps ID deletes going and still skips title deletes."""
+        test_bot.config.deleting.after_delete = "NONE"
+        title_ad_file, title_ad_cfg, title_ad_cfg_orig = self._make_ad(minimal_ad_config, tmp_path)
+        title_ad_cfg.id = None
+        id_ad_file, id_ad_cfg, id_ad_cfg_orig = self._make_ad(minimal_ad_config | {"title": "Exact ID Title"}, tmp_path)
+        mock_delete = AsyncMock(return_value = DeleteResult(deleted = True, attempted = True))
+
+        with (
+            caplog.at_level("INFO"),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fetch_error),
+            patch("kleinanzeigen_bot.delete_flow.delete_ad", new = mock_delete),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = test_bot.config.deleting.after_delete,
+                delete_old_ads_by_title = True,
+                ad_cfgs = [(title_ad_file, title_ad_cfg, title_ad_cfg_orig), (id_ad_file, id_ad_cfg, id_ad_cfg_orig)],
+            )
+
+        mock_delete.assert_awaited_once_with(test_bot, test_bot.root_url, id_ad_cfg, [], delete_old_ads_by_title = True)
+        assert "deleting by ID without the check" in caplog.text
+        assert "title-based deletion requires a complete published ads list" in caplog.text
 
     @pytest.mark.asyncio
     async def test_cleanup_on_title_match_all_404_with_id_none(

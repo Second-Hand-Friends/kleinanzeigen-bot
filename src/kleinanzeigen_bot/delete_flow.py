@@ -6,6 +6,8 @@
 from gettext import gettext as _
 from typing import Any, Final, Literal, NamedTuple
 
+from nodriver.core.connection import ProtocolException
+
 from . import ad_state as _ad_state
 from . import published_ads
 from .model.ad_model import Ad
@@ -56,8 +58,12 @@ async def delete_ads(
     if needs_published_ads:
         try:
             published_ads_list = await published_ads.fetch_published_ads(web, root_url, strict = True)
-        except published_ads.PublishedAdsFetchIncompleteError as ex:
-            published_ads_fetch_error = ex
+        except (published_ads.PublishedAdsFetchIncompleteError, AssertionError, ProtocolException) as ex:
+            # Besides timeouts and malformed pages, web_request raises AssertionError for an unexpected HTTP status
+            # and ProtocolException for a missing response; all mean the list is incomplete.
+            published_ads_fetch_error = (
+                ex if isinstance(ex, published_ads.PublishedAdsFetchIncompleteError) else published_ads.PublishedAdsFetchIncompleteError(str(ex))
+            )
             if any(ad_cfg.id is not None for _, ad_cfg, _ in ad_cfgs):
                 # Keep deleting by ID as before rather than blocking the batch on an incomplete list.
                 LOG.warning("Could not check ad IDs against your account, deleting by ID without the check: %s", ex)
