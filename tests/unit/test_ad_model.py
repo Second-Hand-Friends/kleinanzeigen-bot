@@ -123,6 +123,24 @@ def test_repost_count_does_not_influence_content_hash() -> None:
 
 
 @pytest.mark.unit
+def test_synced_online_status_does_not_influence_content_hash() -> None:
+    """online_state/expires_on written by sync-status must never mark an ad as changed."""
+    base_ad_cfg = {
+        "id": "123456789",
+        "title": "Test Ad Title",
+        "category": "160",
+        "description": "Test Description",
+        "price_type": "NEGOTIABLE",
+    }
+
+    hash_without_status = AdPartial.model_validate(base_ad_cfg).update_content_hash().content_hash
+    hash_with_status = AdPartial.model_validate(
+        base_ad_cfg | {"online_state": "paused", "expires_on": "2026-12-24"}
+    ).update_content_hash().content_hash
+    assert hash_without_status == hash_with_status
+
+
+@pytest.mark.unit
 def test_shipping_costs() -> None:
     minimal_ad_cfg = {
         "id": "123456789",

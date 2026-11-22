@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import certifi
 
-from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, published_ads, reserve_flow
+from . import ad_loading, ad_status, delete_flow, download_flow, extend_flow, published_ads, reserve_flow, status_sync
 from . import login_flow as _login_flow
 from . import publishing_workflow as _publishing_workflow
 from . import runtime_config as _runtime_config
@@ -143,6 +143,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self._handle_login()
                 case "list":
                     await self._handle_list()
+                case "sync-status":
+                    await self._handle_sync_status()
                 case "publish":
                     await self._handle_publish()
                 case "update":
@@ -298,6 +300,41 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         await self._open_logged_in_browser()
         ads = await published_ads.fetch_published_ads(self, self.root_url, strict = True)
         print(published_ads.render_published_ads(ads))
+
+    async def _handle_sync_status(self) -> None:
+        """Write the online state and expiry date of published ads to their local ad files without changing anything online."""
+        # Validate before bootstrapping so config problems cannot mask this error.
+        if not ad_loading.is_valid_ads_selector(self.ads_selector, {"all"}):
+            if self._ads_selector_explicit:
+                LOG.error('Invalid --ads selector: "%s". Valid values: all or comma-separated numeric IDs.', self.ads_selector)
+                sys.exit(2)
+            self.ads_selector = "all"
+
+        self._bootstrap_runtime()
+        self._check_for_updates()
+
+        # All ad files are considered, including those with ``active: false``: ``active`` is a local
+        # publishing flag and says nothing about whether the ad is online.
+        loaded = ad_loading.load_ad_configs(
+            config_file_path = self.config_file_path,
+            ad_file_patterns = self.config.ad_files,
+            ad_defaults = self.config.ad_defaults,
+        )
+        ads = status_sync.select_ads_to_sync(loaded, self.ads_selector)
+        # With "all", online ads without a local file are reported even when no local ad has an ID yet.
+        if not ads and self.ads_selector != "all":
+            LOG.info("############################################")
+            LOG.info("DONE: No local ads with the given IDs found.")
+            LOG.info("############################################")
+            return
+
+        await self._open_logged_in_browser()
+        # Strict: an incomplete online list would wrongly report ads as "not found online".
+        online_ads = await published_ads.fetch_published_ads(self, self.root_url, strict = True)
+        status_sync.sync_ad_status(
+            ads, online_ads,
+            report_online_ads_without_local_file = self.ads_selector == "all",
+        )
 
     async def _handle_publish(self) -> None:
         self._bootstrap_runtime()

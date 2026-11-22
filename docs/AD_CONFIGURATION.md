@@ -58,6 +58,7 @@ Description values can be multiline. See <https://yaml-multiline.info/> for YAML
 - `publish` and `update` also skip inactive ads when they are named by ID.
 - `delete`, `extend`, `reserve` and `activate` act on ads that are already online, so an ad named explicitly by ID (e.g. `--ads=1,2,3`) is processed even if `active: false`.
 - `download` ignores the flag and sets it according to the ad's state on the website.
+- `sync-status` never changes the flag; it records the ad's state on the website in [`online_state`](#auto-managed-fields) instead.
 - `after_delete: DISABLE` sets `active: false` after a successful delete.
 
 ```yaml
@@ -393,9 +394,16 @@ updated_on:  # ISO timestamp when the ad was last published
 content_hash:  # Hash of the ad content, used to detect changes
 repost_count:  # How often the ad has been (re)published; used for automatic price reductions
 price_reduction_count:  # Auto-managed reduction cycle counter (starts at 0); used with price to recompute effective reduced price
+online_state:  # State of the ad on kleinanzeigen.de as of the last sync-status run (e.g. active, paused = reserved, inactive)
+expires_on:  # Expiry date of the ad on kleinanzeigen.de as of the last sync-status run (e.g. 2024-12-25)
 ```
 
 `price_reduction_count` is maintained by the bot after successful runs and should not be edited manually.
+
+`online_state` and `expires_on` are written only by `kleinanzeigen-bot sync-status`. They are a snapshot of the website at the time of
+that run (other commands such as `publish`, `extend` or `reserve` do not update them), so run `sync-status` again to refresh them.
+A re-download keeps them when `download.preserve_local_settings` is enabled (the default); otherwise it drops them.
+Both fields are informational: they are not part of `content_hash`, so updating them never makes an ad count as changed.
 
 ## Complete Example
 

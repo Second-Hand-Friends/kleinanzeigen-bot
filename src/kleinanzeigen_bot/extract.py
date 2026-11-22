@@ -420,6 +420,10 @@ class AdExtractor(WebScrapingMixin):
                         preserved["repost_count"] = existing_data["repost_count"]
                     if "price_reduction_count" in existing_data:
                         preserved["price_reduction_count"] = existing_data["price_reduction_count"]
+                    # Snapshot of the last sync-status run; download itself does not record it.
+                    for key in ("online_state", "expires_on"):
+                        if existing_data.get(key) is not None:
+                            preserved[key] = existing_data[key]
 
                     if preserved:
                         # Build a fully validated instance from merged data,

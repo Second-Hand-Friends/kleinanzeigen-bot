@@ -8,7 +8,7 @@ import enum
 import hashlib, json  # isort: skip
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime  # noqa: TC003 Move import into a type-checking block
+from datetime import date, datetime  # noqa: TC003 Move import into a type-checking block
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 from gettext import gettext as _
 from typing import Annotated, Any, Final, Literal, Self
@@ -201,6 +201,15 @@ class AdPartial(ContextualModel):
     created_on:datetime | None = _ISO_DATETIME()
     updated_on:datetime | None = _ISO_DATETIME()
     content_hash:str | None = _OPTIONAL()
+    online_state:str | None = Field(
+        default = None,
+        description = "auto-managed: state of the ad on kleinanzeigen.de as of the last sync-status run "
+                      "(e.g. active, paused = reserved, inactive); independent of 'active'",
+    )
+    expires_on:date | None = Field(
+        default = None,
+        description = "auto-managed: expiry date of the ad on kleinanzeigen.de as of the last sync-status run (e.g. 2024-12-25)",
+    )
 
     @field_validator("created_on", "updated_on", mode = "before")
     @classmethod
@@ -276,6 +285,8 @@ class AdPartial(ContextualModel):
                 "content_hash",
                 "repost_count",
                 "price_reduction_count",
+                "online_state",
+                "expires_on",
             },
             exclude_none = True,
             exclude_unset = True,
