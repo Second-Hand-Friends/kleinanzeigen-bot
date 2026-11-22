@@ -303,16 +303,30 @@ def show_help() -> None:
     print(help_text())
 
 
+_SHORT_OPTIONS:Final[str] = "hv"
+_LONG_OPTIONS:Final[list[str]] = [
+    "ads=", "config=", "force", "help", "json", "keep-old", "logfile=", "lang=", "preserve-local-settings", "unread", "verbose",
+    "workspace-mode=",
+]
+
+
+def _prints_parsed_output(args:Sequence[str]) -> bool:
+    """Return whether stdout carries output meant to be parsed (``version``, ``--json``), so the banner must stay off it.
+
+    Uses the same option parsing as :func:`parse_args`, so abbreviations such as ``--js`` count, but without its side effects.
+    """
+    try:
+        options, arguments = getopt.gnu_getopt(list(args)[1:], _SHORT_OPTIONS, _LONG_OPTIONS)
+    except getopt.error:
+        return False  # parse_args reports the error after the banner, as before
+    return arguments == ["version"] or any(option == "--json" for option, _value in options)
+
+
 def parse_args(args:Sequence[str]) -> ParsedArgs:
     parsed = ParsedArgs()
     help_requested = False
     try:
-        options, arguments = getopt.gnu_getopt(
-            list(args)[1:],
-            "hv",
-            ["ads=", "config=", "force", "help", "json", "keep-old", "logfile=", "lang=", "preserve-local-settings", "unread", "verbose",
-             "workspace-mode="],
-        )
+        options, arguments = getopt.gnu_getopt(list(args)[1:], _SHORT_OPTIONS, _LONG_OPTIONS)
     except getopt.error as ex:
         LOG.error(ex.msg)
         LOG.error("Use --help to display available options.")
@@ -378,7 +392,7 @@ def parse_args(args:Sequence[str]) -> ParsedArgs:
 
 def main(args:Sequence[str]) -> None:
     # Logs go to stderr; keep stdout free of the banner where it is parsed (version, messages --json).
-    if "version" not in args and "--json" not in args:
+    if not _prints_parsed_output(args):
         print(
             textwrap.dedent(rf"""
          _    _      _                           _                       _           _

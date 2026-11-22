@@ -177,6 +177,9 @@ class TestCliMain:
     @pytest.mark.parametrize(("args", "banner"), [
         (["script.py", "messages"], True),
         (["script.py", "messages", "--json"], False),
+        (["script.py", "messages", "--js"], False),
+        (["script.py", "--lang=de", "version"], False),
+        (["script.py", "messages", "--unknown"], True),
         (["script.py", "version"], False),
     ])
     def test_main_keeps_stdout_free_of_the_banner_for_parsed_output(

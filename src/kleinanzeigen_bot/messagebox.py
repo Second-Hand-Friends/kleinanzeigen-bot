@@ -199,8 +199,9 @@ class MessageboxClient:
             data = await self.gateway("GET", f"/conversations?page={page}&size={PAGE_SIZE}")
             raw_conversations = data.get("conversations") if isinstance(data, dict) else None
             if not isinstance(raw_conversations, list):
-                LOG.debug("Unexpected messagebox conversations response on page %s: %s", page, data)
-                break
+                # An empty or partial result would look like a complete inbox, so this is an error, not "no conversations".
+                LOG.debug("Unexpected messagebox conversations response on page %s: %.500s", page, data)
+                raise MessageboxError(_("Unexpected messagebox conversations response on page %s") % page)
             new_on_page = 0
             for raw in raw_conversations:
                 conversation = parse_conversation(raw)

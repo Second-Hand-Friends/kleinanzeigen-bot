@@ -307,17 +307,49 @@ async def test_unexpected_page_script_result_is_reported(tmp_path:Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_answers_without_the_expected_json_are_tolerated(tmp_path:Path, capsys:pytest.CaptureFixture[str]) -> None:
-    """Non-JSON or differently shaped 2xx answers show an empty inbox instead of crashing."""
+async def test_meta_without_the_expected_json_is_tolerated(tmp_path:Path, capsys:pytest.CaptureFixture[str]) -> None:
+    """The unread summary is informational: a non-JSON answer only drops it. An empty list is a valid empty inbox."""
     gateway = {
         "/conversations?include=_meta": {"statusCode": 200, "statusMessage": "OK", "content": "not json"},
-        f"/conversations?page=0&size={messagebox.PAGE_SIZE}": _ok({"items": []}),
+        f"/conversations?page=0&size={messagebox.PAGE_SIZE}": _ok({"conversations": []}),
     }
     bot = FakeMessagesBot(gateway)
 
     await bot.run(_args(tmp_path))
 
     assert capsys.readouterr().out == "No conversations found.\n"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("answer", [
+    pytest.param({"statusCode": 200, "statusMessage": "OK", "content": "<html>login</html>"}, id = "html"),
+    pytest.param(_ok({"items": []}), id = "missing-collection"),
+    pytest.param(_ok({"conversations": {"id": "c-1"}}), id = "malformed-collection"),
+])
+async def test_invalid_conversation_answers_fail_instead_of_showing_an_empty_inbox(
+    tmp_path:Path, capsys:pytest.CaptureFixture[str], answer:dict[str, Any],
+) -> None:
+    gateway = _gateway()
+    gateway[f"/conversations?page=0&size={messagebox.PAGE_SIZE}"] = answer
+    bot = FakeMessagesBot(gateway)
+
+    with pytest.raises(MessageboxError, match = "Unexpected messagebox conversations response on page 0"):
+        await bot.run(_args(tmp_path))
+
+    assert not capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_invalid_later_page_fails_instead_of_truncating_the_list() -> None:
+    gateway = {
+        f"/conversations?page=0&size={messagebox.PAGE_SIZE}": _ok({"conversations": [{"id": f"c-{n}"} for n in range(messagebox.PAGE_SIZE)]}),
+        f"/conversations?page=1&size={messagebox.PAGE_SIZE}": {"statusCode": 200, "statusMessage": "OK", "content": "<html></html>"},
+    }
+    bot = FakeMessagesBot(gateway)
+    bot.logged_in = True
+
+    with pytest.raises(MessageboxError, match = "on page 1"):
+        await messagebox.MessageboxClient(bot, bot.root_url).conversations()
 
 
 @pytest.mark.asyncio
