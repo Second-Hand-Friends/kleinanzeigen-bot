@@ -446,6 +446,33 @@
       ],
       "default": null,
       "title": "Content Hash"
+    },
+    "online_state": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "auto-managed: state of the ad on kleinanzeigen.de as of the last sync-status run (e.g. active, paused = reserved, inactive); independent of 'active'",
+      "title": "Online State"
+    },
+    "expires_on": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "auto-managed: expiry date of the ad on kleinanzeigen.de as of the last sync-status run (e.g. 2024-12-25)",
+      "title": "Expires On"
     }
   },
   "required": [

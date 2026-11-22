@@ -164,6 +164,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
               diagnose - Diagnostiziert Browser-Verbindungsprobleme und zeigt Troubleshooting-Informationen
               status   - Zeigt Anzeigenstatus und APR-Vorschau an
               list     - Zeigt aktuelle Online-Anzeigen mit ID, Titel, Status und Ablaufdatum an
+              sync-status - Übernimmt Online-Status und Ablaufdatum der Anzeigen in die lokalen Anzeigendateien
+                            (ändert online nichts und lässt alle anderen lokalen Einstellungen unverändert)
               --
               help     - Zeigt diese Hilfe an (Standardbefehl)
               version  - Zeigt die Version der Anwendung an
@@ -199,6 +201,10 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * all: Stellt alle passenden Anzeigen um
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
                     * Hinweis: Anzeigen, die bereits im Zielzustand sind, werden übersprungen.
+              --ads=all|<id(s)> (sync-status) - Gibt an, welche lokalen Anzeigen abgeglichen werden sollen (STANDARD: all)
+                    Mögliche Werte:
+                    * all: Gleicht alle lokalen Anzeigen mit ID ab und meldet Online-Anzeigen ohne lokale Datei
+                    * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
               --ads=all|due|<id(s)> (delete) - Gibt an, welche Anzeigen gelöscht werden sollen (ERFORDERLICH)
                     Mögliche Werte:
                     * all: Löscht alle Anzeigen
@@ -236,6 +242,8 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
           diagnose - diagnoses browser connection issues and shows troubleshooting information
           status   - shows ad status and APR preview details
           list     - lists current online ads with ID, title, state, and expiry date
+          sync-status - writes the online state and expiry date of your ads to the local ad files
+                        (changes nothing online and keeps all other local settings)
           --
           help     - displays this help (default command)
           version  - displays the application version
@@ -270,6 +278,10 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * all: switch all eligible ads
                 * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
                 * Note: ads already in the target state are skipped.
+          --ads=all|<id(s)> (sync-status) - specifies which local ads to synchronize (DEFAULT: all)
+                Possible values:
+                * all: synchronize all local ads that have an ID and report online ads without a local file
+                * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
           --ads=all|due|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
                 Possible values:
                 * all: delete all ads

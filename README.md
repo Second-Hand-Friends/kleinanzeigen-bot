@@ -33,6 +33,7 @@
 - **Bulk Management**: Update or delete multiple listings at once
 - **Download Listings**: Download existing listings from your profile to local configuration files
 - **List Online Listings**: View current account listings with IDs, status, and expiry dates
+- **Sync Listing Status**: Write the current online status and expiry date of your listings to the local ad files
 - **Extend Listings**: Extend ads close to expiry to keep watchers/savers and preserve the monthly ad quota
 - **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
 - **Flexible Configuration**: Configure defaults once, override per listing as needed
@@ -255,6 +256,8 @@ Commands:
   diagnose - diagnoses browser connection issues and shows troubleshooting information
   status   - shows ad status and APR preview details
   list     - lists current online ads with ID, title, state, and expiry date
+  sync-status - writes the online state and expiry date of your ads to the local ad files
+                (changes nothing online and keeps all other local settings)
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -289,6 +292,10 @@ Options:
         * all: switch all eligible ads
         * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
         * Note: ads already in the target state are skipped.
+  --ads=all|<id(s)> (sync-status) - specifies which local ads to synchronize (DEFAULT: all)
+        Possible values:
+        * all: synchronize all local ads that have an ID and report online ads without a local file
+        * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
   --ads=all|due|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
         Possible values:
         * all: delete all ads
@@ -310,6 +317,14 @@ each listing's ID, title, status, and expiry date when available. It does not
 download listings or change them. In a source checkout, use `pdm run app list`.
 This differs from `status`, which describes only local ad files. If the online
 list cannot be fetched completely, `list` fails instead of showing a partial list.
+
+`kleinanzeigen-bot sync-status` reads the same online list and writes each listing's
+status and expiry date to the matching local ad file (matched by `id`) as
+[`online_state` and `expires_on`](docs/AD_CONFIGURATION.md#auto-managed-fields), e.g. after
+you extended a listing on the website. All other local settings stay unchanged, the ads do not
+count as changed for `publish`/`update`, and nothing is changed online. Local ads that are not
+listed online and online listings without a local file are reported, not deleted or downloaded.
+Use `--ads=<id(s)>` to sync only specific ads.
 
 `publish` and `update` process the remaining ads when an individual ad fails, then
 exit with status `1` if any ads failed. Visible form-validation errors include the

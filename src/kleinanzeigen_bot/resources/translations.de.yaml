@@ -131,6 +131,11 @@ kleinanzeigen_bot/app.py:
   _handle_status:
     "No ad files found.": "Keine Anzeigendateien gefunden."
 
+  _handle_sync_status:
+    "############################################": "############################################"
+    "DONE: No local ads with an ID found.": "FERTIG: Keine lokalen Anzeigen mit ID gefunden."
+    "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
+
 #################################################
 kleinanzeigen_bot/login_flow.py:
 #################################################
@@ -574,6 +579,29 @@ kleinanzeigen_bot/reserve_flow.py:
 
   report_missing:
     " -> FAILED: Could not find '%s' button for ad ID %s": " -> FEHLER: '%s'-Button für Anzeigen-ID %s nicht gefunden"
+
+#################################################
+kleinanzeigen_bot/status_sync.py:
+#################################################
+  select_ads_to_sync:
+    " -> SKIPPED: ad [%s] has no ID (not published yet)": " -> ÜBERSPRUNGEN: Anzeige [%s] hat keine ID (noch nicht veröffentlicht)"
+    "No local ad file found for ID %s": "Keine lokale Anzeigendatei für ID %s gefunden"
+
+  _sync_ad:
+    " -> ad [%s] (ID: %s): invalid expiry date from kleinanzeigen.de: %s; keeping the local value": " -> Anzeige [%s] (ID: %s): ungültiges Ablaufdatum von kleinanzeigen.de: %s; der lokale Wert bleibt erhalten"
+    " -> UNCHANGED: ad [%s] (ID: %s)": " -> UNVERÄNDERT: Anzeige [%s] (ID: %s)"
+    " -> FAILED: could not save ad [%s]: %s": " -> FEHLER: Anzeige [%s] konnte nicht gespeichert werden: %s"
+    " -> UPDATED: ad [%s] (ID: %s): state %s -> %s, expires %s -> %s": " -> AKTUALISIERT: Anzeige [%s] (ID: %s): Status %s -> %s, Ablaufdatum %s -> %s"
+
+  sync_ad_status:
+    "Skipping online ad with non-numeric id: %s": "Überspringe Online-Anzeige mit nicht-numerischer ID: %s"
+    " -> NOT FOUND ONLINE: ad [%s] (ID: %s) is not listed in your account; local file left unchanged": " -> ONLINE NICHT GEFUNDEN: Anzeige [%s] (ID: %s) ist nicht in Ihrem Konto gelistet; lokale Datei bleibt unverändert"
+    "Online ad %s ('%s') has no local ad file.": "Online-Anzeige %s ('%s') hat keine lokale Anzeigendatei."
+    "Use 'download --ads=new' to download online ads that have no local ad file.": "Mit 'download --ads=new' werden Online-Anzeigen ohne lokale Anzeigendatei heruntergeladen."
+    "############################################": "############################################"
+    "DONE: Checked %s: %s updated, %s unchanged, %s not found online, %s failed": "FERTIG: %s geprüft: %s aktualisiert, %s unverändert, %s online nicht gefunden, %s fehlgeschlagen"
+    "ad": "Anzeige"
+    "Failed to save %s": "Speichern fehlgeschlagen für %s"
 
 #################################################
 kleinanzeigen_bot/ad_drafts.py:
