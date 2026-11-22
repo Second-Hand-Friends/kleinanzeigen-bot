@@ -66,6 +66,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self.keep_old_ads = False
         self._unread_only:bool = False
         self._json_output:bool = False
+        self._conversation_id:str | None = None
+        self._reply_text:str | None = None
+        self._reply_text_file:str | None = None
 
         # Ensure the attribute always exists on the bot object so that
         # capture_login_detection_diagnostics_if_enabled can read/write it
@@ -102,6 +105,9 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         self._preserve_local_settings = parsed.preserve_local_settings
         self._unread_only = parsed.unread_only
         self._json_output = parsed.json_output
+        self._conversation_id = parsed.conversation_id
+        self._reply_text = parsed.reply_text
+        self._reply_text_file = parsed.reply_text_file
         self._config_arg = parsed.config_arg
         self._workspace_mode_arg = cast(_xdg_paths.InstallationMode, parsed.workspace_mode) if parsed.workspace_mode else None
         self._logfile_arg = parsed.logfile_arg
@@ -150,6 +156,8 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
                     await self._handle_list()
                 case "messages":
                     await self._handle_messages()
+                case "reply":
+                    await self._handle_reply()
                 case "publish":
                     await self._handle_publish()
                 case "update":
@@ -325,6 +333,45 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
             print(messagebox.conversations_to_json(conversations, meta))
         else:
             print(messagebox.render_conversations(conversations, meta))
+
+    def _reply_text_or_exit(self) -> str:
+        """Return the message text from --text or --text-file, or exit with status 2 when it is missing or ambiguous."""
+        if (self._reply_text is None) == (self._reply_text_file is None):
+            LOG.error("Pass the message with exactly one of --text or --text-file.")
+            sys.exit(2)
+        if self._reply_text_file is not None:
+            try:
+                text = Path(self._reply_text_file).read_text(encoding = "utf-8")
+            except (OSError, UnicodeDecodeError) as ex:
+                LOG.error("Could not read the message text from %s: %s", self._reply_text_file, ex)
+                sys.exit(2)
+        else:
+            text = self._reply_text or ""
+        if not text.strip():
+            LOG.error("The message text is empty.")
+            sys.exit(2)
+        return text.strip()
+
+    async def _handle_reply(self) -> None:
+        """Send one message to an existing conversation."""
+        # Validate everything before logging in, so nothing is sent on a typo.
+        conversation_id = self._conversation_id or ""
+        if not messagebox.is_valid_conversation_id(conversation_id):
+            LOG.error('Missing or invalid --conversation: "%s". Use the conversation ID shown by the messages command.', conversation_id)
+            sys.exit(2)
+        text = self._reply_text_or_exit()
+
+        self._bootstrap_runtime()
+        await self._open_logged_in_browser()
+        client = messagebox.MessageboxClient(self, self.root_url)
+        # Only existing conversations: check the read-only list instead of opening the conversation (which marks it read).
+        conversation = next((c for c in await client.conversations() if c.id == conversation_id), None)
+        if conversation is None:
+            raise messagebox.MessageboxError(_("Conversation %s was not found in your message box; nothing was sent.") % conversation_id)
+        LOG.info("Sending message to conversation %s (ad: %s, partner: %s)...",
+                 conversation.id, conversation.ad_title or "-", conversation.partner or "-")
+        await client.send_message(conversation.id, text)
+        LOG.info("Message sent to conversation %s.", conversation.id)
 
     async def _handle_publish(self) -> None:
         self._bootstrap_runtime()

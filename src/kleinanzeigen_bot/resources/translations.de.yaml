@@ -131,6 +131,17 @@ kleinanzeigen_bot/app.py:
   _handle_status:
     "No ad files found.": "Keine Anzeigendateien gefunden."
 
+  _reply_text_or_exit:
+    "Pass the message with exactly one of --text or --text-file.": "Die Nachricht mit genau einer der Optionen --text oder --text-file angeben."
+    "Could not read the message text from %s: %s": "Der Nachrichtentext konnte nicht aus %s gelesen werden: %s"
+    "The message text is empty.": "Der Nachrichtentext ist leer."
+
+  _handle_reply:
+    "Missing or invalid --conversation: \"%s\". Use the conversation ID shown by the messages command.": "Fehlende oder ungültige --conversation: \"%s\". Die vom Befehl messages angezeigte Unterhaltungs-ID verwenden."
+    "Conversation %s was not found in your message box; nothing was sent.": "Unterhaltung %s wurde in Ihrem Postfach nicht gefunden; es wurde nichts gesendet."
+    "Sending message to conversation %s (ad: %s, partner: %s)...": "Sende Nachricht an Unterhaltung %s (Anzeige: %s, Gesprächspartner: %s)..."
+    "Message sent to conversation %s.": "Nachricht an Unterhaltung %s gesendet."
+
   _handle_messages:
     "Invalid --ads selector: \"%s\". Valid values: all or comma-separated numeric IDs.": "Ungültiger --ads-Selektor: \"%s\". Gültige Werte: all oder kommagetrennte numerische IDs."
 

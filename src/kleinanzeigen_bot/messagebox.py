@@ -14,11 +14,14 @@ logged-in page, so the requests carry the session like the web app's own:
 These endpoints and their JSON fields are not a documented API. Parsing is therefore tolerant:
 missing fields become empty values, and unexpected shapes are logged at debug level.
 Listing conversations is read-only; single conversations are never opened, so nothing is marked as read.
+Sending a reply (``reply`` command) is the only write: ``POST <gateway>/messagebox/api/users/<uid>/conversations/<cid>``
+with ``{"message": text}``.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict, dataclass
 from gettext import gettext as _
 from typing import TYPE_CHECKING, Any, Final
@@ -37,6 +40,7 @@ PAGE_SIZE:Final[int] = 100
 MAX_PAGES:Final[int] = 20  # safety limit: 2000 conversations
 HTTP_OK:Final[int] = 200
 _HTTP_UNAUTHORIZED:Final[frozenset[int]] = frozenset({401, 403})
+_CONVERSATION_ID_RE:Final[re.Pattern[str]] = re.compile(r"[A-Za-z0-9_:.-]+")
 
 
 class MessageboxError(KleinanzeigenBotError):
@@ -214,6 +218,15 @@ class MessageboxClient:
         else:
             LOG.warning("Stopped after %s pages of conversations (safety limit); older conversations are not listed.", MAX_PAGES)
         return result
+
+    async def send_message(self, conversation_id:str, text:str) -> None:
+        """Send one message to an existing conversation. Never retried: a repeat could send it twice."""
+        await self.gateway("POST", f"/conversations/{conversation_id}", {"message": text})
+
+
+def is_valid_conversation_id(conversation_id:str) -> bool:
+    """Return whether the ID is safe to put into the gateway URL path."""
+    return bool(_CONVERSATION_ID_RE.fullmatch(conversation_id))
 
 
 def filter_conversations(conversations:list[Conversation], *, unread_only:bool, ad_ids:set[int] | None) -> list[Conversation]:

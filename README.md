@@ -33,7 +33,7 @@
 - **Bulk Management**: Update or delete multiple listings at once
 - **Download Listings**: Download existing listings from your profile to local configuration files
 - **List Online Listings**: View current account listings with IDs, status, and expiry dates
-- **Read Messages**: List the conversations in your message box, optionally only unread ones or as JSON
+- **Read and Answer Messages**: List the conversations in your message box (optionally only unread ones or as JSON) and reply to one
 - **Extend Listings**: Extend ads close to expiry to keep watchers/savers and preserve the monthly ad quota
 - **Browser Automation**: Uses Chromium-based browsers (Chrome, Edge, Chromium) for reliable automation
 - **Flexible Configuration**: Configure defaults once, override per listing as needed
@@ -258,6 +258,7 @@ Commands:
   list     - lists current online ads with ID, title, state, and expiry date
   messages - lists the conversations in your message box (ad, partner, last message, unread);
              read-only, nothing is marked as read
+  reply    - sends one message to an existing conversation (one message per call)
   --
   help     - displays this help (default command)
   version  - displays the application version
@@ -301,6 +302,9 @@ Options:
   --ads=all|<id(s)> (messages) - only lists conversations about these ad IDs (DEFAULT: all)
   --unread          - (messages) only lists conversations with unread messages
   --json            - (messages) prints the conversations as JSON
+  --conversation=<ID> (reply) - ID of the existing conversation (see "messages")
+  --text=<TEXT>     - (reply) text of the message
+  --text-file=<PATH> - (reply) file (UTF-8) with the text of the message, instead of --text
   --keep-old        - don't delete old ads on republication
   --preserve-local-settings - force-enable preservation of local-only settings on re-download (overrides config value of false)
   --config=<PATH>   - path to the config YAML or JSON file (does not implicitly change workspace mode)
@@ -323,6 +327,10 @@ conversations with unread messages, `--ads=<id(s)>` only those about the given a
 prints machine-readable JSON (the banner is skipped and logs go to stderr). The command only reads;
 it does not open single conversations, so nothing is marked as read. It uses the message box API of
 the web app, whose fields are not documented; unknown or missing fields are shown as empty.
+
+`kleinanzeigen-bot reply --conversation=<id> --text="..."` (or `--text-file=<path>`) sends exactly one
+message to an existing conversation; use the conversation ID shown by `messages`. Unknown
+conversations are rejected before anything is sent, and a failed send is not retried.
 
 `publish` and `update` process the remaining ads when an individual ad fails, then
 exit with status `1` if any ads failed. Visible form-validation errors include the

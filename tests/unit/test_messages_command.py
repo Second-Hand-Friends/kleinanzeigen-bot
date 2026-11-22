@@ -47,9 +47,11 @@ def _gateway_script(path:str, method:str = "GET", body:str | None = None) -> str
 class FakeMessagesBot(KleinanzeigenBot):
     """Real CLI dispatch with canned same-origin and gateway answers instead of a browser."""
 
-    def __init__(self, gateway:dict[str, Any]) -> None:
+    def __init__(self, gateway:dict[str, Any], posts:dict[tuple[str, str], Any] | None = None) -> None:
         super().__init__()
         self.gateway = gateway
+        self.posts = posts or {}
+        self.sent:list[tuple[str, str]] = []
         self.requests:list[tuple[str, str]] = []
         self.bootstrapped = False
         self.logged_in = False
@@ -86,6 +88,10 @@ class FakeMessagesBot(KleinanzeigenBot):
         for path, response in self.gateway.items():
             if jscode == _gateway_script(path):
                 self.requests.append(("GET", path))
+                return response
+        for (path, body), response in self.posts.items():
+            if jscode == _gateway_script(path, "POST", body):
+                self.sent.append((path, body))
                 return response
         pytest.fail(f"unexpected page script {jscode[-200:]}")
 
@@ -279,3 +285,101 @@ def test_render_conversations_in_german() -> None:
         "Unterhaltung: c-1 [ungelesen]\n  Anzeige: Rad (ID: 1)\n  Gesprächspartner: Anna\n  letzte Nachricht: t\n  Text: Hallo"
     )
     assert messagebox.render_conversations([], {"numUnread": 0}) == "Ungelesene Unterhaltungen: 0\n\nKeine Unterhaltungen gefunden."
+
+
+# --------------------------------------------------------------------------- #
+# reply
+# --------------------------------------------------------------------------- #
+
+
+def _reply_args(tmp_path:Path, *extra:str) -> list[str]:
+    return ["app", "reply", "--config", str(tmp_path / "config.yaml"), "--workspace-mode", "portable", *extra]
+
+
+def _post(conversation_id:str, text:str) -> tuple[str, str]:
+    return f"/conversations/{conversation_id}", json.dumps({"message": text})
+
+
+def test_reply_is_accepted_and_documented() -> None:
+    assert "reply" in VALID_COMMANDS
+    parsed = parse_args(["app", "reply", "--conversation", " c-1 ", "--text", "Hallo"])
+    assert (parsed.command, parsed.conversation_id, parsed.reply_text) == ("reply", "c-1", "Hallo")
+    assert parse_args(["app", "reply", "--text-file=msg.txt"]).reply_text_file == "msg.txt"
+    assert "reply    - sends one message to an existing conversation" in help_text(language = "en")
+    assert "reply    - Sendet eine Nachricht in eine bestehende Unterhaltung" in help_text(language = "de")
+
+
+@pytest.mark.asyncio
+async def test_reply_sends_exactly_one_message(tmp_path:Path, caplog:pytest.LogCaptureFixture) -> None:
+    bot = FakeMessagesBot(_gateway(), posts = {_post("c-2", "Yes, still available."): {"statusCode": 201, "statusMessage": "Created", "content": ""}})
+
+    with caplog.at_level("INFO"):
+        await bot.run(_reply_args(tmp_path, "--conversation=c-2", "--text", "  Yes, still available.\n"))
+
+    assert bot.sent == [_post("c-2", "Yes, still available.")]
+    assert "Sending message to conversation c-2 (ad: VW Golf, partner: Ben)" in caplog.text
+    assert "Message sent to conversation c-2." in caplog.text
+    assert bot.closed
+
+
+@pytest.mark.asyncio
+async def test_reply_reads_the_text_from_a_file(tmp_path:Path) -> None:
+    text_file = tmp_path / "reply.txt"
+    text_file.write_text("Hallo Anna,\n\ngerne.\n", encoding = "utf-8")
+    bot = FakeMessagesBot(_gateway(), posts = {_post("c-1", "Hallo Anna,\n\ngerne."): {"statusCode": 200, "statusMessage": "OK", "content": "{}"}})
+
+    await bot.run(_reply_args(tmp_path, "--conversation=c-1", f"--text-file={text_file}"))
+
+    assert bot.sent == [_post("c-1", "Hallo Anna,\n\ngerne.")]
+
+
+@pytest.mark.asyncio
+async def test_reply_to_unknown_conversation_sends_nothing(tmp_path:Path) -> None:
+    bot = FakeMessagesBot(_gateway())
+
+    with pytest.raises(MessageboxError, match = "Conversation c-9 was not found in your message box; nothing was sent"):
+        await bot.run(_reply_args(tmp_path, "--conversation=c-9", "--text=Hallo"))
+
+    assert bot.sent == []
+
+
+@pytest.mark.asyncio
+async def test_reply_reports_a_failed_send(tmp_path:Path) -> None:
+    bot = FakeMessagesBot(_gateway(), posts = {_post("c-1", "Hallo"): {"statusCode": 500, "statusMessage": "Error", "content": ""}})
+
+    with pytest.raises(MessageboxError, match = "failed with HTTP 500"):
+        await bot.run(_reply_args(tmp_path, "--conversation=c-1", "--text=Hallo"))
+
+    assert bot.sent == [_post("c-1", "Hallo")], "a failed send is not retried"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("extra", [
+    pytest.param(["--text=Hallo"], id = "missing-conversation"),
+    pytest.param(["--conversation=../users/1", "--text=Hallo"], id = "unsafe-conversation-id"),
+    pytest.param(["--conversation=c-1"], id = "missing-text"),
+    pytest.param(["--conversation=c-1", "--text=   "], id = "blank-text"),
+    pytest.param(["--conversation=c-1", "--text-file=does-not-exist.txt"], id = "unreadable-file"),
+])
+async def test_reply_rejects_invalid_input_before_logging_in(tmp_path:Path, extra:list[str]) -> None:
+    bot = FakeMessagesBot(_gateway())
+
+    with pytest.raises(SystemExit) as exc_info:
+        await bot.run(_reply_args(tmp_path, *extra))
+
+    assert exc_info.value.code == 2
+    assert not bot.bootstrapped
+    assert bot.sent == []
+
+
+@pytest.mark.asyncio
+async def test_reply_rejects_text_and_text_file_together(tmp_path:Path) -> None:
+    text_file = tmp_path / "reply.txt"
+    text_file.write_text("From the file", encoding = "utf-8")
+    bot = FakeMessagesBot(_gateway())
+
+    with pytest.raises(SystemExit) as exc_info:
+        await bot.run(_reply_args(tmp_path, "--conversation=c-1", "--text=Hallo", f"--text-file={text_file}"))
+
+    assert exc_info.value.code == 2
+    assert bot.sent == []
