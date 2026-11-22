@@ -16,13 +16,14 @@
     const needle = normalize(value);
     const items = element.querySelectorAll('[role="option"]');
     for (const li of items) {
+      // A [role="option"] element need not be an HTMLElement (e.g. SVG) and then has no click().
+      if (!(li instanceof HTMLElement)) continue;
       if (normalize(li.textContent) === needle) {
         try {
           li.scrollIntoView({ block: "nearest" });
         } catch {
           // scrolling is best effort
         }
-        // @ts-expect-error js-debt: a [role="option"] element need not be an HTMLElement with click()
         li.click();
         return true;
       }

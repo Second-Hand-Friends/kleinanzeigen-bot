@@ -83,9 +83,10 @@
         if (fiber.memoizedProps && fiber.memoizedProps.options) {
           const opts = fiber.memoizedProps.options;
           for (let k = 0; k < opts.length; k++) {
-            if (opts[k].value === value && options[k]) {
-              // @ts-expect-error js-debt: a [role="option"] element need not be an HTMLElement with click()
-              options[k].click();
+            // React props map to options by position, so options keeps non-HTML elements and they are skipped here.
+            const target = options[k];
+            if (opts[k].value === value && target instanceof HTMLElement) {
+              target.click();
               return { ok: true };
             }
           }
@@ -95,19 +96,19 @@
     }
     for (let k = 0; k < options.length; k++) {
       const o = options[k];
+      // A [role="option"] element need not be an HTMLElement (e.g. SVG) and then has no click().
+      if (!(o instanceof HTMLElement)) continue;
       if (
         o.getAttribute("value") === value ||
         o.getAttribute("data-value") === value ||
         o.getAttribute("aria-label") === value ||
         o.getAttribute("title") === value
       ) {
-        // @ts-expect-error js-debt: a [role="option"] element need not be an HTMLElement with click()
         o.click();
         return { ok: true };
       }
       const text = (o.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
       if (text === (value + "").replace(/\s+/g, " ").trim().toLowerCase()) {
-        // @ts-expect-error js-debt: a [role="option"] element need not be an HTMLElement with click()
         o.click();
         return { ok: true };
       }

@@ -68,6 +68,50 @@ async def test_button_combobox_prefers_react_option_values(web:WebScrapingMixin,
     assert await web.web_execute("clicks") == ["Kraftstoff", "B"]
 
 
+async def test_button_combobox_skips_non_html_options(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """A matching [role=option] that is no HTMLElement (here SVG, without click()) is skipped for the next match."""
+    body = '<div><button id="fuel" role="combobox">Kraftstoff</button><div id="slot"></div></div>'
+    menu = ('<ul id="fuel-menu" role="listbox"><svg role="option" data-value="diesel"><text>Diesel</text></svg>'
+            '<li role="option" data-value="diesel">Diesel</li></ul>')
+    await _show_combobox(web, show_html, body, menu)
+    await publishing_form._select_button_combobox(web, "fuel", "diesel")
+    assert await web.web_execute("clicks") == ["Kraftstoff", "Diesel"]
+
+
+async def test_button_combobox_with_only_non_html_match_reports_option_not_found(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """A match that cannot be clicked is reported like a missing option instead of failing in the page."""
+    body = '<div><button id="fuel" role="combobox">Kraftstoff</button><div id="slot"></div></div>'
+    menu = '<ul id="fuel-menu" role="listbox"><svg role="option"><text>Diesel</text></svg><li role="option">Benzin</li></ul>'
+    await _show_combobox(web, show_html, body, menu)
+    with pytest.raises(TimeoutError, match = "Option not found"):
+        await publishing_form._select_button_combobox(web, "fuel", "diesel")
+    assert await web.web_execute("clicks") == ["Kraftstoff"]
+
+
+async def _show_react_combobox_with_svg_option(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """React props ``diesel, benzin`` map by position onto an SVG option ``A`` and an HTML option ``B``."""
+    body = '<div><button id="fuel" role="combobox">Kraftstoff</button><div id="slot"></div></div>'
+    await _show_combobox(web, show_html, body,
+                         '<ul id="fuel-menu"><svg role="option"><text>A</text></svg><li role="option">B</li></ul>')
+    await web.web_execute("""document.getElementById('fuel').__reactFiber$test =
+        {return: {memoizedProps: {options: [{value: 'diesel'}, {value: 'benzin'}]}, return: null}}; true""")
+
+
+async def test_button_combobox_react_values_keep_positions_with_non_html_options(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """Non-HTML options are skipped, not removed, so React props still map to the right option by position."""
+    await _show_react_combobox_with_svg_option(web, show_html)
+    await publishing_form._select_button_combobox(web, "fuel", "benzin")
+    assert await web.web_execute("clicks") == ["Kraftstoff", "B"]
+
+
+async def test_button_combobox_react_value_on_non_html_option_is_not_clicked(web:WebScrapingMixin, show_html:ShowHtml) -> None:
+    """A React value whose option is no HTMLElement is reported as not found instead of failing in the page."""
+    await _show_react_combobox_with_svg_option(web, show_html)
+    with pytest.raises(TimeoutError, match = "Option not found"):
+        await publishing_form._select_button_combobox(web, "fuel", "diesel")
+    assert await web.web_execute("clicks") == ["Kraftstoff"]
+
+
 @pytest.mark.parametrize(("body", "menu", "message"), [
     pytest.param('<div><button id="fuel" role="combobox">Kraftstoff</button><div id="slot"></div></div>',
                  f'<ul id="fuel-menu">{_OPTIONS}</ul>', "Option not found", id = "unknown-value"),
