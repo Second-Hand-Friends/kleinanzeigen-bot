@@ -15,6 +15,7 @@ from .published_ads import PublishedAd
 from .utils import dicts as _dicts
 from .utils import loggers as _loggers
 from .utils import page_scripts
+from .utils.exceptions import AdBatchError
 from .utils.i18n import pluralize
 from .utils.misc import ensure
 from .utils.web_scraping_mixin import WebScrapingMixin
@@ -46,6 +47,7 @@ async def delete_ads(
 ) -> None:
     count = 0
     deleted_count = 0
+    failed_count = 0
     skipped_ids_not_in_account:list[int] = []
 
     # The account's own ads are needed to match ID-less ads by title and to check explicit IDs:
@@ -84,7 +86,13 @@ async def delete_ads(
             skipped_ids_not_in_account.append(ad_cfg.id)
             result = DeleteResult(deleted = False, attempted = False)
         else:
-            result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
+            try:
+                result = await delete_ad(web, root_url, ad_cfg, published_ads_list, delete_old_ads_by_title = delete_old_ads_by_title)
+            except (AssertionError, ProtocolException) as ex:
+                # A rejected delete request (e.g. HTTP 500) must not abort the remaining ads.
+                LOG.error(" -> FAILED: could not delete ad '%s' (ID: %s): %s", ad_cfg.title, ad_cfg.id, ex)
+                failed_count += 1
+                result = DeleteResult(deleted = False, attempted = False)
         if result.deleted:
             deleted_count += 1
 
@@ -102,6 +110,73 @@ async def delete_ads(
             ", ".join(str(ad_id) for ad_id in skipped_ids_not_in_account),
         )
     LOG.info("############################################")
+    if failed_count:
+        raise AdBatchError(_("Failed to delete %s") % pluralize("ad", failed_count))
+
+
+async def delete_all_online_ads(web:WebScrapingMixin, root_url:str) -> None:
+    """Delete every ad the account lists online, independent of local ad files.
+
+    Uses the same strict, paginated list as the ``list`` command. If the list is incomplete nothing is deleted.
+    A failing delete request for one ad is logged and the remaining ads are still processed.
+    """
+    online_ads = await published_ads.fetch_published_ads(web, root_url, strict = True)
+    targets:list[tuple[int, str]] = []
+    for published_ad in online_ads:
+        try:
+            targets.append((int(published_ad["id"]), str(published_ad.get("title") or "-")))
+        except (KeyError, TypeError, ValueError):
+            LOG.warning("Skipping online ad with invalid id: %r", published_ad.get("id"))
+
+    LOG.info("Found %s online to delete", pluralize("ad", len(targets)))
+    if not targets:
+        LOG.info("############################################")
+        LOG.info("DONE: No ads to delete found.")
+        LOG.info("############################################")
+        return
+
+    csrf_token = await _fetch_csrf_token(web, root_url)
+    deleted_count = 0
+    failed_count = 0
+    for index, (ad_id, title) in enumerate(targets, start = 1):
+        LOG.info("Processing %s/%s: '%s' (ID: %s)...", index, len(targets), title, ad_id)
+        try:
+            if await _request_delete(web, root_url, csrf_token, ad_id, title):
+                deleted_count += 1
+        except (AssertionError, ProtocolException) as ex:
+            LOG.error(" -> FAILED: could not delete ad '%s' (ID: %s): %s", title, ad_id, ex)
+            failed_count += 1
+        await web.web_sleep()
+
+    LOG.info("############################################")
+    LOG.info("DONE: Deleted %s of %s", deleted_count, pluralize("ad", len(targets)))
+    LOG.info("############################################")
+    if failed_count:
+        raise AdBatchError(_("Failed to delete %s") % pluralize("ad", failed_count))
+
+
+async def _fetch_csrf_token(web:WebScrapingMixin, root_url:str) -> str:
+    await web.web_open(f"{root_url}/m-meine-anzeigen.html")
+    csrf_token = await web.web_execute(page_scripts.call("csrf_token"))
+    ensure(isinstance(csrf_token, str) and csrf_token.strip(), _("Expected CSRF Token not found in HTML content!"))
+    return str(csrf_token)
+
+
+async def _request_delete(web:WebScrapingMixin, root_url:str, csrf_token:str, target_id:int, title:str) -> bool:
+    """Send one delete request; return True on HTTP 200, False on 404 (already gone)."""
+    HTTP_OK:Final = 200
+    LOG.debug(" -> deleting ad %s...", target_id)
+    response = await web.web_request(
+        url = f"{root_url}/m-anzeigen-loeschen.json?ids={target_id}",
+        method = "POST",
+        headers = {"x-csrf-token": csrf_token},
+        valid_response_codes = [200, 404],
+    )
+    if response["statusCode"] == HTTP_OK:
+        LOG.info(" -> SUCCESS: deleted ad '%s' (ID: %s)", title, target_id)
+        return True
+    LOG.warning(" -> ad %s not found (status %s), may have been removed already", target_id, response["statusCode"])
+    return False
 
 
 def _published_ad_ids(published_ads_list:list[PublishedAd]) -> set[int]:
@@ -172,25 +247,12 @@ async def delete_ad(
         return DeleteResult(deleted = False, attempted = False)
 
     # Phase B: Open manage-ads page, fetch CSRF token, execute deletions
-    await web.web_open(f"{root_url}/m-meine-anzeigen.html")
-    csrf_token = await web.web_execute(page_scripts.call("csrf_token"))
-    ensure(isinstance(csrf_token, str) and csrf_token.strip(), _("Expected CSRF Token not found in HTML content!"))
+    csrf_token = await _fetch_csrf_token(web, root_url)
 
-    HTTP_OK:Final = 200
     deleted = False
     for target_id in ids_to_delete:
-        LOG.debug(" -> deleting ad %s...", target_id)
-        response = await web.web_request(
-            url = f"{root_url}/m-anzeigen-loeschen.json?ids={target_id}",
-            method = "POST",
-            headers = {"x-csrf-token": str(csrf_token)},
-            valid_response_codes = [200, 404],
-        )
-        if response["statusCode"] == HTTP_OK:
+        if await _request_delete(web, root_url, csrf_token, target_id, ad_cfg.title):
             deleted = True
-            LOG.info(" -> SUCCESS: deleted ad '%s' (ID: %s)", ad_cfg.title, target_id)
-        else:
-            LOG.warning(" -> ad %s not found (status %s), may have been removed already", target_id, response["statusCode"])
 
     await web.web_sleep()
     # Clear ad_cfg.id whenever a delete was attempted — the old ID is stale

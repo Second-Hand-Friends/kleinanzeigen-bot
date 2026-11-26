@@ -276,7 +276,22 @@ class TestKleinanzeigenBotAdOperations:
             assert test_bot.command == "delete"
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("args", [["delete"], ["delete", "--ads=bogus"], ["delete", "--ads=all,due"]])
+    async def test_run_delete_online_all_ignores_local_ads(self, test_bot:KleinanzeigenBot, mock_config_setup:None) -> None:  # pylint: disable=unused-argument
+        """--ads=online-all deletes what the account lists online and never loads local ad files."""
+        with (
+            patch.object(test_bot, "load_ads") as load_ads,
+            patch.object(test_bot, "_open_logged_in_browser", new_callable = AsyncMock),
+            patch("kleinanzeigen_bot.delete_flow.delete_all_online_ads", new_callable = AsyncMock) as mock_delete_all,
+            patch("kleinanzeigen_bot.delete_flow.delete_ads", new_callable = AsyncMock) as mock_delete_ads,
+        ):
+            await test_bot.run(["script.py", "delete", "--ads=online-all"])
+        mock_delete_all.assert_awaited_once()
+        mock_delete_ads.assert_not_called()
+        load_ads.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("args", [["delete"], ["delete", "--ads=bogus"], ["delete", "--ads=all,due"],
+                             ["delete", "--ads=online-all,due"], ["delete", "--ads=online-all,1"]])
     async def test_run_delete_command_requires_valid_selector(self, test_bot:KleinanzeigenBot, mock_config_setup:None, args:list[str]) -> None:  # pylint: disable=unused-argument
         """Delete is irreversible: missing or invalid --ads must abort before loading ads."""
         with patch.object(test_bot, "load_ads") as load_ads, pytest.raises(SystemExit) as exc:

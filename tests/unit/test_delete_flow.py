@@ -16,6 +16,7 @@ from kleinanzeigen_bot.app import KleinanzeigenBot
 from kleinanzeigen_bot.delete_flow import DeleteResult
 from kleinanzeigen_bot.model.ad_model import Ad
 from kleinanzeigen_bot.published_ads import PublishedAdsFetchIncompleteError
+from kleinanzeigen_bot.utils.exceptions import AdBatchError
 
 
 def remove_fields(config:dict[str, Any], *fields:str) -> dict[str, Any]:
@@ -735,3 +736,116 @@ class TestDeleteAdsAfterDeletePolicy:
         assert ad_cfg.repost_count == 0
         assert "id" not in ad_cfg_orig
         mock_save.assert_called_once()
+
+
+class TestDeleteAdsServerErrors:
+    """A rejected delete request for one ad must not abort the rest of the batch."""
+
+    @pytest.mark.asyncio
+    async def test_delete_ads_continues_after_server_error_and_reports_failure(
+        self, test_bot:KleinanzeigenBot, minimal_ad_config:dict[str, Any], tmp_path:Path,
+    ) -> None:
+        """A 500 on the first ad is logged, the second ad is still deleted, and the batch ends with AdBatchError."""
+        test_bot.config.deleting.after_delete = "NONE"
+        ads = [
+            (str(tmp_path / f"ad{ad_id}.yaml"), ad_cfg, ad_cfg.model_dump())
+            for ad_id in (111, 222)
+            for ad_cfg in [Ad.model_validate(minimal_ad_config | {"id": ad_id, "title": f"Test advertisement {ad_id}"})]
+        ]
+        ok_response = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+        async def fake_request(url:str, **_:Any) -> dict[str, Any]:
+            if url.endswith("ids=111"):
+                raise AssertionError('Invalid response "500 Internal Server Error" received')
+            return ok_response
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 111}, {"id": 222}]),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fake_request) as mock_request,
+            pytest.raises(AdBatchError, match = "1 ad"),
+        ):
+            await delete_flow.delete_ads(
+                web = test_bot, root_url = test_bot.root_url,
+                after_delete = "NONE", delete_old_ads_by_title = False, ad_cfgs = ads,
+            )
+
+        requested = [call.kwargs["url"] for call in mock_request.call_args_list]
+        assert requested == [
+            f"{test_bot.root_url}/m-anzeigen-loeschen.json?ids=111",
+            f"{test_bot.root_url}/m-anzeigen-loeschen.json?ids=222",
+        ]
+        assert ads[0][1].id == 111  # the failed ad keeps its ID
+        assert ads[1][1].id is None  # the second one was deleted
+
+
+class TestDeleteAllOnlineAds:
+    """Tests for ``--ads=online-all``: delete everything the account lists online."""
+
+    OK_RESPONSE:dict[str, Any] = {"statusCode": 200, "statusMessage": "OK", "content": "{}"}
+
+    @pytest.mark.asyncio
+    async def test_deletes_every_online_ad_without_local_files(self, test_bot:KleinanzeigenBot, caplog:pytest.LogCaptureFixture) -> None:
+        online = [{"id": 1, "title": "One"}, {"id": "2", "title": "Two"}, {"id": 3}]
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = online) as mock_fetch,
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, return_value = self.OK_RESPONSE) as mock_request,
+            caplog.at_level("INFO"),
+        ):
+            await delete_flow.delete_all_online_ads(test_bot, test_bot.root_url)
+
+        assert mock_fetch.call_args.kwargs["strict"] is True
+        assert [call.kwargs["url"] for call in mock_request.call_args_list] == [
+            f"{test_bot.root_url}/m-anzeigen-loeschen.json?ids={ad_id}" for ad_id in (1, 2, 3)
+        ]
+        assert "Found 3 ads online to delete" in caplog.text
+        assert "Deleted 3 of 3 ads" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_incomplete_list_deletes_nothing(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock,
+                  side_effect = PublishedAdsFetchIncompleteError("page 2 timed out")),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+            pytest.raises(PublishedAdsFetchIncompleteError),
+        ):
+            await delete_flow.delete_all_online_ads(test_bot, test_bot.root_url)
+
+        mock_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_online_ads_sends_no_request(self, test_bot:KleinanzeigenBot) -> None:
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = []),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock) as mock_open,
+            patch.object(test_bot, "web_request", new_callable = AsyncMock) as mock_request,
+        ):
+            await delete_flow.delete_all_online_ads(test_bot, test_bot.root_url)
+
+        mock_open.assert_not_called()
+        mock_request.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_server_error_for_one_ad_does_not_stop_the_run(self, test_bot:KleinanzeigenBot) -> None:
+        async def fake_request(url:str, **_:Any) -> dict[str, Any]:
+            if url.endswith("ids=1"):
+                raise ProtocolException("no response")
+            return self.OK_RESPONSE
+
+        with (
+            patch("kleinanzeigen_bot.published_ads.fetch_published_ads", new_callable = AsyncMock, return_value = [{"id": 1}, {"id": 2}]),
+            patch.object(test_bot, "web_open", new_callable = AsyncMock),
+            patch.object(test_bot, "web_execute", new_callable = AsyncMock, return_value = "some-token"),
+            patch.object(test_bot, "web_sleep", new_callable = AsyncMock),
+            patch.object(test_bot, "web_request", new_callable = AsyncMock, side_effect = fake_request) as mock_request,
+            pytest.raises(AdBatchError, match = "1 ad"),
+        ):
+            await delete_flow.delete_all_online_ads(test_bot, test_bot.root_url)
+
+        assert mock_request.call_count == 2

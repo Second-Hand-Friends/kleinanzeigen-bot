@@ -111,7 +111,7 @@ kleinanzeigen_bot/app.py:
   _handle_delete:
     "############################################": "############################################"
     "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
-    "Missing or invalid --ads selector: \"%s\". Valid values: all, due or comma-separated numeric IDs.": "Fehlender oder ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, due oder kommagetrennte numerische IDs."
+    "Missing or invalid --ads selector: \"%s\". Valid values: all, due, online-all or comma-separated numeric IDs.": "Fehlender oder ungültiger --ads-Selektor: \"%s\". Gültige Werte: all, due, online-all oder kommagetrennte numerische IDs."
 
   _handle_extend:
     "############################################": "############################################"
@@ -497,14 +497,31 @@ kleinanzeigen_bot/delete_flow.py:
     "Could not check ad IDs against your account, deleting by ID without the check: %s": "Anzeigen-IDs konnten nicht mit Ihrem Konto abgeglichen werden, Löschen per ID erfolgt ohne Prüfung: %s"
     " -> SKIPPED: ad '%s' (ID: %s) is not listed in your account": " -> ÜBERSPRUNGEN: Anzeige '%s' (ID: %s) ist nicht in Ihrem Konto gelistet"
     "Skipped %s not listed in your account (IDs: %s); their local files were left unchanged": "%s übersprungen, die nicht in Ihrem Konto gelistet sind (IDs: %s); ihre lokalen Dateien bleiben unverändert"
+    " -> FAILED: could not delete ad '%s' (ID: %s): %s": " -> FEHLGESCHLAGEN: Anzeige '%s' (ID: %s) konnte nicht gelöscht werden: %s"
+    "Failed to delete %s": "Löschen fehlgeschlagen bei %s"
+
+  delete_all_online_ads:
+    "ad": "Anzeige"
+    "Found %s online to delete": "%s online zum Löschen gefunden"
+    "############################################": "############################################"
+    "DONE: No ads to delete found.": "FERTIG: Keine zu löschenden Anzeigen gefunden."
+    "Skipping online ad with invalid id: %r": "Online-Anzeige mit ungültiger ID wird übersprungen: %r"
+    "Processing %s/%s: '%s' (ID: %s)...": "Verarbeite %s/%s: '%s' (ID: %s)..."
+    " -> FAILED: could not delete ad '%s' (ID: %s): %s": " -> FEHLGESCHLAGEN: Anzeige '%s' (ID: %s) konnte nicht gelöscht werden: %s"
+    "DONE: Deleted %s of %s": "FERTIG: %s von %s gelöscht"
+    "Failed to delete %s": "Löschen fehlgeschlagen bei %s"
+
+  _fetch_csrf_token:
+    "Expected CSRF Token not found in HTML content!": "Erwartetes CSRF-Token wurde im HTML-Inhalt nicht gefunden!"
+
+  _request_delete:
+    " -> SUCCESS: deleted ad '%s' (ID: %s)": " -> ERFOLG: Anzeige '%s' (ID: %s) gelöscht"
+    " -> ad %s not found (status %s), may have been removed already": " -> Anzeige %s nicht gefunden (Status %s), möglicherweise bereits entfernt"
 
   delete_ad:
     "Deleting ad '%s' if already present...": "Lösche Anzeige '%s', falls bereits vorhanden..."
-    "Expected CSRF Token not found in HTML content!": "Erwartetes CSRF-Token wurde im HTML-Inhalt nicht gefunden!"
     " -> SKIPPED: no published ad matched '%s' for deletion": " -> ÜBERSPRUNGEN: Keine veröffentlichte Anzeige '%s' zum Löschen gefunden"
     " -> SKIPPED: title '%s' matched multiple published ads (%s); delete by ID instead": " -> ÜBERSPRUNGEN: Titel '%s' passt zu mehreren veröffentlichten Anzeigen (%s); stattdessen per ID löschen"
-    " -> SUCCESS: deleted ad '%s' (ID: %s)": " -> ERFOLG: Anzeige '%s' (ID: %s) gelöscht"
-    " -> ad %s not found (status %s), may have been removed already": " -> Anzeige %s nicht gefunden (Status %s), möglicherweise bereits entfernt"
 
 #################################################
 kleinanzeigen_bot/bulk_ad_actions.py:

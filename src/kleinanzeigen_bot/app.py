@@ -343,13 +343,19 @@ class KleinanzeigenBot(WebScrapingMixin):  # noqa: PLR0904
         # Validate before bootstrapping so config problems cannot mask this error.
         # Keyword lists (e.g. "all,due") are rejected; only numeric IDs may be combined.
         if not self._ads_selector_explicit or not (
-            self.ads_selector in {"all", "due"} or ad_loading.is_valid_ads_selector(self.ads_selector, set())
+            self.ads_selector in {"all", "due", "online-all"} or ad_loading.is_valid_ads_selector(self.ads_selector, set())
         ):
-            LOG.error('Missing or invalid --ads selector: "%s". Valid values: all, due or comma-separated numeric IDs.', self.ads_selector)
+            LOG.error('Missing or invalid --ads selector: "%s". Valid values: all, due, online-all or comma-separated numeric IDs.', self.ads_selector)
             sys.exit(2)
 
         self._bootstrap_runtime()
         self._check_for_updates()
+
+        if self.ads_selector == "online-all":
+            # Every ad the account lists online, independent of local ad files.
+            await self._open_logged_in_browser()
+            await delete_flow.delete_all_online_ads(self, self.root_url)
+            return
 
         if ads := self.load_ads():
             await self._open_logged_in_browser()

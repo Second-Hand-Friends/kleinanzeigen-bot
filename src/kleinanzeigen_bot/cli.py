@@ -199,10 +199,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                     * all: Stellt alle passenden Anzeigen um
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
                     * Hinweis: Anzeigen, die bereits im Zielzustand sind, werden übersprungen.
-              --ads=all|due|<id(s)> (delete) - Gibt an, welche Anzeigen gelöscht werden sollen (ERFORDERLICH)
+              --ads=all|due|online-all|<id(s)> (delete) - Gibt an, welche Anzeigen gelöscht werden sollen (ERFORDERLICH)
                     Mögliche Werte:
-                    * all: Löscht alle Anzeigen
+                    * all: Löscht alle Anzeigen aus den lokalen Anzeigen-Dateien
                     * due: Löscht alle Anzeigen, deren republication_interval abgelaufen ist
+                    * online-all: Löscht alle Anzeigen, die Ihr Konto online listet, unabhängig von den lokalen Dateien
                     * <id(s)>: Gibt bestimmte Anzeigen-IDs an, z. B. "--ads=1,2,3"
               --force           - Alias für '--ads=all'
               --keep-old        - Verhindert das Löschen alter Anzeigen bei erneuter Veröffentlichung
@@ -270,10 +271,11 @@ def help_text(*, executable:str | None = None, language:str | None = None) -> st
                 * all: switch all eligible ads
                 * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
                 * Note: ads already in the target state are skipped.
-          --ads=all|due|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
+          --ads=all|due|online-all|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
                 Possible values:
-                * all: delete all ads
+                * all: delete all ads from your local ad files
                 * due: delete all ads whose republication_interval has elapsed
+                * online-all: delete all ads your account lists online, regardless of local files
                 * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
           --force           - alias for '--ads=all'
           --keep-old        - don't delete old ads on republication

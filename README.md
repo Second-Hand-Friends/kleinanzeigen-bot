@@ -289,10 +289,11 @@ Options:
         * all: switch all eligible ads
         * <id(s)>: specify ad IDs, e.g. "--ads=1,2,3"
         * Note: ads already in the target state are skipped.
-  --ads=all|due|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
+  --ads=all|due|online-all|<id(s)> (delete) - specifies which ads to delete (REQUIRED)
         Possible values:
-        * all: delete all ads
+        * all: delete all ads from your local ad files
         * due: delete all ads whose republication_interval has elapsed
+        * online-all: delete all ads your account lists online, regardless of local files
         * <id(s)>: specify ad IDs to delete, e.g. "--ads=1,2,3"
   --force           - alias for '--ads=all'
   --keep-old        - don't delete old ads on republication
@@ -322,6 +323,13 @@ your account's current online ad list; IDs that are not listed there (for exampl
 to another account) are skipped with a warning, their files are left unchanged, and the remaining
 ads are still deleted. If the online list cannot be fetched completely, ads are deleted by ID
 without this check, as before.
+
+`delete --ads=online-all` instead deletes every ad your account currently lists online, regardless of your
+local ad files. It uses the same complete, paginated list as `list`, prints how many ads it found before the
+first deletion, and deletes nothing if that list cannot be fetched completely. Local ad files are not changed.
+
+If a delete request for a single ad is rejected by the server (for example with HTTP 500), the error is logged
+and the remaining ads are still processed; the command then exits with status `1` so the partial failure is visible.
 
 > **Note:** The output of `kleinanzeigen-bot help` is always the most up-to-date reference for available commands and options.
 
